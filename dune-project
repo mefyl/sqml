@@ -22,6 +22,8 @@
     :with-test))
   (base
    (>= 0.13.1))
+  (fmt
+   (>= 0.8.8))
   (ocamlformat
    (and
     (= 0.14.1)
