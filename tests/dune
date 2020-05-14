@@ -1,0 +1,3 @@
+(tests
+ (names sqml)
+ (libraries alcotest sqml))
