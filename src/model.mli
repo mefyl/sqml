@@ -1,1 +1,3 @@
-module BindTable (Meta : Table.Meta) : Table.S with type columns = Meta.columns
+include module type of Model_intf
+
+module Make () : S

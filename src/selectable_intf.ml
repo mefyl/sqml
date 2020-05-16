@@ -3,6 +3,8 @@ open Base
 (** Any object that can be selected from *)
 
 module type S = sig
+  type model
+
   (** Type identifier of columns that can be selected from this *)
   type tag
 

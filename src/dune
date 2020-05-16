@@ -1,3 +1,4 @@
 (library
  (name sqml)
- (libraries base fmt))
+ (public_name sqml)
+ (libraries acid fmt lwt))

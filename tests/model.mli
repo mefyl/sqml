@@ -1,7 +1,9 @@
 open Sqml
 
+include Sqml.Model.S
+
 module T1 : sig
-  include Table.S
+  include Table.S with type model = tag
 
   module Column : sig
     val id : int Expression.t
@@ -11,7 +13,7 @@ module T1 : sig
 end
 
 module T2 : sig
-  include Table.S
+  include Table.S with type model = tag
 
   module Column : sig
     val id : int Expression.t

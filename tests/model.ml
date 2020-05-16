@@ -1,5 +1,7 @@
 open Sqml
 
+include Sqml.Model.Make ()
+
 module T1_meta = struct
   let name = "table1"
 
@@ -13,7 +15,7 @@ module T1_meta = struct
 end
 
 module T1 = struct
-  include Model.BindTable (T1_meta)
+  include BindTable (T1_meta)
 
   module Column = struct
     let Expression.List.(Cons (id, Cons (name, Empty))) = columns
@@ -31,7 +33,7 @@ module T2_meta = struct
 end
 
 module T2 = struct
-  include Model.BindTable (T2_meta)
+  include BindTable (T2_meta)
 
   module Column = struct
     let Expression.List.(Cons (id, Empty)) = columns
