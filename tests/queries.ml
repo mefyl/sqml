@@ -13,7 +13,15 @@ let select () =
   let* db = Sqlite3.make () in
   let* res = Sqlite3.query db q in
   let* res = Sequence.to_list res in
-  Alcotest.(check (list int) "tmp" [] res) |> Lwt_result.return
+  Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
+
+let insert () =
+  let* db = Sqlite3.make () in
+  let* () = Sqlite3.insert db (module T1) (0, ("zero", ())) in
+  let q = Model.select (module T1) T1.Column.id in
+  let* res = Sqlite3.query db q in
+  let* res = Sequence.to_list res in
+  Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
 let join () =
   let module J = Model.Join (T1) (T2) in
@@ -48,4 +56,11 @@ let () =
   in
   Lwt_main.run
   @@ run "SQML"
-       [ ("Select", [ test_case "select" select; test_case "join" join ]) ]
+       [
+         ( "Queries",
+           [
+             test_case "select" select;
+             test_case "insert" insert;
+             test_case "join" join;
+           ] );
+       ]

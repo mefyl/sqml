@@ -9,6 +9,8 @@ end
 module type S = sig
   include Selectable.S
 
+  module Meta : Meta
+
   val name : string
 
   module Expression : sig
@@ -19,9 +21,7 @@ module type S = sig
     end)
   end
 
-  type columns
-
-  val columns : columns Expression.List.t
+  val columns : Meta.columns Expression.List.t
 end
 
 type 'tag t = (module S with type tag = 'tag)

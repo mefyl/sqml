@@ -14,6 +14,8 @@ module Make () = struct
   module BindTable (Meta : Table.Meta) = struct
     type model = unit
 
+    module Meta = Meta
+
     let _ = v.tables <- Array.append v.tables [| (module Meta) |]
 
     type tag = unit
@@ -38,8 +40,6 @@ module Make () = struct
         Expression.List.Cons
           (Column { selectable = name; column = hd }, bind_columns tl)
       | Column.List.Empty -> Expression.List.Empty
-
-    type columns = Meta.columns
 
     let columns = bind_columns Meta.columns
 

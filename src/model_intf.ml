@@ -6,7 +6,7 @@ module type S = sig
   val tables : unit -> (module Table.Meta) array
 
   module BindTable (Meta : Table.Meta) :
-    Table.S with type model = tag and type columns = Meta.columns
+    Table.S with type model = tag and module Meta = Meta
 
   module Join
       (L : Selectable.S with type model = tag)

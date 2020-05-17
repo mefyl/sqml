@@ -6,6 +6,12 @@ module type S = sig
 
   module Model : Model.S
 
+  val insert :
+    Model.tag t ->
+    (module Table.S with type Meta.columns = 'columns) ->
+    'columns ->
+    (unit, [> `Sqml_engine of string ]) Lwt_result.t
+
   val query :
     Model.tag t ->
     't Model.Query.t ->

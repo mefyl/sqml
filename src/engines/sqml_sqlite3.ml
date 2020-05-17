@@ -32,8 +32,12 @@ module Make (Model : Model.S) = struct
 
   module Array = Array.Monadic2 (Lwt_result)
 
+  let string_of_value : type t. t Sqml.Type.t -> t -> string = function
+    | Sqml.Type.Int -> fun i -> Int.to_string i
+    | Sqml.Type.Text -> fun s -> Format.sprintf "%S" s
+
   let string_of_type : type t. t Sqml.Type.t -> string = function
-    | Sqml.Type.Int -> "INT"
+    | Sqml.Type.Int -> "T"
     | Sqml.Type.Text -> "TEXT"
 
   let make () =
@@ -67,6 +71,24 @@ module Make (Model : Model.S) = struct
     | Sqml.Type.Int -> Sqlite3.Data.to_int column |> get
 
   (* | Sql.Nullable t -> ( * try Some (conv t) with Invalid_argument _ -> None ) *)
+
+  let insert
+      (type columns)
+      { db }
+      (module Table : Table.S with type Meta.columns = columns)
+      (cols : columns) =
+    let module T = Table in
+    let rec columns : type t. t Sqml.Column.List.t -> t -> string list =
+     fun specs cols ->
+      match (specs, cols) with
+      | Sqml.Column.List.Cons ({ type_; _ }, col_tl), (v, v_tl) ->
+        let col = string_of_value type_ v in
+        col :: columns col_tl v_tl
+      | Sqml.Column.List.Empty, () -> []
+    in
+    query_str db
+      (Format.sprintf "INSERT INTO %S VALUES (%s)" T.name
+         (String.concat ~sep:", " (columns T.Meta.columns cols)))
 
   let query { db } q =
     let query_str = Fmt.str "%a" Model.Query.pp q in

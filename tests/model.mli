@@ -3,7 +3,8 @@ open Sqml
 include Sqml.Model.S
 
 module T1 : sig
-  include Table.S with type model = tag
+  include
+    Table.S with type model = tag and type Meta.columns = int * (string * unit)
 
   module Column : sig
     val id : int Expression.t
