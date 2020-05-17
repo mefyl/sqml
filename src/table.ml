@@ -4,6 +4,12 @@ module type Meta = sig
   type columns
 
   val columns : columns Column.List.t
+
+  type mapped
+
+  val map : columns -> mapped
+
+  val unmap : mapped -> columns
 end
 
 module type S = sig

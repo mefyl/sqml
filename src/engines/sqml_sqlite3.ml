@@ -73,11 +73,12 @@ module Make (Model : Model.S) = struct
   (* | Sql.Nullable t -> ( * try Some (conv t) with Invalid_argument _ -> None ) *)
 
   let insert
-      (type columns)
+      (type mapped)
       { db }
-      (module Table : Table.S with type Meta.columns = columns)
-      (cols : columns) =
+      (module Table : Table.S with type Meta.mapped = mapped)
+      (mapped : mapped) =
     let module T = Table in
+    let cols = Table.Meta.unmap mapped in
     let rec columns : type t. t Sqml.Column.List.t -> t -> string list =
      fun specs cols ->
       match (specs, cols) with

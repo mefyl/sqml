@@ -1,3 +1,4 @@
+open Acid
 open Sqml
 
 include Sqml.Model.Make ()
@@ -12,6 +13,12 @@ module T1_meta = struct
   type columns = int * (string * unit)
 
   let columns = Column.List.(Cons (id, Cons (name_, Empty)))
+
+  type mapped = int * string
+
+  let map (id, (name, ())) = (id, name)
+
+  let unmap (id, name) = (id, (name, ()))
 end
 
 module T1 = struct
@@ -30,6 +37,12 @@ module T2_meta = struct
   type columns = int * unit
 
   let columns = Column.List.(Cons (id, Empty))
+
+  type mapped = columns
+
+  let map = Fn.id
+
+  let unmap = Fn.id
 end
 
 module T2 = struct

@@ -8,8 +8,8 @@ module type S = sig
 
   val insert :
     Model.tag t ->
-    (module Table.S with type Meta.columns = 'columns) ->
-    'columns ->
+    (module Table.S with type Meta.mapped = 'mapped) ->
+    'mapped ->
     (unit, [> `Sqml_engine of string ]) Lwt_result.t
 
   val query :

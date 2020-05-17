@@ -17,7 +17,7 @@ let select () =
 
 let insert () =
   let* db = Sqlite3.make () in
-  let* () = Sqlite3.insert db (module T1) (0, ("zero", ())) in
+  let* () = Sqlite3.insert db (module T1) (0, "zero") in
   let q = Model.select (module T1) T1.Column.id in
   let* res = Sqlite3.query db q in
   let* res = Sequence.to_list res in
