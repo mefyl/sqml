@@ -62,13 +62,17 @@ module Make () = struct
 
     type tag = unit
 
-    let left = function
+    let rec left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
+      function
       | Expression.Column { selectable; column } ->
         Expression.Column { selectable = "l_" ^ selectable; column }
+      | Pair (a, b) -> Pair (left a, left b)
 
-    let right = function
+    let rec right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
+      function
       | Expression.Column { selectable; column } ->
         Expression.Column { selectable = "r_" ^ selectable; column }
+      | Pair (a, b) -> Pair (right a, right b)
 
     let pp_ ~prefix:p =
       let open Fmt in
