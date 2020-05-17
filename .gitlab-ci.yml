@@ -1,2 +1,5 @@
+variables:
+  PACKAGES: "sqlite-dev"
+
 include:
   - local: '/.logistic/ci/.gitlab-ci-latest.yml'
