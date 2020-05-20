@@ -42,9 +42,9 @@ module Make (Model : Model.S) = struct
     | Sqml.Type.Text -> "TEXT"
     | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
-  let make () =
+  let make ?(uri = ":memory:") () =
     try
-      let db = Sqlite3.db_open ":memory:" in
+      let db = Sqlite3.db_open uri in
       let create_table (module M : Table.Meta) =
         let rec column : type t. t Sqml.Column.List.t -> string list = function
           | Sqml.Column.List.Cons ({ Sqml.Column.name; type_ }, tl) ->
