@@ -33,12 +33,14 @@ module Make (Model : Model.S) = struct
   module Array = Array.Monadic2 (Lwt_result)
 
   let string_of_value : type t. t Sqml.Type.t -> t -> string = function
-    | Sqml.Type.Int -> fun i -> Int.to_string i
-    | Sqml.Type.Text -> fun s -> Format.sprintf "%S" s
+    | Sqml.Type.Int -> Int.to_string
+    | Sqml.Type.Text -> Format.sprintf "%S"
+    | Sqml.Type.Varchar _ -> Format.sprintf "%S"
 
   let string_of_type : type t. t Sqml.Type.t -> string = function
-    | Sqml.Type.Int -> "T"
+    | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
+    | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
   let make () =
     try
@@ -68,6 +70,7 @@ module Make (Model : Model.S) = struct
     let column = Sqlite3.column stmt i in
     match type_ with
     | Sqml.Type.Text -> Sqlite3.Data.to_string column |> get
+    | Sqml.Type.Varchar _ -> Sqlite3.Data.to_string column |> get
     | Sqml.Type.Int -> Sqlite3.Data.to_int column |> get
 
   (* | Sql.Nullable t -> ( * try Some (conv t) with Invalid_argument _ -> None ) *)
