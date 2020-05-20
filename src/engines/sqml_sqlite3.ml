@@ -54,7 +54,7 @@ module Make (Model : Model.S) = struct
         in
         let module M = M in
         query_str db
-          (Format.sprintf "CREATE TABLE %S (%s)" M.name
+          (Format.sprintf "CREATE TABLE IF NOT EXISTS %S (%s)" M.name
              (String.concat ~sep:", " (column M.columns)))
       in
       let* () = Array.iter ~f:create_table (Model.tables ()) in
