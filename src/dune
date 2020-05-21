@@ -1,4 +1,4 @@
 (library
  (name sqml)
  (public_name sqml)
- (libraries acid fmt lwt))
+ (libraries acid fmt lwt ptime))

@@ -19,3 +19,11 @@ module T2 : sig
     val id : int Expression.t
   end
 end
+
+module Ts : sig
+  include Table.S with type model = tag and type Meta.mapped = Ptime.t
+
+  module Column : sig
+    val time : Ptime.t Expression.t
+  end
+end

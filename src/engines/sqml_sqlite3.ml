@@ -35,11 +35,13 @@ module Make (Model : Model.S) = struct
   let string_of_value : type t. t Sqml.Type.t -> t -> string = function
     | Sqml.Type.Int -> Int.to_string
     | Sqml.Type.Text -> Format.sprintf "%S"
+    | Sqml.Type.Timestamp -> fun t -> Format.sprintf "%S" @@ Ptime.to_rfc3339 t
     | Sqml.Type.Varchar _ -> Format.sprintf "%S"
 
   let string_of_type : type t. t Sqml.Type.t -> string = function
     | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
+    | Sqml.Type.Timestamp -> "TEXT"
     | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
   let make ?(uri = ":memory:") () =
@@ -69,9 +71,18 @@ module Make (Model : Model.S) = struct
     in
     let column = Sqlite3.column stmt i in
     match type_ with
-    | Sqml.Type.Text -> Sqlite3.Data.to_string column |> get
-    | Sqml.Type.Varchar _ -> Sqlite3.Data.to_string column |> get
     | Sqml.Type.Int -> Sqlite3.Data.to_int column |> get
+    | Sqml.Type.Text -> Sqlite3.Data.to_string column |> get
+    | Sqml.Type.Timestamp ->
+      let* repr = Sqlite3.Data.to_string column |> get in
+      let* res, _, _ =
+        let f (`RFC3339 (_, e)) =
+          `Sqml_engine (Format.asprintf "%a" Ptime.pp_rfc3339_error e)
+        in
+        Ptime.of_rfc3339 repr |> Result.map_error ~f |> Lwt.return
+      in
+      Lwt_result.return res
+    | Sqml.Type.Varchar _ -> Sqlite3.Data.to_string column |> get
 
   (* | Sql.Nullable t -> ( * try Some (conv t) with Invalid_argument _ -> None ) *)
 

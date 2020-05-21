@@ -52,3 +52,27 @@ module T2 = struct
     let Expression.List.(Cons (id, Empty)) = columns
   end
 end
+
+module Ts = struct
+  module Meta_ = struct
+    let name = "ts"
+
+    let time = { Column.name = "time"; type_ = Type.Timestamp }
+
+    type columns = Ptime.t * unit
+
+    let columns = Column.List.(Cons (time, Empty))
+
+    type mapped = Ptime.t
+
+    let map (time, ()) = time
+
+    let unmap time = (time, ())
+  end
+
+  include BindTable (Meta_)
+
+  module Column = struct
+    let Expression.List.(Cons (time, Empty)) = columns
+  end
+end

@@ -6,6 +6,12 @@ let ( let* ) = Lwt_result.( >>= )
 
 module Sequence = Sqml.Engine.Sequence
 
+module Alcotest = struct
+  include Alcotest
+
+  let ptime = testable Ptime.pp Ptime.equal
+end
+
 let select () =
   let q = Model.select (module T1) T1.Column.id in
   Alcotest.(
@@ -38,6 +44,19 @@ let join () =
       (Fmt.str "%a" Query.pp q));
   Lwt_result.return ()
 
+let timestamp () =
+  let module J = Model.Join (T1) (T2) in
+  let now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
+  let later = Option.value_exn (Ptime.of_float_s @@ (Unix.time () +. 3600.)) in
+  let* db = Sqlite3.make () in
+  let* () = Sqlite3.insert db (module Ts) now in
+  let* () = Sqlite3.insert db (module Ts) later in
+  let q = Model.select (module Ts) Ts.Column.time in
+  let* res = Sqlite3.query db q in
+  let* res = Sequence.to_list res in
+  Lwt_result.return
+  @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
+
 let error : [ `Sqml_engine of string ] Alcotest.testable =
   Alcotest.testable
     (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
@@ -62,5 +81,6 @@ let () =
              test_case "select" select;
              test_case "insert" insert;
              test_case "join" join;
+             test_case "timestamp" timestamp;
            ] );
        ]
