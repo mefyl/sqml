@@ -2,7 +2,7 @@ open Acid
 open Model
 module Sqlite = Sqml_sqlite3.Make (Model)
 
-open Let.Let2 (Lwt_result)
+open Let.Syntax2 (Lwt_result)
 
 module Sequence = Sqml.Engine.Sequence
 
