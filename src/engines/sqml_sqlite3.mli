@@ -5,4 +5,7 @@ module Make (Model : Sqml.Model.S) : sig
     ?uri:string ->
     unit ->
     (Model.tag t, [> `Sqml_engine of string ]) Lwt_result.t
+
+  val of_db :
+    Sqlite3.db -> (Model.tag t, [> `Sqml_engine of string ]) Lwt_result.t
 end

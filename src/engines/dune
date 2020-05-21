@@ -2,4 +2,4 @@
  (name sqml_sqlite3)
  (public_name sqml.sqlite3)
  (modules sqml_sqlite3)
- (libraries base logs logs.lwt lwt sqml sqlite3))
+ (libraries base logs logs.lwt lwt semver sqml sqlite3))

@@ -2,7 +2,12 @@ open Base
 open Poly
 include Model_intf
 
-module Make () = struct
+module Make (Meta : sig
+  val version : Semver.t
+end) =
+struct
+  let version = Meta.version
+
   type tag = unit
 
   type t = { mutable tables : (module Table.Meta) Array.t }
@@ -16,7 +21,9 @@ module Make () = struct
 
     module Meta = Meta
 
-    let _ = v.tables <- Array.append v.tables [| (module Meta) |]
+    let _ =
+      Caml.print_endline @@ "REGISTER " ^ Meta.name;
+      v.tables <- Array.append v.tables [| (module Meta) |]
 
     type tag = unit
 
@@ -102,4 +109,43 @@ module Make () = struct
   end
 
   let select t e = Query.Select (e, t)
+
+  (* Metadata *)
+
+  module Metadata = struct
+    type t = {
+      major : int;
+      minor : int;
+      subminor : int;
+      migrated : Ptime.t;
+    }
+
+    module Meta_ = struct
+      type mapped = t
+
+      let name = "sqml_metadata"
+
+      let major = { Column.name = "major"; type_ = Type.Int }
+
+      let minor = { Column.name = "minor"; type_ = Type.Int }
+
+      let subminor = { Column.name = "subminor"; type_ = Type.Int }
+
+      let migrated = { Column.name = "migrated"; type_ = Type.Timestamp }
+
+      type columns = int * (int * (int * (Ptime.t * unit)))
+
+      let columns =
+        Column.List.(
+          Cons (major, Cons (minor, Cons (subminor, Cons (migrated, Empty)))))
+
+      let map (major, (minor, (subminor, (migrated, ())))) =
+        { major; minor; subminor; migrated }
+
+      let unmap { major; minor; subminor; migrated } =
+        (major, (minor, (subminor, (migrated, ()))))
+    end
+
+    include BindTable (Meta_)
+  end
 end

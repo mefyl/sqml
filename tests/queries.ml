@@ -1,8 +1,8 @@
 open Acid
 open Model
-module Sqlite3 = Sqml_sqlite3.Make (Model)
+module Sqlite = Sqml_sqlite3.Make (Model)
 
-let ( let* ) = Lwt_result.( >>= )
+open Let.Let2 (Lwt_result)
 
 module Sequence = Sqml.Engine.Sequence
 
@@ -12,20 +12,24 @@ module Alcotest = struct
   let ptime = testable Ptime.pp Ptime.equal
 end
 
+let () =
+  Logs.set_reporter (Logs_fmt.reporter ());
+  Logs.Src.set_level Logs.default (Some Logs.Debug)
+
 let select () =
   let q = Model.select (module T1) T1.Column.id in
   Alcotest.(
     check string "repr" "SELECT table1.id FROM table1" (Fmt.str "%a" Query.pp q));
-  let* db = Sqlite3.make () in
-  let* res = Sqlite3.query db q in
+  let* db = Sqlite.make () in
+  let* res = Sqlite.query db q in
   let* res = Sequence.to_list res in
   Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
 
 let insert () =
-  let* db = Sqlite3.make () in
-  let* () = Sqlite3.insert db (module T1) (0, "zero") in
+  let* db = Sqlite.make () in
+  let* () = Sqlite.insert db (module T1) (0, "zero") in
   let q = Model.select (module T1) T1.Column.id in
-  let* res = Sqlite3.query db q in
+  let* res = Sqlite.query db q in
   let* res = Sequence.to_list res in
   Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
@@ -45,17 +49,24 @@ let join () =
   Lwt_result.return ()
 
 let timestamp () =
-  let module J = Model.Join (T1) (T2) in
   let now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
   let later = Option.value_exn (Ptime.of_float_s @@ (Unix.time () +. 3600.)) in
-  let* db = Sqlite3.make () in
-  let* () = Sqlite3.insert db (module Ts) now in
-  let* () = Sqlite3.insert db (module Ts) later in
+  let* db = Sqlite.make () in
+  let* () = Sqlite.insert db (module Ts) now in
+  let* () = Sqlite.insert db (module Ts) later in
   let q = Model.select (module Ts) Ts.Column.time in
-  let* res = Sqlite3.query db q in
+  let* res = Sqlite.query db q in
   let* res = Sequence.to_list res in
   Lwt_result.return
   @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
+
+module Versioning = struct
+  let stable () =
+    let db = Sqlite3.db_open ~memory:true ":memory:" in
+    let* _ = Sqlite.of_db db in
+    let* _ = Sqlite.of_db db in
+    Lwt_result.return ()
+end
 
 let error : [ `Sqml_engine of string ] Alcotest.testable =
   Alcotest.testable
@@ -83,4 +94,5 @@ let () =
              test_case "join" join;
              test_case "timestamp" timestamp;
            ] );
+         ("Versioning", [ test_case "stable" Versioning.stable ]);
        ]

@@ -1,6 +1,8 @@
 open Base
 
 module type S = sig
+  val version : Semver.t
+
   type tag
 
   val tables : unit -> (module Table.Meta) array

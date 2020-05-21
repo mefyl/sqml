@@ -1,7 +1,9 @@
 open Acid
 open Sqml
 
-include Sqml.Model.Make ()
+include Sqml.Model.Make (struct
+  let version = (0, 0, 0)
+end)
 
 module T1_meta = struct
   let name = "table1"
