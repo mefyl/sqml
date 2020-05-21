@@ -7,9 +7,7 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let ( let* ) = Lwt_result.( >>= )
-
-  let ( let+ ) = Lwt_result.( >>| )
+  open Acid.Let.Let2 (Lwt_result)
 
   let debug f = Logs_lwt.debug f |> Lwt.map ~f:Result.return
 
