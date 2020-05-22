@@ -22,7 +22,9 @@ module ModelS :
      and module Join = Model.Join =
   Model
 
-(* open Model *)
+let convert_error =
+  let f e = `Sqml_engine (Caqti_error.show e) in
+  Result.map_error ~f
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let select make () =
@@ -133,5 +135,57 @@ let () =
              test_case "join" @@ make Caqti_test.join;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
+           ] );
+         ( "Caqti-PostgreSQL",
+           let make db test () =
+             let pg_host =
+               Sys.getenv "PG_HOST" |> Option.value ~default:"localhost"
+             in
+             let* c =
+               Caqti_lwt.connect
+                 (Uri.of_string @@ "postgres://postgres@" ^ pg_host)
+               |> Lwt.map ~f:convert_error
+             in
+             let module C = (val c) in
+             let* () =
+               C.exec
+                 ( Caqti_request.exec Caqti_type.unit
+                 @@ Format.sprintf "CREATE DATABASE %S" db )
+                 ()
+               |> Lwt.map ~f:convert_error
+             in
+             let open Let.Syntax (Lwt) in
+             let* res =
+               Lwt_switch.with_switch (fun switch ->
+                   let open Let.Syntax2 (Lwt_result) in
+                   let make () =
+                     let+ res =
+                       Caqti.make ("postgres://postgres@" ^ pg_host ^ "/" ^ db)
+                     in
+                     let () =
+                       Lwt_switch.add_hook (Some switch) (fun () ->
+                           Caqti.close res)
+                     in
+                     res
+                   in
+                   test make ())
+             in
+             let* drop_res =
+               C.exec
+                 ( Caqti_request.exec Caqti_type.unit
+                 @@ Format.sprintf "DROP DATABASE %S" db )
+                 ()
+               |> Lwt.map ~f:convert_error
+             in
+             Result.map ~f:(fun ((), ()) -> ()) (Result.both res drop_res)
+             |> Lwt.return
+           in
+           [
+             test_case "select" @@ make "select" Caqti_test.select;
+             test_case "insert" @@ make "insert" Caqti_test.insert;
+             test_case "join" @@ make "join" Caqti_test.join;
+             test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
+             test_case "versioning-stable"
+             @@ make "versioning_stable" Caqti_test.Versioning.stable;
            ] );
        ]

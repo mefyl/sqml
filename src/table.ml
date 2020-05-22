@@ -1,4 +1,6 @@
 module type Meta = sig
+  val schema : string option
+
   val name : string
 
   type columns

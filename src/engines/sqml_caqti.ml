@@ -10,10 +10,27 @@ module Make (Model : Model.S) = struct
     pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t;
   }
 
-  let string_of_type : type t. t Sqml.Type.t -> string = function
+  let table_name info schema name =
+    match schema with
+    | None -> Format.sprintf "%S" name
+    | Some schema -> (
+      match Caqti_driver_info.dialect_tag info with
+      | `Sqlite ->
+        Format.sprintf "%s_%s" (String.escaped schema) (String.escaped name)
+      | `Pgsql -> Format.sprintf "%S.%S" schema name
+      | _ -> failwith "dialect not handled" )
+
+  let string_of_type : type t. Caqti_driver_info.t -> t Sqml.Type.t -> string =
+   fun i ->
+    let d = Caqti_driver_info.dialect_tag i in
+    function
     | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
-    | Sqml.Type.Timestamp -> "TEXT"
+    | Sqml.Type.Timestamp ->
+      if d = `Sqlite then
+        "TEXT"
+      else
+        "TIMESTAMP"
     | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
   let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
@@ -43,6 +60,10 @@ module Make (Model : Model.S) = struct
             Caqti_request.find Caqti_type.unit Caqti_type.bool
               "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
                name= 'sqml_metadata'"
+          | `Pgsql ->
+            Caqti_request.find Caqti_type.unit Caqti_type.bool
+              "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
+               table_schema = 'sqml' AND table_name = 'metadata')"
           | _ -> failwith "dialect not handled"
         in
         let* found = C.find found_query () in
@@ -50,8 +71,14 @@ module Make (Model : Model.S) = struct
         if found then
           let query =
             Caqti_request.find Caqti_type.unit caqti_metadata_type
-              "SELECT major, minor, subminor, migrated FROM sqml_metadata \
-               ORDER BY datetime(migrated) DESC LIMIT 1"
+              (Format.sprintf
+                 "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
+                  DESC LIMIT 1"
+                 (table_name i (Some "sqml") "metadata")
+                 ( if Caqti_driver_info.dialect_tag i = `Sqlite then
+                   "datetime(migrated)"
+                 else
+                   "migrated" ))
           in
           let* major, minor, subminor, _ = C.find query () in
           let current = (major, minor, subminor) in
@@ -69,14 +96,32 @@ module Make (Model : Model.S) = struct
             let rec column : type t. t Sqml.Column.List.t -> string list =
               function
               | Sqml.Column.List.Cons ({ Sqml.Column.name; type_ }, tl) ->
-                let col = Format.sprintf "%s %s" name (string_of_type type_) in
+                let col =
+                  Format.sprintf "%s %s" name (string_of_type i type_)
+                in
                 col :: column tl
               | Sqml.Column.List.Empty -> []
             in
             let module M = M in
+            let* () =
+              match Caqti_driver_info.dialect_tag i with
+              | `Sqlite -> Lwt_result.return ()
+              | `Pgsql -> (
+                match M.schema with
+                | None -> Lwt_result.return ()
+                | Some schema ->
+                  let query =
+                    Caqti_request.exec ~oneshot:true Caqti_type.unit
+                      (Format.sprintf "CREATE SCHEMA IF NOT EXISTS %S" schema)
+                  in
+                  C.exec query () )
+              | _ -> failwith "dialect not handled"
+            in
+
             let query =
               Caqti_request.exec ~oneshot:true Caqti_type.unit
-                (Format.sprintf "CREATE TABLE %S (%s)" M.name
+                (Format.sprintf "CREATE TABLE %s (%s)"
+                   (table_name i M.schema M.name)
                    (String.concat ~sep:", " (column M.columns)))
             in
             C.exec query ()
@@ -84,8 +129,10 @@ module Make (Model : Model.S) = struct
           let* () = Array.iter ~f:create_table (Model.tables ()) in
           let query =
             Caqti_request.exec caqti_metadata_type
-              "INSERT INTO sqml_metadata (major, minor, subminor, migrated) \
-               VALUES (?, ?, ?, ?)"
+              (Format.sprintf
+                 "INSERT INTO %s (major, minor, subminor, migrated) VALUES (?, \
+                  ?, ?, ?)"
+                 (table_name i (Some "sqml") "metadata"))
           in
           let* () =
             let major, minor, subminor = Model.version
@@ -104,6 +151,8 @@ module Make (Model : Model.S) = struct
         Lwt_result.return { pool }
     else
       fail "backend does not support transactions"
+
+  let close { pool } = Caqti_lwt.Pool.drain pool
 
   module Model = Model
 

@@ -6,6 +6,8 @@ include Sqml.Model.Make (struct
 end)
 
 module T1_meta = struct
+  let schema = None
+
   let name = "table1"
 
   let id = { Column.name = "id"; type_ = Type.Int }
@@ -32,6 +34,8 @@ module T1 = struct
 end
 
 module T2_meta = struct
+  let schema = None
+
   let name = "table2"
 
   let id = { Column.name = "id"; type_ = Type.Int }
@@ -57,6 +61,8 @@ end
 
 module Ts = struct
   module Meta_ = struct
+    let schema = None
+
     let name = "ts"
 
     let time = { Column.name = "time"; type_ = Type.Timestamp }

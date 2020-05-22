@@ -9,6 +9,9 @@ module Make (Model : Model.S) = struct
 
   open Acid.Let.Syntax2 (Lwt_result)
 
+  let table_name schema name =
+    (Option.value ~default:"" @@ Option.map ~f:(fun s -> s ^ "_") schema) ^ name
+
   let debug f = Logs_lwt.debug f |> Lwt.map ~f:Result.return
 
   let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
@@ -169,7 +172,8 @@ module Make (Model : Model.S) = struct
             | Sqml.Column.List.Empty -> []
           in
           let module M = M in
-          query_raw_unit db "CREATE TABLE %S (%s)" M.name
+          query_raw_unit db "CREATE TABLE %S (%s)"
+            (table_name M.schema M.name)
             (String.concat ~sep:", " (column M.columns))
         in
         let* () = Array.iter ~f:create_table (Model.tables ()) in

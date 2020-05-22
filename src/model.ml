@@ -123,7 +123,9 @@ struct
     module Meta_ = struct
       type mapped = t
 
-      let name = "sqml_metadata"
+      let schema = Some "sqml"
+
+      let name = "metadata"
 
       let major = { Column.name = "major"; type_ = Type.Int }
 

@@ -24,6 +24,10 @@
    (and
     (>= 1.2.1)
     :with-test))
+  (caqti-driver-postgresql
+   (and
+    (>= 1.2.1)
+    :with-test))
   (caqti
    (>= 1.2.0))
   (caqti-lwt
