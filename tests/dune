@@ -1,3 +1,4 @@
 (tests
  (names queries)
- (libraries alcotest-lwt logs.fmt sqml sqml.sqlite3 ptime))
+ (libraries alcotest-lwt logs.fmt sqml sqml.sqlite3 sqml.caqti
+   caqti-driver-sqlite3 ptime))

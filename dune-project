@@ -20,8 +20,14 @@
    (and
     (>= 1.1.0)
     :with-test))
-  (base
-   (>= 0.13.1))
+  (caqti-driver-sqlite3
+   (and
+    (>= 1.2.1)
+    :with-test))
+  (caqti
+   (>= 1.2.0))
+  (caqti-lwt
+   (>= 1.2.0))
   (fmt
    (>= 0.8.8))
   (lwt
