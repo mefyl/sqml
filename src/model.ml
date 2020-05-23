@@ -21,9 +21,7 @@ struct
 
     module Meta = Meta
 
-    let _ =
-      Caml.print_endline @@ "REGISTER " ^ Meta.name;
-      v.tables <- Array.append v.tables [| (module Meta) |]
+    let _ = v.tables <- Array.append v.tables [| (module Meta) |]
 
     type tag = unit
 
