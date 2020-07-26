@@ -29,6 +29,7 @@ module Make (Model : Model.S) = struct
     in
     let column = Sqlite3.column stmt i in
     match type_ with
+    | Sqml.Type.Bool -> Sqlite3.Data.to_bool column |> get
     | Sqml.Type.Int -> Sqlite3.Data.to_int column |> get
     | Sqml.Type.Text -> Sqlite3.Data.to_string column |> get
     | Sqml.Type.Timestamp ->
@@ -83,12 +84,14 @@ module Make (Model : Model.S) = struct
   module Array = Array.Monadic2 (Lwt_result)
 
   let string_of_value : type t. t Sqml.Type.t -> t -> string = function
+    | Sqml.Type.Bool -> Bool.to_string
     | Sqml.Type.Int -> Int.to_string
     | Sqml.Type.Text -> Format.sprintf "%S"
     | Sqml.Type.Timestamp -> fun t -> Format.sprintf "%S" @@ Ptime.to_rfc3339 t
     | Sqml.Type.Varchar _ -> Format.sprintf "%S"
 
   let string_of_type : type t. t Sqml.Type.t -> string = function
+    | Sqml.Type.Bool -> "BOOLEAN"
     | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
     | Sqml.Type.Timestamp -> "TEXT"

@@ -24,6 +24,7 @@ module Make (Model : Model.S) = struct
    fun i ->
     let d = Caqti_driver_info.dialect_tag i in
     function
+    | Sqml.Type.Bool -> "BOOLEAN"
     | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
     | Sqml.Type.Timestamp ->
@@ -166,6 +167,7 @@ module Make (Model : Model.S) = struct
   let type_of_column : type t. t Sqml.Column.t -> t Caqti_type.t = function
     | { Column.type_; _ } -> (
       match type_ with
+      | Sqml.Type.Bool -> Caqti_type.bool
       | Sqml.Type.Int -> Caqti_type.int
       | Sqml.Type.Text -> Caqti_type.string
       | Sqml.Type.Timestamp -> Caqti_type.ptime
