@@ -28,7 +28,7 @@ let convert_error =
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let select make () =
-    let q = Model.select (module Model.T1) Model.T1.Column.id in
+    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
     Alcotest.(
       check string "repr" "SELECT table1.id FROM table1"
         (Fmt.str "%a" Model.Query.pp q));
@@ -40,20 +40,20 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let insert make () =
     let* db = make () in
     let* () = Engine.insert db (module Model.T1) (0, "zero") in
-    let q = Model.select (module Model.T1) Model.T1.Column.id in
+    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
     let* res = Engine.query db q in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
   let join _make () =
     let module J = Model.Join (Model.T1) (Model.T2) in
-    let q = Model.select (module J) (J.left Model.T1.Column.id) in
+    let q = Model.select ~from:(module J) (J.left Model.T1.Column.id) in
     Alcotest.(
       check string "simple"
         "SELECT l_table1.id FROM table1 l_table1 JOIN table2 r_table2"
         (Fmt.str "%a" Model.Query.pp q));
     let module J = Model.Join (Model.T1) (Model.T1) in
-    let q = Model.select (module J) (J.right Model.T1.Column.id) in
+    let q = Model.select ~from:(module J) (J.right Model.T1.Column.id) in
     Alcotest.(
       check string "self"
         "SELECT r_table1.id FROM table1 l_table1 JOIN table1 r_table1"
@@ -68,7 +68,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* db = make () in
     let* () = Engine.insert db (module Model.Ts) now in
     let* () = Engine.insert db (module Model.Ts) later in
-    let q = Model.select (module Model.Ts) Model.Ts.Column.time in
+    let q = Model.select ~from:(module Model.Ts) Model.Ts.Column.time in
     let* res = Engine.query db q in
     let* res = Sequence.to_list res in
     Lwt_result.return
@@ -100,7 +100,6 @@ let () =
         ~f:Alcotest.(check (result unit error) "result" (Result.Ok ()))
         (f ())
     in
-
     test_case name `Quick f
   in
   Lwt_main.run
