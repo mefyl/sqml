@@ -26,13 +26,15 @@ module type S = sig
       | Select :
           ('t, 'tag) Expression.t
           * (module Selectable.S with type model = tag and type tag = 'tag)
+          * (bool, 'tag) Expression.t option
           -> 't t
 
     val pp : Formatter.t -> 't t -> unit
   end
 
   val select :
-    (module Selectable.S with type model = tag and type tag = 'tag) ->
+    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
+    ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
     't Query.t
 end

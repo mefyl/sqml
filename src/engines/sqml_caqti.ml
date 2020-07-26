@@ -177,11 +177,13 @@ module Make (Model : Model.S) = struct
     | Column.List.Empty -> Caqti_type.unit
     | Cons (c, tl) -> Caqti_type.tup2 (type_of_column c) (type_of_s_list tl)
 
-  let rec type_of_expr : type t. (t, _) Priv.Expression.t -> t Caqti_type.t =
+  let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =
     function
-    | Priv.Expression.Column { column; _ } -> type_of_column column
-    | Priv.Expression.Pair (a, b) ->
+    | Expression.Column { column; _ } -> type_of_column column
+    | Expression.Pair (a, b) ->
       Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
+    | Expression.Comparison _ -> Caqti_type.bool
+    | Expression.String _ -> Caqti_type.string
 
   let insert
       (type mapped)
@@ -208,7 +210,7 @@ module Make (Model : Model.S) = struct
     let query_str = Fmt.str "%a" Model.Query.pp query in
     let* () = debug @@ fun m -> m "caqti: execute query: %s" query_str in
     match query with
-    | Select (e, s) ->
+    | Select (e, s, _) ->
       let module Selected = (val s) in
       let query =
         Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str

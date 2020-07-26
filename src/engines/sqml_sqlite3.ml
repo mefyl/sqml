@@ -122,7 +122,7 @@ module Make (Model : Model.S) = struct
     let* () = debug @@ fun m -> m "sqlite3: execute query: %s" query_str in
     let* stmt = stmt db query_str in
     match q with
-    | Select (e, s) ->
+    | Select (e, s, _) ->
       let module Selected = (val s) in
       let step stmt =
         match Sqlite3.step stmt with
@@ -130,16 +130,22 @@ module Make (Model : Model.S) = struct
           let rec get :
               type a.
               int ->
-              (a, Selected.tag) Priv.Expression.t ->
+              (a, Selected.tag) Expression.t ->
               (int * a, [> `Sqml_engine of string ]) Lwt_result.t =
            fun i -> function
-            | Priv.Expression.Column { column; _ } ->
+            | Expression.Column { column; _ } ->
               let+ res = conv column.type_ stmt i in
               (i + 1, res)
-            | Priv.Expression.Pair (a, b) ->
+            | Expression.Comparison _ ->
+              let+ res = conv Bool stmt i in
+              (i + 1, res)
+            | Expression.Pair (a, b) ->
               let* i, a = get i a in
               let+ i, b = get i b in
               (i, (a, b))
+            | Expression.String _ ->
+              let+ res = conv Text stmt i in
+              (i + 1, res)
           in
           let* _, v = get 0 e in
           Lwt_result.return (Sequence.Step.Yield (v, stmt))

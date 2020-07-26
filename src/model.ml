@@ -27,8 +27,6 @@ struct
 
     let name = Meta.name
 
-    open Expression
-
     module Expression = struct
       include Expression
 
@@ -42,8 +40,7 @@ struct
     let rec bind_columns : type l. l Column.List.t -> l Expression.List.t =
       function
       | Column.List.Cons (hd, tl) ->
-        Expression.List.Cons
-          (Column { selectable = name; column = hd }, bind_columns tl)
+        Expression.List.Cons (Expression.make_column name hd, bind_columns tl)
       | Column.List.Empty -> Expression.List.Empty
 
     let columns = bind_columns Meta.columns
@@ -67,17 +64,11 @@ struct
 
     type tag = unit
 
-    let rec left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
-      function
-      | Expression.Column { selectable; column } ->
-        Expression.Column { selectable = "l_" ^ selectable; column }
-      | Pair (a, b) -> Pair (left a, left b)
+    let left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
+     fun e -> Expression.map_name (fun n -> "l_" ^ n) e
 
-    let rec right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
-      function
-      | Expression.Column { selectable; column } ->
-        Expression.Column { selectable = "r_" ^ selectable; column }
-      | Pair (a, b) -> Pair (right a, right b)
+    let right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
+     fun e -> Expression.map_name (fun n -> "r_" ^ n) e
 
     let pp_ ~prefix:p =
       let open Fmt in
@@ -93,20 +84,24 @@ struct
       | Select :
           ('t, 'tag) Expression.t
           * (module Selectable.S with type model = tag and type tag = 'tag)
+          * (bool, 'tag) Expression.t option
           -> 't t
 
     let pp f =
       let open Fmt in
       function
-      | Select (e, s) ->
+      | Select (e, s, where) ->
         let module Selectable = (val s) in
         ( box
         @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
-           ++ const string "FROM" ++ sp ++ const Selectable.pp () )
+           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
+                where )
           f ()
   end
 
-  let select t e = Query.Select (e, t)
+  let select ~from ?where e = Query.Select (e, from, where)
 
   (* Metadata *)
 

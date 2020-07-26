@@ -1,11 +1,9 @@
-module Priv = struct
-  module Expression = Expression
-end
-
 module Column = Column
 module Engine = Engine
 
-module Expression : Expression.Interface = Expression
+module Expression :
+  Expression.Interface with type ('t, 'tag) t = ('t, 'tag) Expression.t =
+  Expression
 
 module Model = Model
 module Table = Table
