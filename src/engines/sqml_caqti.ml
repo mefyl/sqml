@@ -168,9 +168,6 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let fail fmt =
-    Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
-
   let type_of_column : type t. t Sqml.Column.t -> t Caqti_type.t = function
     | { Column.type_; _ } -> (
       match type_ with
