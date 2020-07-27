@@ -55,6 +55,21 @@ module Make (Model : Model.S) = struct
     in
     map
 
+  let columns i columns =
+    let f { Sqml.Column.name; type_; _ } =
+      Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
+    in
+    column_map { f } columns
+
+  and primary columns =
+    let f { Sqml.Column.name; primary; _ } =
+      if primary then
+        Some name
+      else
+        None
+    in
+    column_map { f } columns
+
   let make ?max_size uri =
     let* pool =
       Caqti_lwt.connect_pool ?max_size (Uri.of_string uri)
@@ -104,20 +119,6 @@ module Make (Model : Model.S) = struct
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           let create_table (module M : Table.Meta) =
-            let columns columns =
-              let f { Sqml.Column.name; type_; _ } =
-                Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
-              in
-              column_map { f } columns
-            and primary columns =
-              let f { Sqml.Column.name; primary; _ } =
-                if primary then
-                  Some name
-                else
-                  None
-              in
-              column_map { f } columns
-            in
             let module M = M in
             let* () =
               match Caqti_driver_info.dialect_tag i with
@@ -133,7 +134,7 @@ module Make (Model : Model.S) = struct
                   C.exec query () )
               | _ -> failwith "dialect not handled"
             in
-            let columns = columns M.columns in
+            let columns = columns i M.columns in
             let columns =
               match primary M.columns with
               | [] -> columns
@@ -234,26 +235,47 @@ module Make (Model : Model.S) = struct
           C.call ~f query ()
         in
         Caqti_lwt.Pool.use get pool |> error
-      | Insert (into, v) ->
+      | Insert { into; on_conflict; value } ->
         let module T = (val into) in
-        let query =
-          let t =
-            let ( % ) = Fn.compose in
-            let encode = Result.return % T.Meta.unmap
-            and decode = Result.return % T.Meta.map in
-            Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
-          in
-          Caqti_request.exec t
-          @@ Format.sprintf "INSERT INTO %S VALUES (%s)" T.name
-               (String.concat ~sep:", "
-                  (List.init
-                     ~f:(fun _ -> "?")
-                     (Column.List.length T.Meta.columns)))
-        in
         let insert value (module C : Caqti_lwt.CONNECTION) =
+          let i = C.driver_info in
+          let conflict_sqlite, conflict_pg =
+            match (Caqti_driver_info.dialect_tag i, on_conflict) with
+            | _, None -> ("", "")
+            | `Pgsql, Some Ignore -> ("", " ON CONFLICT DO NOTHING")
+            | `Pgsql, Some Update ->
+              let f { Column.name; _ } =
+                Option.return @@ Fmt.str "%s = excluded.%s" name name
+              in
+              ( "",
+                Fmt.str " ON CONFLICT (%s) DO UPDATE SET %s"
+                  (String.concat ~sep:", " (primary T.Meta.columns))
+                  (String.concat ~sep:", " (column_map { f } T.Meta.columns)) )
+            | `Sqlite, Some Ignore -> (" OR IGNORE", "")
+            | `Sqlite, Some Update -> (" OR REPLACE", "")
+            | _ -> failwith "dialect not handled"
+          in
+          let* query =
+            let t =
+              let ( % ) = Fn.compose in
+              let encode = Result.return % T.Meta.unmap
+              and decode = Result.return % T.Meta.map in
+              Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
+            in
+            let q =
+              Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite T.name
+                (String.concat ~sep:", "
+                   (List.init
+                      ~f:(fun _ -> "?")
+                      (Column.List.length T.Meta.columns)))
+                conflict_pg
+            in
+            let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
+            Caqti_request.exec t q
+          in
           C.exec query value
         in
-        let* () = Caqti_lwt.Pool.use (insert v) pool |> error in
+        let* () = Caqti_lwt.Pool.use (insert value) pool |> error in
         Lwt_result.return Model.Query.Zero
     in
     exec query

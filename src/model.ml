@@ -89,10 +89,17 @@ struct
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
       | Zero : (unit, zero, 'error) result
 
+    type on_conflict =
+      | Ignore
+      | Update
+
     type ('t, 'arity) t =
-      | Insert :
-          (module Table.S with type model = tag and type Meta.mapped = 'mapped)
-          * 'mapped
+      | Insert : {
+          into :
+            (module Table.S with type model = tag and type Meta.mapped = 'mapped);
+          on_conflict : on_conflict option;
+          value : 'mapped;
+        }
           -> (unit, zero) t
       | Select :
           ('t, 'tag) Expression.t
@@ -103,7 +110,7 @@ struct
     let pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
       let open Fmt in
       fun fmt -> function
-        | Insert (into, _v) ->
+        | Insert { into; _ } ->
           let module Table = (val into) in
           ( box
           @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
@@ -123,7 +130,8 @@ struct
 
   let select ~from ?where e = Query.Select (e, from, where)
 
-  let insert ~into e = Query.Insert (into, e)
+  let insert ~into ?on_conflict value =
+    Query.Insert { into; on_conflict; value }
 
   (* Metadata *)
 

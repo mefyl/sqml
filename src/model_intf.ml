@@ -30,10 +30,17 @@ module type S = sig
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
       | Zero : (unit, zero, 'error) result
 
+    type on_conflict =
+      | Ignore
+      | Update
+
     type ('t, 'arity) t = private
-      | Insert :
-          (module Table.S with type model = tag and type Meta.mapped = 'mapped)
-          * 'mapped
+      | Insert : {
+          into :
+            (module Table.S with type model = tag and type Meta.mapped = 'mapped);
+          on_conflict : on_conflict option;
+          value : 'mapped;
+        }
           -> (unit, zero) t
       | Select :
           ('t, 'tag) Expression.t
@@ -52,6 +59,7 @@ module type S = sig
 
   val insert :
     into:(module Table.S with type model = tag and type Meta.mapped = 'mapped) ->
+    ?on_conflict:Query.on_conflict ->
     'mapped ->
     (unit, Query.zero) Query.t
 end

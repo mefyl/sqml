@@ -15,6 +15,18 @@ let () =
   Logs.Src.set_level Logs.default (Some Logs.Debug);
   Logs.Src.set_level Sqml.Log.src (Some Logs.Debug)
 
+let error : [ `Sqml_engine of string ] Alcotest.testable =
+  Alcotest.testable
+    (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
+    (* We don't care about the error message *)
+      (fun _ _ -> true)
+
+let zero : (unit, Model.Query.zero, _) Model.Query.result Alcotest.testable =
+  Alcotest.testable
+    (fun fmt Model.Query.Zero ->
+      Format.pp_print_string fmt "empty query result")
+    ( = )
+
 module ModelS :
   Sqml.Model.S
     with type tag = Model.tag
@@ -88,6 +100,47 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Lwt_result.return
     @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
 
+  let conflict make () =
+    let* db = make () in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      Engine.query db q
+    in
+    let* () =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      let%lwt res = Engine.query db q in
+      Lwt_result.return
+        Alcotest.(
+          check (result zero error) "conflict result"
+            (Result.Error (`Sqml_engine ""))
+            res)
+    in
+    let* Zero =
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Ignore (0, "one")
+      in
+      Engine.query db q
+    in
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      Engine.query db q
+    in
+    let* res = Sequence.to_list res in
+    let () = Alcotest.(check (list string) "untouched row" [ "zero" ] res) in
+    let* Zero =
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Update (0, "two")
+      in
+      Engine.query db q
+    in
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      Engine.query db q
+    in
+    let* res = Sequence.to_list res in
+    let () = Alcotest.(check (list string) "updated row" [ "two" ] res) in
+    Lwt_result.return ()
+
   module Versioning = struct
     let stable make () =
       let* _ = make () in
@@ -95,11 +148,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Lwt_result.return ()
   end
 end
-
-let error : [ `Sqml_engine of string ] Alcotest.testable =
-  Alcotest.testable
-    (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
-    ( = )
 
 module Caqti = Sqml_caqti.Make (Model)
 module Caqti_test = Test (Caqti)
@@ -131,6 +179,7 @@ let () =
              test_case "select" @@ make Caqti_test.select;
              test_case "insert" @@ make Caqti_test.insert;
              test_case "join" @@ make Caqti_test.join;
+             test_case "conflict" @@ make Caqti_test.conflict;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
            ] );
@@ -183,6 +232,7 @@ let () =
              test_case "insert" @@ make "insert" Caqti_test.insert;
              test_case "join" @@ make "join" Caqti_test.join;
              test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
+             test_case "conflict" @@ make "conflict" Caqti_test.conflict;
              test_case "versioning-stable"
              @@ make "versioning_stable" Caqti_test.Versioning.stable;
            ] );
