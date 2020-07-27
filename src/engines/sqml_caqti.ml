@@ -43,6 +43,18 @@ module Make (Model : Model.S) = struct
 
   let error = Lwt.map ~f:convert_error
 
+  type 'res column_mapper = { f : 'a. 'a Sqml.Column.t -> 'res option }
+
+  let column_map (f : 'res column_mapper) =
+    let rec map : type t. t Sqml.Column.List.t -> 'res list = function
+      | Sqml.Column.List.Cons (column, tl) -> (
+        match f.f column with
+        | Some value -> value :: map tl
+        | None -> map tl )
+      | Sqml.Column.List.Empty -> []
+    in
+    map
+
   let make ?max_size uri =
     let* pool =
       Caqti_lwt.connect_pool ?max_size (Uri.of_string uri)
@@ -92,25 +104,19 @@ module Make (Model : Model.S) = struct
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           let create_table (module M : Table.Meta) =
-            let rec column :
-                type t. string list -> t Sqml.Column.List.t -> string list =
-             fun keys -> function
-              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; primary }, tl)
-                ->
-                let col = Format.sprintf "%s %s" name (string_of_type i type_)
-                and keys =
-                  if primary then
-                    keys @ [ name ]
-                  else
-                    keys
-                in
-                col :: column keys tl
-              | Sqml.Column.List.Empty -> (
-                match keys with
-                | [] -> []
-                | _ ->
-                  [ Fmt.str "PRIMARY KEY (%s)" @@ String.concat ~sep:", " keys ]
-                )
+            let columns columns =
+              let f { Sqml.Column.name; type_; _ } =
+                Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
+              in
+              column_map { f } columns
+            and primary columns =
+              let f { Sqml.Column.name; primary; _ } =
+                if primary then
+                  Some name
+                else
+                  None
+              in
+              column_map { f } columns
             in
             let module M = M in
             let* () =
@@ -127,10 +133,21 @@ module Make (Model : Model.S) = struct
                   C.exec query () )
               | _ -> failwith "dialect not handled"
             in
+            let columns = columns M.columns in
+            let columns =
+              match primary M.columns with
+              | [] -> columns
+              | primary ->
+                columns
+                @ [
+                    Fmt.str "PRIMARY KEY (%s)"
+                    @@ String.concat ~sep:", " primary;
+                  ]
+            in
             let query =
               Fmt.str "CREATE TABLE %s (%s)"
                 (table_name i M.schema M.name)
-                (String.concat ~sep:", " (column [] M.columns))
+                (String.concat ~sep:", " columns)
             in
             let* () = Log.debug (fun m -> m "create table: %s" query) in
             let query =
