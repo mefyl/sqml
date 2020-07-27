@@ -88,8 +88,6 @@ let error : [ `Sqml_engine of string ] Alcotest.testable =
     (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
     ( = )
 
-module Sqlite = Sqml_sqlite3.Make (Model)
-module Sqlite_test = Test (Sqlite)
 module Caqti = Sqml_caqti.Make (Model)
 module Caqti_test = Test (Caqti)
 
@@ -106,19 +104,6 @@ let () =
   Lwt_main.run
   @@ run "SQML"
        [
-         ( "SQLite",
-           let make () =
-             let db = Sqlite3.db_open ~memory:true ":memory:" in
-             fun () -> Sqlite.of_db db
-           in
-           [
-             test_case "select" @@ Sqlite_test.select (make ());
-             test_case "insert" @@ Sqlite_test.insert (make ());
-             test_case "join" @@ Sqlite_test.join (make ());
-             test_case "timestamp" @@ Sqlite_test.timestamp (make ());
-             test_case "versioning-stable"
-             @@ Sqlite_test.Versioning.stable (make ());
-           ] );
          ( "Caqti-SQLite",
            let make test () =
              let open Let.Syntax (Lwt) in
