@@ -1,7 +1,7 @@
 open Acid
 open Sqml
+open Utils
 module Array = Array.Monadic2 (Lwt_result)
-module Sequence = Engine.Sequence
 
 open Let.Syntax2 (Lwt_result)
 
@@ -189,49 +189,55 @@ module Make (Model : Model.S) = struct
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.String _ -> Caqti_type.string
 
-  let insert
-      (type mapped)
-      { pool }
-      (module Table : Table.S with type Meta.mapped = mapped)
-      (mapped : mapped) =
-    let module T = Table in
-    let query =
-      let t =
-        let ( % ) = Fn.compose in
-        let encode = Result.return % T.Meta.unmap
-        and decode = Result.return % T.Meta.map in
-        Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
-      in
-      Caqti_request.exec t
-      @@ Format.sprintf "INSERT INTO %S VALUES (%s)" T.name
-           (String.concat ~sep:", "
-              (List.init ~f:(fun _ -> "?") (Column.List.length T.Meta.columns)))
-    in
-    let insert value (module C : Caqti_lwt.CONNECTION) = C.exec query value in
-    Caqti_lwt.Pool.use (insert mapped) pool |> error
-
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
-    match query with
-    | Select (e, s, _) ->
-      let module Selected = (val s) in
-      let query =
-        Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
-      in
-      let get (module C : Caqti_lwt.CONNECTION) =
-        let f response =
-          let f
-              (stream :
-                ('c, ([> Caqti_error.retrieve ] as 'err)) Caqti_lwt.Stream.t) =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Sequence.unfold_step ~init ~f
+    let exec :
+        type res arity.
+        (res, arity) Model.Query.t ->
+        ( (res, arity, 'error) Model.Query.result,
+          [> `Sqml_engine of string ] )
+        Lwt_result.t = function
+      | Select (e, s, _) ->
+        let module Selected = (val s) in
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
         in
-        C.call ~f query ()
-      in
-      Caqti_lwt.Pool.use get pool |> error
+        let get (module C : Caqti_lwt.CONNECTION) =
+          let f response =
+            let f stream =
+              Lwt.bind (stream ()) ~f:(function
+                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                | Error e -> Lwt_result.fail e |> error
+                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+            and init = C.Response.to_stream response in
+            Lwt_result.return
+            @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
+          in
+          C.call ~f query ()
+        in
+        Caqti_lwt.Pool.use get pool |> error
+      | Insert (into, v) ->
+        let module T = (val into) in
+        let query =
+          let t =
+            let ( % ) = Fn.compose in
+            let encode = Result.return % T.Meta.unmap
+            and decode = Result.return % T.Meta.map in
+            Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
+          in
+          Caqti_request.exec t
+          @@ Format.sprintf "INSERT INTO %S VALUES (%s)" T.name
+               (String.concat ~sep:", "
+                  (List.init
+                     ~f:(fun _ -> "?")
+                     (Column.List.length T.Meta.columns)))
+        in
+        let insert value (module C : Caqti_lwt.CONNECTION) =
+          C.exec query value
+        in
+        let* () = Caqti_lwt.Pool.use (insert v) pool |> error in
+        Lwt_result.return Model.Query.Zero
+    in
+    exec query
 end

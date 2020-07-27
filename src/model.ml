@@ -1,5 +1,6 @@
 open Base
 open Poly
+open Utils
 include Model_intf
 
 module Make (Meta : sig
@@ -80,28 +81,49 @@ struct
   end
 
   module Query = struct
-    type 't t =
+    type many = Many
+
+    type zero = Zero
+
+    type ('t, 'arity, 'error) result =
+      | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+      | Zero : (unit, zero, 'error) result
+
+    type ('t, 'arity) t =
+      | Insert :
+          (module Table.S with type model = tag and type Meta.mapped = 'mapped)
+          * 'mapped
+          -> (unit, zero) t
       | Select :
           ('t, 'tag) Expression.t
           * (module Selectable.S with type model = tag and type tag = 'tag)
           * (bool, 'tag) Expression.t option
-          -> 't t
+          -> ('t, many) t
 
-    let pp f =
+    let pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
       let open Fmt in
-      function
-      | Select (e, s, where) ->
-        let module Selectable = (val s) in
-        ( box
-        @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
-           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
-                where )
-          f ()
+      fun fmt -> function
+        | Insert (into, _v) ->
+          let module Table = (val into) in
+          ( box
+          @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
+             ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
+             ++ const char '(' ++ const string "<val>" ++ const char ')' )
+            fmt ()
+        | Select (e, s, where) ->
+          let module Selectable = (val s) in
+          ( box
+          @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
+             ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+             ++ const
+                  (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
+                  where )
+            fmt ()
   end
 
   let select ~from ?where e = Query.Select (e, from, where)
+
+  let insert ~into e = Query.Insert (into, e)
 
   (* Metadata *)
 

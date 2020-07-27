@@ -7,6 +7,7 @@ module Expression :
 
 module Log = Log
 module Model = Model
-module Table = Table
 module Selectable = Selectable
+module Table = Table
 module Type = Type
+module Utils = Utils

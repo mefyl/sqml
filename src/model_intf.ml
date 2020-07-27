@@ -1,4 +1,5 @@
-open Base
+open Acid
+open Utils
 
 module type S = sig
   val version : Semver.t
@@ -21,20 +22,36 @@ module type S = sig
   end
 
   module Query : sig
-    type 't t =
-      (* FIXME: should be private *)
+    type many = Many
+
+    type zero = Zero
+
+    type ('t, 'arity, 'error) result =
+      | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+      | Zero : (unit, zero, 'error) result
+
+    type ('t, 'arity) t = private
+      | Insert :
+          (module Table.S with type model = tag and type Meta.mapped = 'mapped)
+          * 'mapped
+          -> (unit, zero) t
       | Select :
           ('t, 'tag) Expression.t
           * (module Selectable.S with type model = tag and type tag = 'tag)
           * (bool, 'tag) Expression.t option
-          -> 't t
+          -> ('t, many) t
 
-    val pp : Formatter.t -> 't t -> unit
+    val pp : Formatter.t -> ('t, 'arity) t -> unit
   end
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
-    't Query.t
+    ('t, Query.many) Query.t
+
+  val insert :
+    into:(module Table.S with type model = tag and type Meta.mapped = 'mapped) ->
+    'mapped ->
+    (unit, Query.zero) Query.t
 end

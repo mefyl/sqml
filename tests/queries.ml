@@ -2,7 +2,7 @@ open Acid
 
 open Let.Syntax2 (Lwt_result)
 
-module Sequence = Sqml.Engine.Sequence
+module Sequence = Sqml.Utils.Sequence
 
 module Alcotest = struct
   include Alcotest
@@ -34,15 +34,21 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       check string "repr" "SELECT table1.id FROM table1"
         (Fmt.str "%a" Model.Query.pp q));
     let* db = make () in
-    let* res = Engine.query db q in
+    let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
 
   let insert make () =
     let* db = make () in
-    let* () = Engine.insert db (module Model.T1) (0, "zero") in
-    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
-    let* res = Engine.query db q in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      Engine.query db q
+    in
+
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
+      Engine.query db q
+    in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
@@ -67,10 +73,17 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Option.value_exn (Ptime.of_float_s @@ (Unix.time () +. 3600.))
     in
     let* db = make () in
-    let* () = Engine.insert db (module Model.Ts) now in
-    let* () = Engine.insert db (module Model.Ts) later in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.Ts) now in
+      Engine.query db q
+    in
+    let* db = make () in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.Ts) later in
+      Engine.query db q
+    in
     let q = Model.select ~from:(module Model.Ts) Model.Ts.Column.time in
-    let* res = Engine.query db q in
+    let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Lwt_result.return
     @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
