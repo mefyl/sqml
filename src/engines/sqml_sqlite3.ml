@@ -12,10 +12,6 @@ module Make (Model : Model.S) = struct
   let table_name schema name =
     (Option.value ~default:"" @@ Option.map ~f:(fun s -> s ^ "_") schema) ^ name
 
-  let debug f = Logs_lwt.debug f |> Lwt.map ~f:Result.return
-
-  let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
-
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
@@ -54,7 +50,7 @@ module Make (Model : Model.S) = struct
     | rc -> fail_db db rc
 
   let query_raw db q =
-    let* () = debug @@ fun m -> m "sqlite3: execute raw query: %s" q in
+    let* () = Log.debug @@ fun m -> m "sqlite3: execute raw query: %s" q in
     stmt db q
 
   let query_raw_unit db fmt =
@@ -119,7 +115,7 @@ module Make (Model : Model.S) = struct
 
   let query { db } q =
     let query_str = Fmt.str "%a" Model.Query.pp q in
-    let* () = debug @@ fun m -> m "sqlite3: execute query: %s" query_str in
+    let* () = Log.debug @@ fun m -> m "sqlite3: execute query: %s" query_str in
     let* stmt = stmt db query_str in
     match q with
     | Select (e, s, _) ->
@@ -169,21 +165,33 @@ module Make (Model : Model.S) = struct
       in
       if not metadata_exists then
         let* () =
-          info (fun m ->
+          Log.info (fun m ->
               m "create model at version %s" @@ Semver.to_string Model.version)
         in
         let create_table (module M : Table.Meta) =
-          let rec column : type t. t Sqml.Column.List.t -> string list =
-            function
-            | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; _ }, tl) ->
-              let col = Format.sprintf "%s %s" name (string_of_type type_) in
-              col :: column tl
-            | Sqml.Column.List.Empty -> []
+          let rec column :
+              type t. string list -> t Sqml.Column.List.t -> string list =
+           fun keys -> function
+            | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; primary }, tl)
+              ->
+              let col = Format.sprintf "%s %s" name (string_of_type type_)
+              and keys =
+                if primary then
+                  keys @ [ name ]
+                else
+                  keys
+              in
+              col :: column keys tl
+            | Sqml.Column.List.Empty -> (
+              match keys with
+              | [] -> []
+              | _ ->
+                [ Fmt.str "PRIMARY KEY (%s)" @@ String.concat ~sep:", " keys ] )
           in
           let module M = M in
           query_raw_unit db "CREATE TABLE %S (%s)"
             (table_name M.schema M.name)
-            (String.concat ~sep:", " (column M.columns))
+            (String.concat ~sep:", " (column [] M.columns))
         in
         let* () = Array.iter ~f:create_table (Model.tables ()) in
         let now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
@@ -210,7 +218,7 @@ module Make (Model : Model.S) = struct
             (Semver.to_string current)
         else
           let* () =
-            info (fun m ->
+            Log.info (fun m ->
                 m "load model at version %s" @@ Semver.to_string Model.version)
           in
           Lwt_result.return res

@@ -5,6 +5,7 @@ module Expression :
   Expression.Interface with type ('t, 'tag) t = ('t, 'tag) Expression.t =
   Expression
 
+module Log = Log
 module Model = Model
 module Table = Table
 module Selectable = Selectable

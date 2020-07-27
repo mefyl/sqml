@@ -12,7 +12,8 @@ end
 
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
-  Logs.Src.set_level Logs.default (Some Logs.Debug)
+  Logs.Src.set_level Logs.default (Some Logs.Debug);
+  Logs.Src.set_level Sqml.Log.src (Some Logs.Debug)
 
 module ModelS :
   Sqml.Model.S

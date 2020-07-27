@@ -34,8 +34,6 @@ module Make (Model : Model.S) = struct
         "TIMESTAMP"
     | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
-  let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
-
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
@@ -84,24 +82,35 @@ module Make (Model : Model.S) = struct
           let* major, minor, subminor, _ = C.find query () in
           let current = (major, minor, subminor) in
           let* () =
-            info (fun m ->
+            Log.info (fun m ->
                 m "load model at version %s" @@ Semver.to_string current)
           in
           Lwt_result.return (true, current)
         else
           let* () =
-            info (fun m ->
+            Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           let create_table (module M : Table.Meta) =
-            let rec column : type t. t Sqml.Column.List.t -> string list =
-              function
-              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; _ }, tl) ->
-                let col =
-                  Format.sprintf "%s %s" name (string_of_type i type_)
+            let rec column :
+                type t. string list -> t Sqml.Column.List.t -> string list =
+             fun keys -> function
+              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; primary }, tl)
+                ->
+                let col = Format.sprintf "%s %s" name (string_of_type i type_)
+                and keys =
+                  if primary then
+                    keys @ [ name ]
+                  else
+                    keys
                 in
-                col :: column tl
-              | Sqml.Column.List.Empty -> []
+                col :: column keys tl
+              | Sqml.Column.List.Empty -> (
+                match keys with
+                | [] -> []
+                | _ ->
+                  [ Fmt.str "PRIMARY KEY (%s)" @@ String.concat ~sep:", " keys ]
+                )
             in
             let module M = M in
             let* () =
@@ -118,12 +127,14 @@ module Make (Model : Model.S) = struct
                   C.exec query () )
               | _ -> failwith "dialect not handled"
             in
-
             let query =
-              Caqti_request.exec ~oneshot:true Caqti_type.unit
-                (Format.sprintf "CREATE TABLE %s (%s)"
-                   (table_name i M.schema M.name)
-                   (String.concat ~sep:", " (column M.columns)))
+              Fmt.str "CREATE TABLE %s (%s)"
+                (table_name i M.schema M.name)
+                (String.concat ~sep:", " (column [] M.columns))
+            in
+            let* () = Log.debug (fun m -> m "create table: %s" query) in
+            let query =
+              Caqti_request.exec ~oneshot:true Caqti_type.unit query
             in
             C.exec query ()
           in
@@ -156,10 +167,6 @@ module Make (Model : Model.S) = struct
   let close { pool } = Caqti_lwt.Pool.drain pool
 
   module Model = Model
-
-  let debug f = Logs_lwt.debug f |> Lwt.map ~f:Result.return
-
-  let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
 
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
@@ -208,7 +215,7 @@ module Make (Model : Model.S) = struct
 
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
-    let* () = debug @@ fun m -> m "caqti: execute query: %s" query_str in
+    let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
     match query with
     | Select (e, s, _) ->
       let module Selected = (val s) in
