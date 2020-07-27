@@ -96,7 +96,7 @@ module Make (Model : Model.S) = struct
           let create_table (module M : Table.Meta) =
             let rec column : type t. t Sqml.Column.List.t -> string list =
               function
-              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_ }, tl) ->
+              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_; _ }, tl) ->
                 let col =
                   Format.sprintf "%s %s" name (string_of_type i type_)
                 in

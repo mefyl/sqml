@@ -120,13 +120,13 @@ struct
 
       let name = "metadata"
 
-      let major = { Column.name = "major"; type_ = Type.Int }
+      let major = Column.make "major" Type.Int
 
-      let minor = { Column.name = "minor"; type_ = Type.Int }
+      let minor = Column.make "minor" Type.Int
 
-      let subminor = { Column.name = "subminor"; type_ = Type.Int }
+      let subminor = Column.make "subminor" Type.Int
 
-      let migrated = { Column.name = "migrated"; type_ = Type.Timestamp }
+      let migrated = Column.make "migrated" Type.Timestamp
 
       type columns = int * (int * (int * (Ptime.t * unit)))
 
