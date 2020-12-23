@@ -1,7 +1,7 @@
 open Acid
 open Sqml
+open Utils
 module Array = Array.Monadic2 (Lwt_result)
-module Sequence = Engine.Sequence
 
 open Let.Syntax2 (Lwt_result)
 
@@ -34,8 +34,6 @@ module Make (Model : Model.S) = struct
         "TIMESTAMP"
     | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
 
-  let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
-
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
@@ -44,6 +42,33 @@ module Make (Model : Model.S) = struct
     Result.map_error ~f
 
   let error = Lwt.map ~f:convert_error
+
+  type 'res column_mapper = { f : 'a. 'a Sqml.Column.t -> 'res option }
+
+  let column_map (f : 'res column_mapper) =
+    let rec map : type t. t Sqml.Column.List.t -> 'res list = function
+      | Sqml.Column.List.Cons (column, tl) -> (
+        match f.f column with
+        | Some value -> value :: map tl
+        | None -> map tl )
+      | Sqml.Column.List.Empty -> []
+    in
+    map
+
+  let columns i columns =
+    let f { Sqml.Column.name; type_; _ } =
+      Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
+    in
+    column_map { f } columns
+
+  and primary columns =
+    let f { Sqml.Column.name; primary; _ } =
+      if primary then
+        Some name
+      else
+        None
+    in
+    column_map { f } columns
 
   let make ?max_size uri =
     let* pool =
@@ -84,25 +109,16 @@ module Make (Model : Model.S) = struct
           let* major, minor, subminor, _ = C.find query () in
           let current = (major, minor, subminor) in
           let* () =
-            info (fun m ->
+            Log.info (fun m ->
                 m "load model at version %s" @@ Semver.to_string current)
           in
           Lwt_result.return (true, current)
         else
           let* () =
-            info (fun m ->
+            Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           let create_table (module M : Table.Meta) =
-            let rec column : type t. t Sqml.Column.List.t -> string list =
-              function
-              | Sqml.Column.List.Cons ({ Sqml.Column.name; type_ }, tl) ->
-                let col =
-                  Format.sprintf "%s %s" name (string_of_type i type_)
-                in
-                col :: column tl
-              | Sqml.Column.List.Empty -> []
-            in
             let module M = M in
             let* () =
               match Caqti_driver_info.dialect_tag i with
@@ -118,12 +134,25 @@ module Make (Model : Model.S) = struct
                   C.exec query () )
               | _ -> failwith "dialect not handled"
             in
-
+            let columns = columns i M.columns in
+            let columns =
+              match primary M.columns with
+              | [] -> columns
+              | primary ->
+                columns
+                @ [
+                    Fmt.str "PRIMARY KEY (%s)"
+                    @@ String.concat ~sep:", " primary;
+                  ]
+            in
             let query =
-              Caqti_request.exec ~oneshot:true Caqti_type.unit
-                (Format.sprintf "CREATE TABLE %s (%s)"
-                   (table_name i M.schema M.name)
-                   (String.concat ~sep:", " (column M.columns)))
+              Fmt.str "CREATE TABLE %s (%s)"
+                (table_name i M.schema M.name)
+                (String.concat ~sep:", " columns)
+            in
+            let* () = Log.debug (fun m -> m "create table: %s" query) in
+            let query =
+              Caqti_request.exec ~oneshot:true Caqti_type.unit query
             in
             C.exec query ()
           in
@@ -157,13 +186,6 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let debug f = Logs_lwt.debug f |> Lwt.map ~f:Result.return
-
-  let info f = Logs_lwt.info f |> Lwt.map ~f:Result.return
-
-  let fail fmt =
-    Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
-
   let type_of_column : type t. t Sqml.Column.t -> t Caqti_type.t = function
     | { Column.type_; _ } -> (
       match type_ with
@@ -185,49 +207,76 @@ module Make (Model : Model.S) = struct
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.String _ -> Caqti_type.string
 
-  let insert
-      (type mapped)
-      { pool }
-      (module Table : Table.S with type Meta.mapped = mapped)
-      (mapped : mapped) =
-    let module T = Table in
-    let query =
-      let t =
-        let ( % ) = Fn.compose in
-        let encode = Result.return % T.Meta.unmap
-        and decode = Result.return % T.Meta.map in
-        Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
-      in
-      Caqti_request.exec t
-      @@ Format.sprintf "INSERT INTO %S VALUES (%s)" T.name
-           (String.concat ~sep:", "
-              (List.init ~f:(fun _ -> "?") (Column.List.length T.Meta.columns)))
-    in
-    let insert value (module C : Caqti_lwt.CONNECTION) = C.exec query value in
-    Caqti_lwt.Pool.use (insert mapped) pool |> error
-
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
-    let* () = debug @@ fun m -> m "caqti: execute query: %s" query_str in
-    match query with
-    | Select (e, s, _) ->
-      let module Selected = (val s) in
-      let query =
-        Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
-      in
-      let get (module C : Caqti_lwt.CONNECTION) =
-        let f response =
-          let f
-              (stream :
-                ('c, ([> Caqti_error.retrieve ] as 'err)) Caqti_lwt.Stream.t) =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Sequence.unfold_step ~init ~f
+    let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+    let exec :
+        type res arity.
+        (res, arity) Model.Query.t ->
+        ( (res, arity, 'error) Model.Query.result,
+          [> `Sqml_engine of string ] )
+        Lwt_result.t = function
+      | Select (e, s, _) ->
+        let module Selected = (val s) in
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
         in
-        C.call ~f query ()
-      in
-      Caqti_lwt.Pool.use get pool |> error
+        let get (module C : Caqti_lwt.CONNECTION) =
+          let f response =
+            let f stream =
+              Lwt.bind (stream ()) ~f:(function
+                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                | Error e -> Lwt_result.fail e |> error
+                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+            and init = C.Response.to_stream response in
+            Lwt_result.return
+            @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
+          in
+          C.call ~f query ()
+        in
+        Caqti_lwt.Pool.use get pool |> error
+      | Insert { into; on_conflict; value } ->
+        let module T = (val into) in
+        let insert value (module C : Caqti_lwt.CONNECTION) =
+          let i = C.driver_info in
+          let conflict_sqlite, conflict_pg =
+            match (Caqti_driver_info.dialect_tag i, on_conflict) with
+            | _, None -> ("", "")
+            | `Pgsql, Some Ignore -> ("", " ON CONFLICT DO NOTHING")
+            | `Pgsql, Some Update ->
+              let f { Column.name; _ } =
+                Option.return @@ Fmt.str "%s = excluded.%s" name name
+              in
+              ( "",
+                Fmt.str " ON CONFLICT (%s) DO UPDATE SET %s"
+                  (String.concat ~sep:", " (primary T.Meta.columns))
+                  (String.concat ~sep:", " (column_map { f } T.Meta.columns)) )
+            | `Sqlite, Some Ignore -> (" OR IGNORE", "")
+            | `Sqlite, Some Update -> (" OR REPLACE", "")
+            | _ -> failwith "dialect not handled"
+          in
+          let* query =
+            let t =
+              let ( % ) = Fn.compose in
+              let encode = Result.return % T.Meta.unmap
+              and decode = Result.return % T.Meta.map in
+              Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
+            in
+            let q =
+              Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite T.name
+                (String.concat ~sep:", "
+                   (List.init
+                      ~f:(fun _ -> "?")
+                      (Column.List.length T.Meta.columns)))
+                conflict_pg
+            in
+            let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
+            Caqti_request.exec t q
+          in
+          C.exec query value
+        in
+        let* () = Caqti_lwt.Pool.use (insert value) pool |> error in
+        Lwt_result.return Model.Query.Zero
+    in
+    exec query
 end

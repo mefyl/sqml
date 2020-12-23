@@ -1,10 +1,4 @@
 (library
- (name sqml_sqlite3)
- (public_name sqml.sqlite3)
- (modules sqml_sqlite3)
- (libraries base logs logs.lwt lwt semver sqml sqlite3))
-
-(library
  (name sqml_caqti)
  (public_name sqml.caqti)
  (modules sqml_caqti)

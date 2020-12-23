@@ -2,7 +2,7 @@ open Acid
 
 open Let.Syntax2 (Lwt_result)
 
-module Sequence = Sqml.Engine.Sequence
+module Sequence = Sqml.Utils.Sequence
 
 module Alcotest = struct
   include Alcotest
@@ -12,7 +12,20 @@ end
 
 let () =
   Logs.set_reporter (Logs_fmt.reporter ());
-  Logs.Src.set_level Logs.default (Some Logs.Debug)
+  Logs.Src.set_level Logs.default (Some Logs.Debug);
+  Logs.Src.set_level Sqml.Log.src (Some Logs.Debug)
+
+let error : [ `Sqml_engine of string ] Alcotest.testable =
+  Alcotest.testable
+    (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
+    (* We don't care about the error message *)
+      (fun _ _ -> true)
+
+let zero : (unit, Model.Query.zero, _) Model.Query.result Alcotest.testable =
+  Alcotest.testable
+    (fun fmt Model.Query.Zero ->
+      Format.pp_print_string fmt "empty query result")
+    ( = )
 
 module ModelS :
   Sqml.Model.S
@@ -33,15 +46,21 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       check string "repr" "SELECT table1.id FROM table1"
         (Fmt.str "%a" Model.Query.pp q));
     let* db = make () in
-    let* res = Engine.query db q in
+    let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
 
   let insert make () =
     let* db = make () in
-    let* () = Engine.insert db (module Model.T1) (0, "zero") in
-    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
-    let* res = Engine.query db q in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      Engine.query db q
+    in
+
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
+      Engine.query db q
+    in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
@@ -66,13 +85,61 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Option.value_exn (Ptime.of_float_s @@ (Unix.time () +. 3600.))
     in
     let* db = make () in
-    let* () = Engine.insert db (module Model.Ts) now in
-    let* () = Engine.insert db (module Model.Ts) later in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.Ts) now in
+      Engine.query db q
+    in
+    let* db = make () in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.Ts) later in
+      Engine.query db q
+    in
     let q = Model.select ~from:(module Model.Ts) Model.Ts.Column.time in
-    let* res = Engine.query db q in
+    let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Lwt_result.return
     @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
+
+  let conflict make () =
+    let* db = make () in
+    let* Zero =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      Engine.query db q
+    in
+    let* () =
+      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      let%lwt res = Engine.query db q in
+      Lwt_result.return
+        Alcotest.(
+          check (result zero error) "conflict result"
+            (Result.Error (`Sqml_engine ""))
+            res)
+    in
+    let* Zero =
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Ignore (0, "one")
+      in
+      Engine.query db q
+    in
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      Engine.query db q
+    in
+    let* res = Sequence.to_list res in
+    let () = Alcotest.(check (list string) "untouched row" [ "zero" ] res) in
+    let* Zero =
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Update (0, "two")
+      in
+      Engine.query db q
+    in
+    let* (Many res) =
+      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      Engine.query db q
+    in
+    let* res = Sequence.to_list res in
+    let () = Alcotest.(check (list string) "updated row" [ "two" ] res) in
+    Lwt_result.return ()
 
   module Versioning = struct
     let stable make () =
@@ -82,13 +149,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   end
 end
 
-let error : [ `Sqml_engine of string ] Alcotest.testable =
-  Alcotest.testable
-    (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
-    ( = )
-
-module Sqlite = Sqml_sqlite3.Make (Model)
-module Sqlite_test = Test (Sqlite)
 module Caqti = Sqml_caqti.Make (Model)
 module Caqti_test = Test (Caqti)
 
@@ -105,19 +165,6 @@ let () =
   Lwt_main.run
   @@ run "SQML"
        [
-         ( "SQLite",
-           let make () =
-             let db = Sqlite3.db_open ~memory:true ":memory:" in
-             fun () -> Sqlite.of_db db
-           in
-           [
-             test_case "select" @@ Sqlite_test.select (make ());
-             test_case "insert" @@ Sqlite_test.insert (make ());
-             test_case "join" @@ Sqlite_test.join (make ());
-             test_case "timestamp" @@ Sqlite_test.timestamp (make ());
-             test_case "versioning-stable"
-             @@ Sqlite_test.Versioning.stable (make ());
-           ] );
          ( "Caqti-SQLite",
            let make test () =
              let open Let.Syntax (Lwt) in
@@ -132,6 +179,7 @@ let () =
              test_case "select" @@ make Caqti_test.select;
              test_case "insert" @@ make Caqti_test.insert;
              test_case "join" @@ make Caqti_test.join;
+             test_case "conflict" @@ make Caqti_test.conflict;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
            ] );
@@ -184,6 +232,7 @@ let () =
              test_case "insert" @@ make "insert" Caqti_test.insert;
              test_case "join" @@ make "join" Caqti_test.join;
              test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
+             test_case "conflict" @@ make "conflict" Caqti_test.conflict;
              test_case "versioning-stable"
              @@ make "versioning_stable" Caqti_test.Versioning.stable;
            ] );

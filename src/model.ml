@@ -1,5 +1,6 @@
 open Base
 open Poly
+open Utils
 include Model_intf
 
 module Make (Meta : sig
@@ -80,28 +81,57 @@ struct
   end
 
   module Query = struct
-    type 't t =
+    type many = Many
+
+    type zero = Zero
+
+    type ('t, 'arity, 'error) result =
+      | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+      | Zero : (unit, zero, 'error) result
+
+    type on_conflict =
+      | Ignore
+      | Update
+
+    type ('t, 'arity) t =
+      | Insert : {
+          into :
+            (module Table.S with type model = tag and type Meta.mapped = 'mapped);
+          on_conflict : on_conflict option;
+          value : 'mapped;
+        }
+          -> (unit, zero) t
       | Select :
           ('t, 'tag) Expression.t
           * (module Selectable.S with type model = tag and type tag = 'tag)
           * (bool, 'tag) Expression.t option
-          -> 't t
+          -> ('t, many) t
 
-    let pp f =
+    let pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
       let open Fmt in
-      function
-      | Select (e, s, where) ->
-        let module Selectable = (val s) in
-        ( box
-        @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
-           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
-                where )
-          f ()
+      fun fmt -> function
+        | Insert { into; _ } ->
+          let module Table = (val into) in
+          ( box
+          @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
+             ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
+             ++ const char '(' ++ const string "<val>" ++ const char ')' )
+            fmt ()
+        | Select (e, s, where) ->
+          let module Selectable = (val s) in
+          ( box
+          @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
+             ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+             ++ const
+                  (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
+                  where )
+            fmt ()
   end
 
   let select ~from ?where e = Query.Select (e, from, where)
+
+  let insert ~into ?on_conflict value =
+    Query.Insert { into; on_conflict; value }
 
   (* Metadata *)
 
@@ -120,13 +150,13 @@ struct
 
       let name = "metadata"
 
-      let major = { Column.name = "major"; type_ = Type.Int }
+      let major = Column.make "major" Type.Int
 
-      let minor = { Column.name = "minor"; type_ = Type.Int }
+      let minor = Column.make "minor" Type.Int
 
-      let subminor = { Column.name = "subminor"; type_ = Type.Int }
+      let subminor = Column.make "subminor" Type.Int
 
-      let migrated = { Column.name = "migrated"; type_ = Type.Timestamp }
+      let migrated = Column.make "migrated" Type.Timestamp
 
       type columns = int * (int * (int * (Ptime.t * unit)))
 

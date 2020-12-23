@@ -10,9 +10,9 @@ module T1_meta = struct
 
   let name = "table1"
 
-  let id = { Column.name = "id"; type_ = Type.Int }
+  let id = Column.make ~primary:true "id" Type.Int
 
-  let name_ = { Column.name = "name"; type_ = Type.Text }
+  let name_ = Column.make "name" Type.Text
 
   type columns = int * (string * unit)
 
@@ -38,7 +38,7 @@ module T2_meta = struct
 
   let name = "table2"
 
-  let id = { Column.name = "id"; type_ = Type.Int }
+  let id = Column.make "id" Type.Int
 
   type columns = int * unit
 
@@ -65,7 +65,7 @@ module Ts = struct
 
     let name = "ts"
 
-    let time = { Column.name = "time"; type_ = Type.Timestamp }
+    let time = Column.make "time" Type.Timestamp
 
     type columns = Ptime.t * unit
 
