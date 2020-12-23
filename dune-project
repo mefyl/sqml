@@ -15,6 +15,7 @@
 
 (package
  (name sqml)
+ (synopsis "Type safe SQL queries.")
  (depends
   (alcotest
    (and
