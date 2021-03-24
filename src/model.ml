@@ -112,19 +112,19 @@ struct
       fun fmt -> function
         | Insert { into; _ } ->
           let module Table = (val into) in
-          ( box
+          (box
           @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
              ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
-             ++ const char '(' ++ const string "<val>" ++ const char ')' )
+             ++ const char '(' ++ const string "<val>" ++ const char ')')
             fmt ()
         | Select (e, s, where) ->
           let module Selectable = (val s) in
-          ( box
+          (box
           @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
              ++ const string "FROM" ++ sp ++ const Selectable.pp ()
              ++ const
                   (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
-                  where )
+                  where)
             fmt ()
   end
 
