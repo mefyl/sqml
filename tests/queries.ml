@@ -25,7 +25,7 @@ let zero : (unit, Model.Query.zero, _) Model.Query.result Alcotest.testable =
   Alcotest.testable
     (fun fmt Model.Query.Zero ->
       Format.pp_print_string fmt "empty query result")
-    ( = )
+    Poly.( = )
 
 module ModelS :
   Sqml.Model.S
@@ -196,8 +196,8 @@ let () =
              let module C = (val c) in
              let* () =
                C.exec
-                 ( Caqti_request.exec Caqti_type.unit
-                 @@ Format.sprintf "CREATE DATABASE %S" db )
+                 (Caqti_request.exec Caqti_type.unit
+                 @@ Format.sprintf "CREATE DATABASE %S" db)
                  ()
                |> Lwt.map ~f:convert_error
              in
@@ -219,8 +219,8 @@ let () =
              in
              let* drop_res =
                C.exec
-                 ( Caqti_request.exec Caqti_type.unit
-                 @@ Format.sprintf "DROP DATABASE %S" db )
+                 (Caqti_request.exec Caqti_type.unit
+                 @@ Format.sprintf "DROP DATABASE %S" db)
                  ()
                |> Lwt.map ~f:convert_error
              in

@@ -18,7 +18,7 @@ module Make (Model : Model.S) = struct
       | `Sqlite ->
         Format.sprintf "%s_%s" (String.escaped schema) (String.escaped name)
       | `Pgsql -> Format.sprintf "%S.%S" schema name
-      | _ -> failwith "dialect not handled" )
+      | _ -> failwith "dialect not handled")
 
   let string_of_type : type t. Caqti_driver_info.t -> t Sqml.Type.t -> string =
    fun i ->
@@ -28,7 +28,7 @@ module Make (Model : Model.S) = struct
     | Sqml.Type.Int -> "INTEGER"
     | Sqml.Type.Text -> "TEXT"
     | Sqml.Type.Timestamp ->
-      if d = `Sqlite then
+      if Poly.(d = `Sqlite) then
         "TEXT"
       else
         "TIMESTAMP"
@@ -50,7 +50,7 @@ module Make (Model : Model.S) = struct
       | Sqml.Column.List.Cons (column, tl) -> (
         match f.f column with
         | Some value -> value :: map tl
-        | None -> map tl )
+        | None -> map tl)
       | Sqml.Column.List.Empty -> []
     in
     map
@@ -101,10 +101,10 @@ module Make (Model : Model.S) = struct
                  "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
                   DESC LIMIT 1"
                  (table_name i (Some "sqml") "metadata")
-                 ( if Caqti_driver_info.dialect_tag i = `Sqlite then
+                 (if Poly.(Caqti_driver_info.dialect_tag i = `Sqlite) then
                    "datetime(migrated)"
                  else
-                   "migrated" ))
+                   "migrated"))
           in
           let* major, minor, subminor, _ = C.find query () in
           let current = (major, minor, subminor) in
@@ -131,7 +131,7 @@ module Make (Model : Model.S) = struct
                     Caqti_request.exec ~oneshot:true Caqti_type.unit
                       (Format.sprintf "CREATE SCHEMA IF NOT EXISTS %S" schema)
                   in
-                  C.exec query () )
+                  C.exec query ())
               | _ -> failwith "dialect not handled"
             in
             let columns = columns i M.columns in
@@ -173,7 +173,7 @@ module Make (Model : Model.S) = struct
     in
     let* transaction, current = Caqti_lwt.Pool.use create pool |> error in
     if transaction then
-      if current <> Model.version then
+      if Poly.(current <> Model.version) then
         fail "model version mismatch: code at %s, data at %s"
           (Semver.to_string Model.version)
           (Semver.to_string current)
@@ -193,7 +193,7 @@ module Make (Model : Model.S) = struct
       | Sqml.Type.Int -> Caqti_type.int
       | Sqml.Type.Text -> Caqti_type.string
       | Sqml.Type.Timestamp -> Caqti_type.ptime
-      | Sqml.Type.Varchar _ -> Caqti_type.string )
+      | Sqml.Type.Varchar _ -> Caqti_type.string)
 
   let rec type_of_s_list : type t. t Column.List.t -> t Caqti_type.t = function
     | Column.List.Empty -> Caqti_type.unit
