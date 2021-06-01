@@ -21,7 +21,7 @@ type ('a, 'tag) t =
   | Unit : (unit, 'tag) t
   | Var : (_, 'tag) t
 
-let unit = Unit
+let null = Unit
 
 let var () = Var
 
@@ -51,7 +51,7 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
   | String s ->
     let fmt = const char '\'' ++ string ++ const char '\'' in
     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
-  | Unit -> Fmt.string f "()"
+  | Unit -> Fmt.string f "NULL"
   | Var -> Fmt.string f "?"
 
 and pp_operator =

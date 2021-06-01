@@ -44,7 +44,7 @@ module type Interface = sig
 
   val string : string -> (string, 'tag) t
 
-  val unit : (unit, 'tag) t
+  val null : (unit, 'tag) t
 
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
