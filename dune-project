@@ -19,7 +19,7 @@
  (depends
   (acid
    (= 0.1.0))
-  (alcotest
+  (alcotest-lwt
    (and
     (>= 1.1.0)
     :with-test))
