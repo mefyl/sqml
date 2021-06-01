@@ -11,6 +11,9 @@ type ('a, 'tag) t =
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Int : int -> (int, 'tag) t
   | String : string -> (string, 'tag) t
+  | Var : (_, 'tag) t
+
+let var () = Var
 
 let make_column selectable column = Column { selectable; column }
 
@@ -33,6 +36,7 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
   | String s ->
     let fmt = const char '\'' ++ string ++ const char '\'' in
     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
+  | Var -> Fmt.string f "?"
 
 and pp_operator =
   let open Fmt in
@@ -58,3 +62,4 @@ let rec map_name :
   | Pair (a, b) -> Pair (map_name f a, map_name f b)
   | Int _ as e -> e
   | String _ as e -> e
+  | Var as e -> e

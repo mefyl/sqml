@@ -40,7 +40,7 @@ let convert_error =
   Result.map_error ~f
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
-  let populate db t1s =
+  let populate ?(t1s = [ (0, "zero"); (1, "one"); (2, "two") ]) db =
     let f t1 =
       let q = Model.insert ~into:(module Model.T1) t1 in
       let+ Zero = Engine.query db q in
@@ -86,7 +86,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       ()
     in
-    let* () = populate db [ (0, "zero"); (1, "one"); (2, "two") ] in
+    let* () = populate db in
     let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
     let* () = check_t1s db [ 0; 2 ] in
     let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 3)) in
@@ -105,7 +105,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       Sequence.to_list res
     in
-    let* () = populate db [ (0, "zero"); (1, "one"); (2, "two") ] in
+    let* () = populate db in
     let* res = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
     let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
     let* () = check_t1s db [ 0; 2 ] in
@@ -195,6 +195,20 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let () = Alcotest.(check (list string) "updated row" [ "two" ] res) in
     Lwt_result.return ()
 
+  let prepared make () =
+    let* db = make () in
+    let* () = populate db in
+    let get id =
+      Model.select
+        ~from:(module Model.T1)
+        ~where:Sqml.Expression.(Model.T1.Column.id = id)
+        Model.T1.Column.name
+    in
+    let get = Engine.Prepare.(arg int get) in
+    let* (Many res) = get db 1 in
+    let+ res = Sequence.to_list res in
+    Alcotest.(check (list string) "selected" [ "one" ] res)
+
   module Versioning = struct
     let stable make () =
       let* _ = make () in
@@ -238,6 +252,7 @@ let () =
              test_case "conflict" @@ make Caqti_test.conflict;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
+             test_case "prepared" @@ make Caqti_test.prepared;
            ] );
          ( "Caqti-PostgreSQL",
            let make db test () =
@@ -294,5 +309,6 @@ let () =
              test_case "conflict" @@ make "conflict" Caqti_test.conflict;
              test_case "versioning-stable"
              @@ make "versioning_stable" Caqti_test.Versioning.stable;
+             test_case "prepared" @@ make "prepared" Caqti_test.prepared;
            ] );
        ]

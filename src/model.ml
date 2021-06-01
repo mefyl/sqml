@@ -85,9 +85,13 @@ struct
 
     type zero = Zero
 
+    type _ arity =
+      | Many : many arity
+      | Zero : zero arity
+
     type ('t, 'arity, 'error) result =
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
-      | Zero : (unit, zero, 'error) result
+      | Zero : ('t, zero, 'error) result
 
     type on_conflict =
       | Ignore
@@ -117,6 +121,12 @@ struct
           * (module Selectable.S with type model = tag and type tag = 'tag)
           * (bool, 'tag) Expression.t option
           -> ('t, many) t
+
+    let arity : type a tag. (tag, a) t -> a arity = function
+      | Delete _ -> Zero
+      | Delete_returning _ -> Many
+      | Insert _ -> Zero
+      | Select _ -> Many
 
     let rec pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
       let open Fmt in

@@ -207,6 +207,14 @@ module Make (Model : Model.S) = struct
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.Int _ -> Caqti_type.int
     | Expression.String _ -> Caqti_type.string
+    | Expression.Var -> failwith "prepared query of variable type not supported"
+
+  let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
+    function
+    | Model.Query.Delete _ -> Caqti_type.unit
+    | Delete_returning { returning; _ } -> type_of_expr returning
+    | Insert _ -> Caqti_type.unit
+    | Select (what, _, _) -> type_of_expr what
 
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
@@ -293,4 +301,48 @@ module Make (Model : Model.S) = struct
         Lwt_result.return Model.Query.Zero
     in
     exec query
+
+  module Prepare = struct
+    type 't arg = 't Caqti_type.t
+
+    let int = Caqti_type.int
+
+    let string = Caqti_type.string
+
+    let arg
+        (type a res arity)
+        (arg : a arg)
+        (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
+        Model.tag t ->
+        a ->
+        ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
+          'error )
+        Lwt_result.t =
+      let query = f (Expression.var ()) in
+      let query_str = Fmt.str "%a" Model.Query.pp query in
+      match Model.Query.arity query with
+      | Zero ->
+        let prepared = Caqti_request.exec arg query_str in
+        let f v (module C : Caqti_lwt.CONNECTION) = C.exec prepared v in
+        fun { pool } v ->
+          let+ () = Caqti_lwt.Pool.use (f v) pool |> error in
+          Model.Query.Zero
+      | Many ->
+        let prepared = Caqti_request.find arg (query_type query) query_str in
+        let f v (module C : Caqti_lwt.CONNECTION) =
+          let f response =
+            let f stream =
+              Lwt.bind (stream ()) ~f:(function
+                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                | Error e -> Lwt_result.fail e |> error
+                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+            and init = C.Response.to_stream response in
+            Lwt_result.return @@ Sequence.unfold_step ~init ~f
+          in
+          C.call ~f prepared v
+        in
+        fun { pool } v ->
+          let+ res = Caqti_lwt.Pool.use (f v) pool |> error in
+          Model.Query.Many res
+  end
 end

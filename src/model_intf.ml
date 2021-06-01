@@ -26,9 +26,13 @@ module type S = sig
 
     type zero = Zero
 
+    type _ arity =
+      | Many : many arity
+      | Zero : zero arity
+
     type ('t, 'arity, 'error) result =
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
-      | Zero : (unit, zero, 'error) result
+      | Zero : ('t, zero, 'error) result
 
     type on_conflict =
       | Ignore
@@ -58,6 +62,8 @@ module type S = sig
           * (module Selectable.S with type model = tag and type tag = 'tag)
           * (bool, 'tag) Expression.t option
           -> ('t, many) t
+
+    val arity : (_, 'arity) t -> 'arity arity
 
     val pp : Formatter.t -> ('t, 'arity) t -> unit
   end

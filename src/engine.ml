@@ -1,5 +1,7 @@
 open Acid
 
+type error = [ `Sqml_engine of string ]
+
 module type S = sig
   type 'model t
 
@@ -8,7 +10,24 @@ module type S = sig
   val query :
     Model.tag t ->
     ('t, 'arity) Model.Query.t ->
-    ( ('t, 'arity, ([> `Sqml_engine of string ] as 'error)) Model.Query.result,
+    ( ('t, 'arity, ([> error ] as 'error)) Model.Query.result,
       'error )
     Lwt_result.t
+
+  module Prepare : sig
+    type 't arg
+
+    val int : int arg
+
+    val string : string arg
+
+    val arg :
+      'arg arg ->
+      (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
+      Model.tag t ->
+      'arg ->
+      ( ('res, 'arity, ([> error ] as 'error)) Model.Query.result,
+        'error )
+      Lwt_result.t
+  end
 end
