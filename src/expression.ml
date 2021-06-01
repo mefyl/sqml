@@ -9,6 +9,7 @@ type ('a, 'tag) t =
       -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Int : int -> (int, 'tag) t
+  | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
   | Map : {
       decode : 'mapped -> 't;
       encode : 't -> 'mapped;
@@ -41,6 +42,9 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
     fmt f ()
   | Int i -> Fmt.int f i
+  | Logic (op, l, r) ->
+    let fmt = const pp l ++ sp ++ pp_logic op ++ sp ++ const pp r in
+    fmt f ()
   | Map { mapped; _ } -> pp f mapped
   | Pair (a, Unit) -> pp f a
   | Pair (a, b) -> (const pp a ++ const string ", " ++ const pp b) f ()
@@ -59,7 +63,17 @@ and pp_operator =
   | Lt -> const char '<'
   | Lte -> const string "<="
 
+and pp_logic =
+  let open Fmt in
+  function
+  | And -> const string "AND"
+  | Or -> const string "OR"
+
 let ( = ) l r = Comparison (Eq, l, r)
+
+let ( && ) l r = Logic (And, l, r)
+
+let ( || ) l r = Logic (And, l, r)
 
 let int i = Int i
 
@@ -74,6 +88,7 @@ let rec map_name :
     Column { selectable = f selectable; column }
   | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
   | Int _ as e -> e
+  | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)
   | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
   | Pair (a, b) -> Pair (map_name f a, map_name f b)
   | String _ as e -> e

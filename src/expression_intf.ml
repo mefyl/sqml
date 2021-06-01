@@ -7,6 +7,10 @@ type comparison =
   | Lt
   | Lte
 
+type logic =
+  | And
+  | Or
+
 module type Interface = sig
   type ('a, 'tag) t = private
     | Column : {
@@ -16,6 +20,7 @@ module type Interface = sig
         -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
     | Int : int -> (int, 'tag) t
+    | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
     | Map : {
         decode : 'mapped -> 't;
         encode : 't -> 'mapped;
@@ -46,4 +51,8 @@ module type Interface = sig
   val ( @ ) : ('a, 'tag) t -> ('b, 'tag) t -> ('a * 'b, 'tag) t
 
   val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
+  val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+
+  val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
 end

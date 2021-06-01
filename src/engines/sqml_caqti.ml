@@ -204,6 +204,7 @@ module Make (Model : Model.S) = struct
     | Expression.Column { column; _ } -> type_of_column column
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.Int _ -> Caqti_type.int
+    | Expression.Logic _ -> Caqti_type.bool
     | Expression.Map { mapped; encode; decode } ->
       Caqti_type.custom
         ~decode:(fun x -> Result.Ok (decode x))
