@@ -205,6 +205,7 @@ module Make (Model : Model.S) = struct
     | Expression.Pair (a, b) ->
       Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
     | Expression.Comparison _ -> Caqti_type.bool
+    | Expression.Int _ -> Caqti_type.int
     | Expression.String _ -> Caqti_type.string
 
   let query { pool } query =

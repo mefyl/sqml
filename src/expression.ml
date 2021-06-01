@@ -9,6 +9,7 @@ type ('a, 'tag) t =
       -> ('t, 'tag) t
   | Pair : ('a, 'tag) t * ('b, 'tag) t -> ('a * 'b, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
+  | Int : int -> (int, 'tag) t
   | String : string -> (string, 'tag) t
 
 let make_column selectable column = Column { selectable; column }
@@ -28,6 +29,7 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
     fmt f ()
   | Pair (a, b) -> (const pp a ++ const string ", " ++ const pp b) f ()
+  | Int i -> Fmt.int f i
   | String s ->
     let fmt = const char '\'' ++ string ++ const char '\'' in
     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
@@ -43,6 +45,8 @@ and pp_operator =
 
 let ( = ) l r = Comparison (Eq, l, r)
 
+let int i = Int i
+
 let string s = String s
 
 let rec map_name :
@@ -52,4 +56,5 @@ let rec map_name :
     Column { selectable = f selectable; column }
   | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
   | Pair (a, b) -> Pair (map_name f a, map_name f b)
+  | Int _ as e -> e
   | String _ as e -> e
