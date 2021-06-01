@@ -29,6 +29,8 @@ module type S = sig
     end)
   end
 
+  val all : Meta.mapped Expression.t
+
   val columns : Meta.columns Expression.List.t
 end
 

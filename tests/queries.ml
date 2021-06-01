@@ -39,8 +39,12 @@ let convert_error =
   let f e = `Sqml_engine (Caqti_error.show e) in
   Result.map_error ~f
 
+let t1 = Alcotest.(testable Fmt.(pair int string) Poly.equal)
+
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
-  let populate ?(t1s = [ (0, "zero"); (1, "one"); (2, "two") ]) db =
+  let default_t1s = [ (0, "zero"); (1, "one"); (2, "two") ]
+
+  let populate ?(t1s = default_t1s) db =
     let f t1 =
       let q = Model.insert ~into:(module Model.T1) t1 in
       let+ Zero = Engine.query db q in
@@ -56,14 +60,39 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Alcotest.(check (list int) "ids" expected all)
 
   let select make () =
-    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
-    Alcotest.(
-      check string "repr" "SELECT table1.id FROM table1"
-        (Fmt.str "%a" Model.Query.pp q));
+    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id
+    and q_all = Model.select ~from:(module Model.T1) Model.T1.all in
+    let () =
+      Alcotest.(
+        check string "repr" "SELECT table1.id FROM table1"
+          (Fmt.str "%a" Model.Query.pp q))
+    and () =
+      Alcotest.(
+        check string "repr" "SELECT table1.id, table1.name FROM table1"
+          (Fmt.str "%a" Model.Query.pp q_all))
+    in
     let* db = make () in
-    let* (Many res) = Engine.query db q in
-    let* res = Sequence.to_list res in
-    Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
+    let* () =
+      let* (Many res) = Engine.query db q in
+      let* res = Sequence.to_list res in
+      Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
+    and* () =
+      let* (Many res) = Engine.query db q_all in
+      let* res = Sequence.to_list res in
+      Alcotest.(check (list t1) "selected" [] res) |> Lwt_result.return
+    in
+    let* () = populate db in
+    let* () =
+      let* (Many res) = Engine.query db q in
+      let* res = Sequence.to_list res in
+      Alcotest.(check (list int) "selected" [ 0; 1; 2 ] res)
+      |> Lwt_result.return
+    and* () =
+      let* (Many res) = Engine.query db q_all in
+      let* res = Sequence.to_list res in
+      Alcotest.(check (list t1) "selected" default_t1s res) |> Lwt_result.return
+    in
+    Lwt_result.return ()
 
   let insert make () =
     let* db = make () in

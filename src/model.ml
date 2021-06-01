@@ -46,6 +46,14 @@ struct
 
     let columns = bind_columns Meta.columns
 
+    let all =
+      let rec pairs_of_list : type l. l Expression.List.t -> l Expression.t =
+        function
+        | Expression.List.Cons (hd, tl) -> Expression.(hd @ pairs_of_list tl)
+        | Expression.List.Empty -> Expression.unit
+      in
+      Expression.map ~encode:Meta.unmap ~decode:Meta.map (pairs_of_list columns)
+
     let pp_ ~prefix:p =
       if p = "" then
         let open Fmt in

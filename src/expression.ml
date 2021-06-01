@@ -7,11 +7,20 @@ type ('a, 'tag) t =
       column : 't Column.t;
     }
       -> ('t, 'tag) t
-  | Pair : ('a, 'tag) t * ('b, 'tag) t -> ('a * 'b, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Int : int -> (int, 'tag) t
+  | Map : {
+      decode : 'mapped -> 't;
+      encode : 't -> 'mapped;
+      mapped : ('mapped, 'tag) t;
+    }
+      -> ('t, 'tag) t
+  | Pair : ('a, 'tag) t * ('b, 'tag) t -> ('a * 'b, 'tag) t
   | String : string -> (string, 'tag) t
+  | Unit : (unit, 'tag) t
   | Var : (_, 'tag) t
+
+let unit = Unit
 
 let var () = Var
 
@@ -31,11 +40,14 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
   | Comparison (op, l, r) ->
     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
     fmt f ()
-  | Pair (a, b) -> (const pp a ++ const string ", " ++ const pp b) f ()
   | Int i -> Fmt.int f i
+  | Map { mapped; _ } -> pp f mapped
+  | Pair (a, Unit) -> pp f a
+  | Pair (a, b) -> (const pp a ++ const string ", " ++ const pp b) f ()
   | String s ->
     let fmt = const char '\'' ++ string ++ const char '\'' in
     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
+  | Unit -> Fmt.string f "()"
   | Var -> Fmt.string f "?"
 
 and pp_operator =
@@ -51,6 +63,8 @@ let ( = ) l r = Comparison (Eq, l, r)
 
 let int i = Int i
 
+let map ~decode ~encode mapped = Map { decode; encode; mapped }
+
 let string s = String s
 
 let rec map_name :
@@ -59,7 +73,9 @@ let rec map_name :
   | Column { selectable; column } ->
     Column { selectable = f selectable; column }
   | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
-  | Pair (a, b) -> Pair (map_name f a, map_name f b)
   | Int _ as e -> e
+  | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
+  | Pair (a, b) -> Pair (map_name f a, map_name f b)
   | String _ as e -> e
+  | Unit as e -> e
   | Var as e -> e

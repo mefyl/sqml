@@ -202,11 +202,17 @@ module Make (Model : Model.S) = struct
   let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =
     function
     | Expression.Column { column; _ } -> type_of_column column
-    | Expression.Pair (a, b) ->
-      Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.Int _ -> Caqti_type.int
+    | Expression.Map { mapped; encode; decode } ->
+      Caqti_type.custom
+        ~decode:(fun x -> Result.Ok (decode x))
+        ~encode:(fun x -> Result.Ok (encode x))
+      @@ type_of_expr mapped
+    | Expression.Pair (a, b) ->
+      Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
     | Expression.String _ -> Caqti_type.string
+    | Expression.Unit -> Caqti_type.unit
     | Expression.Var -> failwith "prepared query of variable type not supported"
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
