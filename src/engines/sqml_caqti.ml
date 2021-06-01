@@ -214,7 +214,7 @@ module Make (Model : Model.S) = struct
     | Model.Query.Delete _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
     | Insert _ -> Caqti_type.unit
-    | Select (what, _, _) -> type_of_expr what
+    | Select { what; _ } -> type_of_expr what
 
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
@@ -251,10 +251,9 @@ module Make (Model : Model.S) = struct
             query_str
         in
         collect query
-      | Select (e, s, _) ->
-        let module Selected = (val s) in
+      | Select { what; _ } ->
         let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
+          Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
         in
         collect query
       | Insert { into; on_conflict; value } ->

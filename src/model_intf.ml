@@ -57,10 +57,12 @@ module type S = sig
           value : 'mapped;
         }
           -> (unit, zero) t
-      | Select :
-          ('t, 'tag) Expression.t
-          * (module Selectable.S with type model = tag and type tag = 'tag)
-          * (bool, 'tag) Expression.t option
+      | Select : {
+          from :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          what : ('t, 'tag) Expression.t;
+          where : (bool, 'tag) Expression.t option;
+        }
           -> ('t, many) t
 
     val arity : (_, 'arity) t -> 'arity arity

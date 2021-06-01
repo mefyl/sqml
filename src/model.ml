@@ -116,10 +116,12 @@ struct
           value : 'mapped;
         }
           -> (unit, zero) t
-      | Select :
-          ('t, 'tag) Expression.t
-          * (module Selectable.S with type model = tag and type tag = 'tag)
-          * (bool, 'tag) Expression.t option
+      | Select : {
+          from :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          what : ('t, 'tag) Expression.t;
+          where : (bool, 'tag) Expression.t option;
+        }
           -> ('t, many) t
 
     let arity : type a tag. (tag, a) t -> a arity = function
@@ -148,10 +150,10 @@ struct
              ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
              ++ const char '(' ++ const string "<val>" ++ const char ')')
             f ()
-        | Select (e, s, where) ->
-          let module Selectable = (val s) in
+        | Select { from; what; where } ->
+          let module Selectable = (val from) in
           (box
-          @@ const string "SELECT" ++ sp ++ const Expression.pp e ++ sp
+          @@ const string "SELECT" ++ sp ++ const Expression.pp what ++ sp
              ++ const string "FROM" ++ sp ++ const Selectable.pp ()
              ++ const
                   (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
@@ -159,7 +161,7 @@ struct
             f ()
   end
 
-  let select ~from ?where e = Query.Select (e, from, where)
+  let select ~from ?where what = Query.Select { from; what; where }
 
   let insert ~into ?on_conflict value =
     Query.Insert { into; on_conflict; value }
