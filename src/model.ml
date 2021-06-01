@@ -94,6 +94,17 @@ struct
       | Update
 
     type ('t, 'arity) t =
+      | Delete : {
+          from : (module Table.S with type model = tag);
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> (unit, zero) t
+      | Delete_returning : {
+          from : (module Table.S with type model = tag);
+          where : (bool, 'tag) Expression.t option;
+          returning : ('t, 'tag) Expression.t;
+        }
+          -> ('t, many) t
       | Insert : {
           into :
             (module Table.S with type model = tag and type Meta.mapped = 'mapped);
@@ -107,16 +118,26 @@ struct
           * (bool, 'tag) Expression.t option
           -> ('t, many) t
 
-    let pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
+    let rec pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
       let open Fmt in
-      fun fmt -> function
+      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword Expression.pp e in
+      fun f -> function
+        | Delete { from; where } ->
+          let module Table = (val from) in
+          Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
+            (option (pp_clause "WHERE"))
+            where
+        | Delete_returning { from; returning; where } ->
+          Fmt.pf f "%a%a" pp
+            (Delete { from; where })
+            (pp_clause "RETURNING") returning
         | Insert { into; _ } ->
           let module Table = (val into) in
           (box
           @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
              ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
              ++ const char '(' ++ const string "<val>" ++ const char ')')
-            fmt ()
+            f ()
         | Select (e, s, where) ->
           let module Selectable = (val s) in
           (box
@@ -125,13 +146,18 @@ struct
              ++ const
                   (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
                   where)
-            fmt ()
+            f ()
   end
 
   let select ~from ?where e = Query.Select (e, from, where)
 
   let insert ~into ?on_conflict value =
     Query.Insert { into; on_conflict; value }
+
+  let delete ~from ?where () = Query.Delete { from; where }
+
+  let delete_returning ~from ?where returning =
+    Query.Delete_returning { from; returning; where }
 
   (* Metadata *)
 

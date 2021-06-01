@@ -40,6 +40,21 @@ let convert_error =
   Result.map_error ~f
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
+  let populate db t1s =
+    let f t1 =
+      let q = Model.insert ~into:(module Model.T1) t1 in
+      let+ Zero = Engine.query db q in
+      ()
+    in
+    Lwt_list.map_p f t1s |> Lwt.map ~f:Result.all_unit
+
+  let check_t1s db expected =
+    let* (Many all) =
+      Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.Column.id
+    in
+    let+ all = Sequence.to_list all in
+    Alcotest.(check (list int) "ids" expected all)
+
   let select make () =
     let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
     Alcotest.(
@@ -56,13 +71,52 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let q = Model.insert ~into:(module Model.T1) (0, "zero") in
       Engine.query db q
     in
-
     let* (Many res) =
       let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
       Engine.query db q
     in
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
+
+  let delete make () =
+    let* db = make () in
+    let delete where =
+      let+ Zero =
+        Engine.query db @@ Model.delete ~from:(module Model.T1) ?where ()
+      in
+      ()
+    in
+    let* () = populate db [ (0, "zero"); (1, "one"); (2, "two") ] in
+    let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
+    let* () = check_t1s db [ 0; 2 ] in
+    let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 3)) in
+    let* () = check_t1s db [ 0; 2 ] in
+    let* () = delete None in
+    check_t1s db []
+
+  let delete_returning make () =
+    let* db = make () in
+    let delete where =
+      let* (Many res) =
+        Engine.query db
+        @@ Model.delete_returning
+             ~from:(module Model.T1)
+             ?where Model.T1.Column.name
+      in
+      Sequence.to_list res
+    in
+    let* () = populate db [ (0, "zero"); (1, "one"); (2, "two") ] in
+    let* res = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
+    let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
+    let* () = check_t1s db [ 0; 2 ] in
+    let* res = delete (Some Sqml.Expression.(Model.T1.Column.id = int 3)) in
+    let () = Alcotest.(check (list string) "deleted rows" [] res) in
+    let* () = check_t1s db [ 0; 2 ] in
+    let* res = delete None in
+    let () =
+      Alcotest.(check (list string) "deleted rows" [ "zero"; "two" ] res)
+    in
+    check_t1s db []
 
   let join _make () =
     let module J = Model.Join (Model.T1) (Model.T2) in
@@ -178,6 +232,8 @@ let () =
            [
              test_case "select" @@ make Caqti_test.select;
              test_case "insert" @@ make Caqti_test.insert;
+             test_case "delete" @@ make Caqti_test.delete;
+             test_case "delete_returning" @@ make Caqti_test.delete_returning;
              test_case "join" @@ make Caqti_test.join;
              test_case "conflict" @@ make Caqti_test.conflict;
              test_case "timestamp" @@ make Caqti_test.timestamp;
@@ -230,6 +286,9 @@ let () =
            [
              test_case "select" @@ make "select" Caqti_test.select;
              test_case "insert" @@ make "insert" Caqti_test.insert;
+             test_case "delete" @@ make "delete" Caqti_test.delete;
+             test_case "delete_returning"
+             @@ make "delete_returning" Caqti_test.delete_returning;
              test_case "join" @@ make "join" Caqti_test.join;
              test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
              test_case "conflict" @@ make "conflict" Caqti_test.conflict;

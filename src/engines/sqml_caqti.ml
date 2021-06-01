@@ -211,31 +211,44 @@ module Make (Model : Model.S) = struct
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+    let collect query =
+      let get (module C : Caqti_lwt.CONNECTION) =
+        let f response =
+          let f stream =
+            Lwt.bind (stream ()) ~f:(function
+              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+              | Error e -> Lwt_result.fail e |> error
+              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+          and init = C.Response.to_stream response in
+          Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
+        in
+        C.call ~f query ()
+      in
+      Caqti_lwt.Pool.use get pool |> error
+    in
     let exec :
         type res arity.
         (res, arity) Model.Query.t ->
         ( (res, arity, 'error) Model.Query.result,
           [> `Sqml_engine of string ] )
         Lwt_result.t = function
+      | Delete _ ->
+        let query = Caqti_request.exec Caqti_type.unit query_str in
+        let delete (module C : Caqti_lwt.CONNECTION) = C.exec query () in
+        let+ () = Caqti_lwt.Pool.use delete pool |> error in
+        Model.Query.Zero
+      | Delete_returning { returning; _ } ->
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+            query_str
+        in
+        collect query
       | Select (e, s, _) ->
         let module Selected = (val s) in
         let query =
           Caqti_request.collect Caqti_type.unit (type_of_expr e) query_str
         in
-        let get (module C : Caqti_lwt.CONNECTION) =
-          let f response =
-            let f stream =
-              Lwt.bind (stream ()) ~f:(function
-                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-                | Error e -> Lwt_result.fail e |> error
-                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-            and init = C.Response.to_stream response in
-            Lwt_result.return
-            @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
-          in
-          C.call ~f query ()
-        in
-        Caqti_lwt.Pool.use get pool |> error
+        collect query
       | Insert { into; on_conflict; value } ->
         let module T = (val into) in
         let insert value (module C : Caqti_lwt.CONNECTION) =

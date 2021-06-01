@@ -35,6 +35,17 @@ module type S = sig
       | Update
 
     type ('t, 'arity) t = private
+      | Delete : {
+          from : (module Table.S with type model = tag);
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> (unit, zero) t
+      | Delete_returning : {
+          from : (module Table.S with type model = tag);
+          where : (bool, 'tag) Expression.t option;
+          returning : ('t, 'tag) Expression.t;
+        }
+          -> ('t, many) t
       | Insert : {
           into :
             (module Table.S with type model = tag and type Meta.mapped = 'mapped);
@@ -62,4 +73,16 @@ module type S = sig
     ?on_conflict:Query.on_conflict ->
     'mapped ->
     (unit, Query.zero) Query.t
+
+  val delete :
+    from:(module Table.S with type model = tag) ->
+    ?where:(bool, 'tag) Expression.t ->
+    unit ->
+    (unit, Query.zero) Query.t
+
+  val delete_returning :
+    from:(module Table.S with type model = tag) ->
+    ?where:(bool, 'tag) Expression.t ->
+    ('res, 'tag) Expression.t ->
+    ('res, Query.many) Query.t
 end
