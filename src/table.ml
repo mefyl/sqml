@@ -70,7 +70,7 @@ module type META = sig
   val columns : columns Column.List.t
 
   val constraints :
-    (columns, 'tag) Bound_columns.List.t -> 'tag constraint_ list
+    (columns, 'tag) Expression.Column_list.t -> 'tag constraint_ list
 end
 
 module Meta (Minimal : sig

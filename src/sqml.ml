@@ -9,7 +9,6 @@ module Expression :
      and type ('t, 'tag) Column_list.t = ('t, 'tag) Expression.Column_list.t =
   Expression
 
-module Bound_columns = Bound_columns
 module Log = Log
 module Model = Model
 module Selectable = Selectable

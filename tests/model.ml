@@ -24,7 +24,7 @@ module T1_meta = struct
 
   let unmap (id, name) = (id, (name, ()))
 
-  let constraints Bound_columns.List.(Cons (_id, Cons (_name, Empty))) = []
+  let constraints Expression.Column_list.(Cons (_id, Cons (_name, Empty))) = []
 end
 
 module T1 = struct
@@ -53,7 +53,7 @@ module T2_meta = struct
 
   let unmap = Fn.id
 
-  let constraints (Bound_columns.List.Cons (id, Empty)) =
+  let constraints (Expression.Column_list.Cons (id, Empty)) =
     [
       Table.Foreign_key
         {
