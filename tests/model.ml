@@ -30,7 +30,7 @@ end
 module T1 = struct
   include BindTable (T1_meta)
 
-  let Expression.List.(Cons (id, Cons (name, Empty))) = columns
+  let Expression.List.(Cons (id, Cons (name, Empty))) = Expression.columns
 
   let Column.List.(Cons (id_column, Cons (_, Empty))) = Column.columns
 end
@@ -62,7 +62,7 @@ end
 module T2 = struct
   include BindTable (T2_meta)
 
-  let Expression.List.(Cons (id, Empty)) = columns
+  let Expression.List.(Cons (id, Empty)) = Expression.columns
 end
 
 module Ts = struct
@@ -86,5 +86,5 @@ module Ts = struct
 
   include BindTable (Meta_)
 
-  let Expression.List.(Cons (time, Empty)) = columns
+  let Expression.List.(Cons (time, Empty)) = Expression.columns
 end

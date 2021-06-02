@@ -35,11 +35,11 @@ module type S = sig
     module List : module type of S_list.Make (struct
       type 't t = ('t, tag) Expression.t
     end)
+
+    val columns : Meta.columns List.t
   end
 
   val all : Meta.mapped Expression.t
-
-  val columns : Meta.columns Expression.List.t
 end
 
 type 'tag constraint_ =

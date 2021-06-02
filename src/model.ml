@@ -44,17 +44,14 @@ struct
       module List = S_list.Make (struct
         type nonrec 'a t = 'a t
       end)
+
+      let rec bind_expressions : type l. l Column.List.t -> l List.t = function
+        | Column.List.Cons (hd, tl) ->
+          List.Cons (column @@ make_column name hd, bind_expressions tl)
+        | Column.List.Empty -> List.Empty
+
+      let columns = bind_expressions Meta.columns
     end
-
-    let rec bind_expressions : type l. l Column.List.t -> l Expression.List.t =
-      function
-      | Column.List.Cons (hd, tl) ->
-        Expression.List.Cons
-          ( Expression.column @@ Expression.make_column name hd,
-            bind_expressions tl )
-      | Column.List.Empty -> Expression.List.Empty
-
-    let columns = bind_expressions Meta.columns
 
     let all =
       let rec pairs_of_list : type l. l Expression.List.t -> l Expression.t =
@@ -62,7 +59,8 @@ struct
         | Expression.List.Cons (hd, tl) -> Expression.(hd @ pairs_of_list tl)
         | Expression.List.Empty -> Expression.null
       in
-      Expression.map ~encode:Meta.unmap ~decode:Meta.map (pairs_of_list columns)
+      Expression.map ~encode:Meta.unmap ~decode:Meta.map
+        (pairs_of_list Expression.columns)
 
     let pp_ ~prefix:p =
       if p = "" then
