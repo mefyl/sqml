@@ -12,12 +12,13 @@ type logic =
   | Or
 
 module type Interface = sig
-  type ('a, 'tag) t = private
-    | Column : {
-        selectable : string;
-        column : 't Column.t;
-      }
-        -> ('t, 'tag) t
+  type ('t, 'tag) column = private {
+    selectable : string;
+    column : 't Column.t;
+  }
+
+  type ('t, 'tag) t = private
+    | Column : ('t, 'tag) column -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
     | Int : int -> (int, 'tag) t
     | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
@@ -33,6 +34,8 @@ module type Interface = sig
     | Var : (_, 'tag) t
 
   val pp : Formatter.t -> ('t, 'tag) t -> unit
+
+  val column : ('t, 'tag) column -> ('t, 'tag) t
 
   val int : int -> (int, 'tag) t
 

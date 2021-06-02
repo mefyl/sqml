@@ -5,25 +5,19 @@ include Sqml.Model.S
 module T1 : sig
   include Table.S with type model = tag and type Meta.mapped = int * string
 
-  module Column : sig
-    val id : int Expression.t
+  val id : int Expression.t
 
-    val name : string Expression.t
-  end
+  val name : string Expression.t
 end
 
 module T2 : sig
   include Table.S with type model = tag
 
-  module Column : sig
-    val id : int Expression.t
-  end
+  val id : int Expression.t
 end
 
 module Ts : sig
   include Table.S with type model = tag and type Meta.mapped = Ptime.t
 
-  module Column : sig
-    val time : Ptime.t Expression.t
-  end
+  val time : Ptime.t Expression.t
 end

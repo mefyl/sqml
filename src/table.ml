@@ -19,7 +19,15 @@ module type S = sig
 
   module Meta : Meta
 
-  val name : string
+  module Column : sig
+    type 't t = ('t, tag) Expression.column
+
+    module List : module type of S_list.Make (struct
+      type 't t = ('t, tag) Expression.column
+    end)
+
+    val columns : Meta.columns List.t
+  end
 
   module Expression : sig
     type 't t = ('t, tag) Expression.t

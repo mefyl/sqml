@@ -1,7 +1,7 @@
 type 't t = {
   name : string;
   type_ : 't Type.t;
-  primary : bool;
+  primary : bool; (* foreign : Table.foreign_key option; *)
 }
 
 let make ?primary name type_ =

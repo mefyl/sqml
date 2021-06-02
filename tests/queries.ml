@@ -54,13 +54,13 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
 
   let check_t1s db expected =
     let* (Many all) =
-      Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.Column.id
+      Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.id
     in
     let+ all = Sequence.to_list all in
     Alcotest.(check (list int) "ids" expected all)
 
   let select make () =
-    let q = Model.select ~from:(module Model.T1) Model.T1.Column.id
+    let q = Model.select ~from:(module Model.T1) Model.T1.id
     and q_all = Model.select ~from:(module Model.T1) Model.T1.all in
     let () =
       Alcotest.(
@@ -101,7 +101,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* (Many res) =
-      let q = Model.select ~from:(module Model.T1) Model.T1.Column.id in
+      let q = Model.select ~from:(module Model.T1) Model.T1.id in
       Engine.query db q
     in
     let* res = Sequence.to_list res in
@@ -116,9 +116,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       ()
     in
     let* () = populate db in
-    let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = int 1)) in
     let* () = check_t1s db [ 0; 2 ] in
-    let* () = delete (Some Sqml.Expression.(Model.T1.Column.id = int 3)) in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = int 3)) in
     let* () = check_t1s db [ 0; 2 ] in
     let* () = delete None in
     check_t1s db []
@@ -128,17 +128,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let delete where =
       let* (Many res) =
         Engine.query db
-        @@ Model.delete_returning
-             ~from:(module Model.T1)
-             ?where Model.T1.Column.name
+        @@ Model.delete_returning ~from:(module Model.T1) ?where Model.T1.name
       in
       Sequence.to_list res
     in
     let* () = populate db in
-    let* res = delete (Some Sqml.Expression.(Model.T1.Column.id = int 1)) in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = int 1)) in
     let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
     let* () = check_t1s db [ 0; 2 ] in
-    let* res = delete (Some Sqml.Expression.(Model.T1.Column.id = int 3)) in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = int 3)) in
     let () = Alcotest.(check (list string) "deleted rows" [] res) in
     let* () = check_t1s db [ 0; 2 ] in
     let* res = delete None in
@@ -149,13 +147,13 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
 
   let join _make () =
     let module J = Model.Join (Model.T1) (Model.T2) in
-    let q = Model.select ~from:(module J) (J.left Model.T1.Column.id) in
+    let q = Model.select ~from:(module J) (J.left Model.T1.id) in
     Alcotest.(
       check string "simple"
         "SELECT l_table1.id FROM table1 l_table1 JOIN table2 r_table2"
         (Fmt.str "%a" Model.Query.pp q));
     let module J = Model.Join (Model.T1) (Model.T1) in
-    let q = Model.select ~from:(module J) (J.right Model.T1.Column.id) in
+    let q = Model.select ~from:(module J) (J.right Model.T1.id) in
     Alcotest.(
       check string "self"
         "SELECT r_table1.id FROM table1 l_table1 JOIN table1 r_table1"
@@ -177,7 +175,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let q = Model.insert ~into:(module Model.Ts) later in
       Engine.query db q
     in
-    let q = Model.select ~from:(module Model.Ts) Model.Ts.Column.time in
+    let q = Model.select ~from:(module Model.Ts) Model.Ts.time in
     let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Lwt_result.return
@@ -205,7 +203,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* (Many res) =
-      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      let q = Model.select ~from:(module Model.T1) Model.T1.name in
       Engine.query db q
     in
     let* res = Sequence.to_list res in
@@ -217,7 +215,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* (Many res) =
-      let q = Model.select ~from:(module Model.T1) Model.T1.Column.name in
+      let q = Model.select ~from:(module Model.T1) Model.T1.name in
       Engine.query db q
     in
     let* res = Sequence.to_list res in
@@ -230,8 +228,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let get id =
       Model.select
         ~from:(module Model.T1)
-        ~where:Sqml.Expression.(Model.T1.Column.id = id)
-        Model.T1.Column.name
+        ~where:Sqml.Expression.(Model.T1.id = id)
+        Model.T1.name
     in
     let get = Engine.Prepare.(arg int get) in
     let* (Many res) = get db 1 in

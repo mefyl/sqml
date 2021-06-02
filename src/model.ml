@@ -28,6 +28,14 @@ struct
 
     let name = Meta.name
 
+    module Column_ = struct
+      type nonrec 't t = ('t, tag) Expression.column
+
+      module List = S_list.Make (struct
+        type nonrec 'a t = 'a t
+      end)
+    end
+
     module Expression = struct
       include Expression
 
@@ -38,13 +46,15 @@ struct
       end)
     end
 
-    let rec bind_columns : type l. l Column.List.t -> l Expression.List.t =
+    let rec bind_expressions : type l. l Column.List.t -> l Expression.List.t =
       function
       | Column.List.Cons (hd, tl) ->
-        Expression.List.Cons (Expression.make_column name hd, bind_columns tl)
+        Expression.List.Cons
+          ( Expression.column @@ Expression.make_column name hd,
+            bind_expressions tl )
       | Column.List.Empty -> Expression.List.Empty
 
-    let columns = bind_columns Meta.columns
+    let columns = bind_expressions Meta.columns
 
     let all =
       let rec pairs_of_list : type l. l Expression.List.t -> l Expression.t =
@@ -63,6 +73,17 @@ struct
         const string name ++ sp ++ const string (p ^ name)
 
     let pp = pp_ ~prefix:""
+
+    module Column = struct
+      include Column_
+
+      let rec bind_columns : type l. l Column.List.t -> l List.t = function
+        | Column.List.Cons (hd, tl) ->
+          List.Cons (Expression.make_column name hd, bind_columns tl)
+        | Column.List.Empty -> List.Empty
+
+      let columns = bind_columns Meta.columns
+    end
   end
 
   module Join

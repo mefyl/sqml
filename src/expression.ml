@@ -1,12 +1,13 @@
 open Acid
 include Expression_intf
 
-type ('a, 'tag) t =
-  | Column : {
-      selectable : string;
-      column : 't Column.t;
-    }
-      -> ('t, 'tag) t
+type ('t, 'tag) column = {
+  selectable : string;
+  column : 't Column.t;
+}
+
+type ('t, 'tag) t =
+  | Column : ('t, 'tag) column -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Int : int -> (int, 'tag) t
   | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
@@ -25,7 +26,7 @@ let null = Unit
 
 let var () = Var
 
-let make_column selectable column = Column { selectable; column }
+let make_column selectable column = { selectable; column }
 
 let ( @ ) a b = Pair (a, b)
 
@@ -74,6 +75,8 @@ let ( = ) l r = Comparison (Eq, l, r)
 let ( && ) l r = Logic (And, l, r)
 
 let ( || ) l r = Logic (And, l, r)
+
+let column c = Column c
 
 let int i = Int i
 

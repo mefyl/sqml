@@ -295,7 +295,8 @@ module Make (Model : Model.S) = struct
               Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
             in
             let q =
-              Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite T.name
+              Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite
+                T.Meta.name
                 (String.concat ~sep:", "
                    (List.init
                       ~f:(fun _ -> "?")
