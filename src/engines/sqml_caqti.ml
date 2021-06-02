@@ -44,26 +44,29 @@ module Make (Model : Model.S) = struct
 
   let error = Lwt.map ~f:convert_error
 
-  type 'res column_mapper = { f : 'a. 'a Sqml.Column.t -> 'res option }
+  type 'res column_mapper = {
+    f : 'a 'tag. ('a, 'tag) Expression.column -> 'res option;
+  }
 
   let column_map (f : 'res column_mapper) =
-    let rec map : type t. t Sqml.Column.List.t -> 'res list = function
-      | Sqml.Column.List.Cons (column, tl) -> (
+    let rec map : type t tag. (t, tag) Expression.Column_list.t -> 'res list =
+      function
+      | Expression.Column_list.Cons (column, tl) -> (
         match f.f column with
         | Some value -> value :: map tl
         | None -> map tl)
-      | Sqml.Column.List.Empty -> []
+      | Expression.Column_list.Empty -> []
     in
     map
 
   let columns i columns =
-    let f { Sqml.Column.name; type_; _ } =
+    let f { Expression.column = { name; type_; _ }; _ } =
       Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
     in
     column_map { f } columns
 
   and primary columns =
-    let f { Sqml.Column.name; primary; _ } =
+    let f { Expression.column = { name; primary; _ }; _ } =
       if primary then
         Some name
       else
@@ -119,13 +122,12 @@ module Make (Model : Model.S) = struct
             Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
-          let create_table (module M : Table.META) =
-            let module M = M in
+          let create_table (module T : Table.S) =
             let* () =
               match Caqti_driver_info.dialect_tag i with
               | `Sqlite -> Lwt_result.return ()
               | `Pgsql -> (
-                match M.schema with
+                match T.Meta.schema with
                 | None -> Lwt_result.return ()
                 | Some schema ->
                   let query =
@@ -135,9 +137,9 @@ module Make (Model : Model.S) = struct
                   C.exec query ())
               | _ -> failwith "dialect not handled"
             in
-            let columns = columns i M.columns in
+            let columns = columns i T.Column.columns in
             let columns =
-              match primary M.columns with
+              match primary T.Column.columns with
               | [] -> columns
               | primary ->
                 columns
@@ -148,7 +150,7 @@ module Make (Model : Model.S) = struct
             in
             let query =
               Fmt.str "CREATE TABLE %s (%s)"
-                (table_name i M.schema M.name)
+                (table_name i T.Meta.schema T.Meta.name)
                 (String.concat ~sep:", " columns)
             in
             let* () = Log.debug (fun m -> m "create table: %s" query) in
@@ -199,10 +201,6 @@ module Make (Model : Model.S) = struct
     in
     of_type column.Column.type_
 
-  let rec type_of_s_list : type t. t Column.List.t -> t Caqti_type.t = function
-    | Column.List.Empty -> Caqti_type.unit
-    | Cons (c, tl) -> Caqti_type.tup2 (type_of_column c) (type_of_s_list tl)
-
   let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =
     function
     | Expression.Column { column; _ } -> type_of_column column
@@ -219,6 +217,11 @@ module Make (Model : Model.S) = struct
     | Expression.String _ -> Caqti_type.string
     | Expression.Unit -> Caqti_type.unit
     | Expression.Var -> failwith "prepared query of variable type not supported"
+
+  let rec type_of_expressions :
+      type t tag. (t, tag) Expression.List.t -> t Caqti_type.t = function
+    | Expression.List.Empty -> Caqti_type.unit
+    | Cons (c, tl) -> Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function
@@ -276,13 +279,14 @@ module Make (Model : Model.S) = struct
             | _, None -> ("", "")
             | `Pgsql, Some Ignore -> ("", " ON CONFLICT DO NOTHING")
             | `Pgsql, Some Update ->
-              let f { Column.name; _ } =
+              let f { Expression.column = { name; _ }; _ } =
                 Option.return @@ Fmt.str "%s = excluded.%s" name name
               in
               ( "",
                 Fmt.str " ON CONFLICT (%s) DO UPDATE SET %s"
-                  (String.concat ~sep:", " (primary T.Meta.columns))
-                  (String.concat ~sep:", " (column_map { f } T.Meta.columns)) )
+                  (String.concat ~sep:", " (primary T.Column.columns))
+                  (String.concat ~sep:", " (column_map { f } T.Column.columns))
+              )
             | `Sqlite, Some Ignore -> (" OR IGNORE", "")
             | `Sqlite, Some Update -> (" OR REPLACE", "")
             | _ -> failwith "dialect not handled"
@@ -292,7 +296,8 @@ module Make (Model : Model.S) = struct
               let ( % ) = Fn.compose in
               let encode = Result.return % T.Meta.unmap
               and decode = Result.return % T.Meta.map in
-              Caqti_type.custom ~encode ~decode (type_of_s_list T.Meta.columns)
+              Caqti_type.custom ~encode ~decode
+                (type_of_expressions T.Expression.columns)
             in
             let q =
               Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite
@@ -300,7 +305,7 @@ module Make (Model : Model.S) = struct
                 (String.concat ~sep:", "
                    (List.init
                       ~f:(fun _ -> "?")
-                      (Column.List.length T.Meta.columns)))
+                      (Expression.List.length T.Expression.columns)))
                 conflict_pg
             in
             let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in

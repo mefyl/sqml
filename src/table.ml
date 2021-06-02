@@ -5,8 +5,6 @@ module type META' = sig
 
   type columns
 
-  val columns : columns Column.List.t
-
   type mapped
 
   val map : columns -> mapped
@@ -46,6 +44,8 @@ type 'tag t = (module S with type tag = 'tag)
 
 module type META = sig
   include META'
+
+  val columns : columns Column.List.t
 
   val constraints :
     (columns, 'tag) Bound_columns.List.t -> 'tag constraint_ list

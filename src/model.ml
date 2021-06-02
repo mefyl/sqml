@@ -11,73 +11,77 @@ struct
 
   type tag = unit
 
-  type t = { mutable tables : (module Table.META) Array.t }
+  type t = { mutable tables : (module Table.S) Array.t }
 
   let v = { tables = [||] }
 
   let tables () = v.tables
 
   module BindTable (Meta : Table.META) = struct
-    type model = unit
+    module Res = struct
+      type model = unit
 
-    module Meta = Meta
+      module Meta = Meta
 
-    let _ = v.tables <- Array.append v.tables [| (module Meta) |]
+      type tag = unit
 
-    type tag = unit
+      let name = Meta.name
 
-    let name = Meta.name
+      module Column_ = struct
+        type nonrec 't t = ('t, tag) Expression.column
+      end
 
-    module Column_ = struct
-      type nonrec 't t = ('t, tag) Expression.column
+      module Expression = struct
+        include Expression
+
+        type nonrec 't t = ('t, tag) t
+
+        let rec bind_expressions :
+            type l. l Column.List.t -> (l, tag) Expression.List.t = function
+          | Column.List.Cons (hd, tl) ->
+            List.Cons (column @@ make_column name hd, bind_expressions tl)
+          | Column.List.Empty -> List.Empty
+
+        let columns = bind_expressions Meta.columns
+      end
+
+      let all =
+        let rec pairs_of_list :
+            type l. (l, tag) Expression.List.t -> l Expression.t = function
+          | Expression.List.Cons (hd, tl) -> Expression.(hd @ pairs_of_list tl)
+          | Expression.List.Empty -> Expression.null
+        in
+        Expression.map ~encode:Meta.unmap ~decode:Meta.map
+          (pairs_of_list Expression.columns)
+
+      let pp_ ~prefix:p =
+        if p = "" then
+          let open Fmt in
+          const string name
+        else
+          let open Fmt in
+          const string name ++ sp ++ const string (p ^ name)
+
+      let pp = pp_ ~prefix:""
+
+      module Column = struct
+        include Column_
+
+        let rec bind_columns :
+            type l. l Column.List.t -> (l, tag) Expression.Column_list.t =
+          function
+          | Column.List.Cons (hd, tl) ->
+            Expression.Column_list.Cons
+              (Expression.make_column name hd, bind_columns tl)
+          | Column.List.Empty -> Expression.Column_list.Empty
+
+        let columns = bind_columns Meta.columns
+      end
     end
 
-    module Expression = struct
-      include Expression
+    let _ = v.tables <- Array.append v.tables [| (module Res) |]
 
-      type nonrec 't t = ('t, tag) t
-
-      let rec bind_expressions :
-          type l. l Column.List.t -> (l, tag) Expression.List.t = function
-        | Column.List.Cons (hd, tl) ->
-          List.Cons (column @@ make_column name hd, bind_expressions tl)
-        | Column.List.Empty -> List.Empty
-
-      let columns = bind_expressions Meta.columns
-    end
-
-    let all =
-      let rec pairs_of_list :
-          type l. (l, tag) Expression.List.t -> l Expression.t = function
-        | Expression.List.Cons (hd, tl) -> Expression.(hd @ pairs_of_list tl)
-        | Expression.List.Empty -> Expression.null
-      in
-      Expression.map ~encode:Meta.unmap ~decode:Meta.map
-        (pairs_of_list Expression.columns)
-
-    let pp_ ~prefix:p =
-      if p = "" then
-        let open Fmt in
-        const string name
-      else
-        let open Fmt in
-        const string name ++ sp ++ const string (p ^ name)
-
-    let pp = pp_ ~prefix:""
-
-    module Column = struct
-      include Column_
-
-      let rec bind_columns :
-          type l. l Column.List.t -> (l, tag) Expression.Column_list.t =
-        function
-        | Column.List.Cons (hd, tl) ->
-          Expression.Column_list.Cons
-            (Expression.make_column name hd, bind_columns tl)
-        | Column.List.Empty -> Expression.Column_list.Empty
-
-      let columns = bind_columns Meta.columns
-    end
+    include Res
   end
 
   module Join
