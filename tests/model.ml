@@ -67,23 +67,21 @@ end
 
 module Ts = struct
   module Meta_ = struct
-    let schema = None
+    include Table.Meta (struct
+      let name = "ts"
 
-    let name = "ts"
+      let time = Column.make "time" Type.Timestamp
 
-    let time = Column.make "time" Type.Timestamp
+      type columns = Ptime.t * unit
 
-    type columns = Ptime.t * unit
-
-    let columns = Column.List.(Cons (time, Empty))
+      let columns = Column.List.(Cons (time, Empty))
+    end)
 
     type mapped = Ptime.t
 
     let map (time, ()) = time
 
     let unmap time = (time, ())
-
-    let constraints _ = []
   end
 
   include BindTable (Meta_)

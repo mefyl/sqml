@@ -58,3 +58,28 @@ module type META = sig
   val constraints :
     (columns, 'tag) Bound_columns.List.t -> 'tag constraint_ list
 end
+
+module Meta (Minimal : sig
+  val name : string
+
+  type columns
+
+  val columns : columns Column.List.t
+end) =
+struct
+  let schema = None
+
+  let name = Minimal.name
+
+  type columns = Minimal.columns
+
+  let columns = Minimal.columns
+
+  type mapped = columns
+
+  let map v = v
+
+  let unmap v = v
+
+  let constraints _ = []
+end
