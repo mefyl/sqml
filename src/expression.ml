@@ -3,7 +3,8 @@ include Expression_intf
 
 type ('t, 'tag) column = {
   selectable : string;
-  column : 't Column.t;
+  name : string;
+  type_ : 't Type.t;
 }
 
 module Column_list = S_list.Make2 (struct
@@ -34,7 +35,7 @@ let null = Unit
 
 let var () = Var
 
-let make_column selectable column = { selectable; column }
+let make_column ~selectable ~name type_ = { selectable; name; type_ }
 
 let ( @ ) a b = Pair (a, b)
 
@@ -44,9 +45,8 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
  fun f ->
   let open Fmt in
   function
-  | Column { selectable; column } ->
-    (const string selectable ++ const string "." ++ const string column.name)
-      f ()
+  | Column { selectable; name; _ } ->
+    (const string selectable ++ const string "." ++ const string name) f ()
   | Comparison (op, l, r) ->
     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
     fmt f ()
@@ -95,8 +95,8 @@ let string s = String s
 let rec map_name :
     type a tag tag'. (string -> string) -> (a, tag) t -> (a, tag') t =
  fun f -> function
-  | Column { selectable; column } ->
-    Column { selectable = f selectable; column }
+  | Column ({ selectable; _ } as pl) ->
+    Column { pl with selectable = f selectable }
   | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
   | Int _ as e -> e
   | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)

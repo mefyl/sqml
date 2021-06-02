@@ -56,7 +56,10 @@ module T2_meta = struct
   let constraints (Bound_columns.List.Cons (id, Empty)) =
     [
       Table.Foreign_key
-        { table = (module T1); target_column = T1.id_column; column = id };
+        {
+          target = Reference { table = (module T1); column = T1.id_column };
+          column = id;
+        };
     ]
 end
 

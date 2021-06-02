@@ -1,4 +1,4 @@
-module Column = Column
+module Column = Table.Column
 module Engine = Engine
 
 module Expression :

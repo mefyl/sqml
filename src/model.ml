@@ -27,8 +27,19 @@ struct
 
       let name = Meta.name
 
-      module Column_ = struct
+      module Column = struct
         type nonrec 't t = ('t, tag) Expression.column
+
+        let rec bind_columns :
+            type l. l Table.Column.List.t -> (l, tag) Expression.Column_list.t =
+          function
+          | Table.Column.List.Cons ({ name; type_; _ }, tl) ->
+            Expression.Column_list.Cons
+              ( Expression.make_column ~selectable:Meta.name ~name type_,
+                bind_columns tl )
+          | Empty -> Expression.Column_list.Empty
+
+        let columns = bind_columns Meta.columns
       end
 
       module Expression = struct
@@ -37,12 +48,14 @@ struct
         type nonrec 't t = ('t, tag) t
 
         let rec bind_expressions :
-            type l. l Column.List.t -> (l, tag) Expression.List.t = function
-          | Column.List.Cons (hd, tl) ->
-            List.Cons (column @@ make_column name hd, bind_expressions tl)
-          | Column.List.Empty -> List.Empty
+            type l tag.
+            (l, tag) Expression.Column_list.t -> (l, tag) Expression.List.t =
+          function
+          | Expression.Column_list.Cons (hd, tl) ->
+            List.Cons (column hd, bind_expressions tl)
+          | Empty -> List.Empty
 
-        let columns = bind_expressions Meta.columns
+        let columns = bind_expressions Column.columns
       end
 
       let all =
@@ -63,20 +76,6 @@ struct
           const string name ++ sp ++ const string (p ^ name)
 
       let pp = pp_ ~prefix:""
-
-      module Column = struct
-        include Column_
-
-        let rec bind_columns :
-            type l. l Column.List.t -> (l, tag) Expression.Column_list.t =
-          function
-          | Column.List.Cons (hd, tl) ->
-            Expression.Column_list.Cons
-              (Expression.make_column name hd, bind_columns tl)
-          | Column.List.Empty -> Expression.Column_list.Empty
-
-        let columns = bind_columns Meta.columns
-      end
     end
 
     let _ = v.tables <- Array.append v.tables [| (module Res) |]
@@ -215,18 +214,18 @@ struct
 
       let name = "metadata"
 
-      let major = Column.make "major" Type.Int
+      let major = Table.Column.make "major" Type.Int
 
-      let minor = Column.make "minor" Type.Int
+      let minor = Table.Column.make "minor" Type.Int
 
-      let subminor = Column.make "subminor" Type.Int
+      let subminor = Table.Column.make "subminor" Type.Int
 
-      let migrated = Column.make "migrated" Type.Timestamp
+      let migrated = Table.Column.make "migrated" Type.Timestamp
 
       type columns = int * (int * (int * (Ptime.t * unit)))
 
       let columns =
-        Column.List.(
+        Table.Column.List.(
           Cons (major, Cons (minor, Cons (subminor, Cons (migrated, Empty)))))
 
       let map (major, (minor, (subminor, (migrated, ())))) =

@@ -44,29 +44,26 @@ module Make (Model : Model.S) = struct
 
   let error = Lwt.map ~f:convert_error
 
-  type 'res column_mapper = {
-    f : 'a 'tag. ('a, 'tag) Expression.column -> 'res option;
-  }
+  type 'res column_mapper = { f : 't. 't Sqml.Column.t -> 'res option }
 
   let column_map (f : 'res column_mapper) =
-    let rec map : type t tag. (t, tag) Expression.Column_list.t -> 'res list =
-      function
-      | Expression.Column_list.Cons (column, tl) -> (
+    let rec map : type t. t Column.List.t -> 'res list = function
+      | Column.List.Cons (column, tl) -> (
         match f.f column with
         | Some value -> value :: map tl
         | None -> map tl)
-      | Expression.Column_list.Empty -> []
+      | Column.List.Empty -> []
     in
     map
 
   let columns i columns =
-    let f { Expression.column = { name; type_; _ }; _ } =
+    let f { Column.name; type_; _ } =
       Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
     in
     column_map { f } columns
 
   and primary columns =
-    let f { Expression.column = { name; primary; _ }; _ } =
+    let f { Column.name; primary; _ } =
       if primary then
         Some name
       else
@@ -137,9 +134,9 @@ module Make (Model : Model.S) = struct
                   C.exec query ())
               | _ -> failwith "dialect not handled"
             in
-            let columns = columns i T.Column.columns in
+            let columns = columns i T.Meta.columns in
             let columns =
-              match primary T.Column.columns with
+              match primary T.Meta.columns with
               | [] -> columns
               | primary ->
                 columns
@@ -189,21 +186,18 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let type_of_column column =
-    let rec of_type : type t. t Sqml.Type.t -> t Caqti_type.t = function
-      | Sqml.Type.Bool -> Caqti_type.bool
-      | Sqml.Type.Custom { encode; decode; repr } ->
-        Caqti_type.custom ~decode ~encode @@ of_type repr
-      | Sqml.Type.Int -> Caqti_type.int
-      | Sqml.Type.Text -> Caqti_type.string
-      | Sqml.Type.Timestamp -> Caqti_type.ptime
-      | Sqml.Type.Varchar _ -> Caqti_type.string
-    in
-    of_type column.Column.type_
+  let rec type_of_type : type t. t Sqml.Type.t -> t Caqti_type.t = function
+    | Sqml.Type.Bool -> Caqti_type.bool
+    | Sqml.Type.Custom { encode; decode; repr } ->
+      Caqti_type.custom ~decode ~encode @@ type_of_type repr
+    | Sqml.Type.Int -> Caqti_type.int
+    | Sqml.Type.Text -> Caqti_type.string
+    | Sqml.Type.Timestamp -> Caqti_type.ptime
+    | Sqml.Type.Varchar _ -> Caqti_type.string
 
   let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =
     function
-    | Expression.Column { column; _ } -> type_of_column column
+    | Expression.Column { type_; _ } -> type_of_type type_
     | Expression.Comparison _ -> Caqti_type.bool
     | Expression.Int _ -> Caqti_type.int
     | Expression.Logic _ -> Caqti_type.bool
@@ -279,14 +273,13 @@ module Make (Model : Model.S) = struct
             | _, None -> ("", "")
             | `Pgsql, Some Ignore -> ("", " ON CONFLICT DO NOTHING")
             | `Pgsql, Some Update ->
-              let f { Expression.column = { name; _ }; _ } =
+              let f { Column.name; _ } =
                 Option.return @@ Fmt.str "%s = excluded.%s" name name
               in
               ( "",
                 Fmt.str " ON CONFLICT (%s) DO UPDATE SET %s"
-                  (String.concat ~sep:", " (primary T.Column.columns))
-                  (String.concat ~sep:", " (column_map { f } T.Column.columns))
-              )
+                  (String.concat ~sep:", " (primary T.Meta.columns))
+                  (String.concat ~sep:", " (column_map { f } T.Meta.columns)) )
             | `Sqlite, Some Ignore -> (" OR IGNORE", "")
             | `Sqlite, Some Update -> (" OR REPLACE", "")
             | _ -> failwith "dialect not handled"

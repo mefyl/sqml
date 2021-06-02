@@ -14,7 +14,8 @@ type logic =
 module type Interface = sig
   type ('t, 'tag) column = private {
     selectable : string;
-    column : 't Column.t;
+    name : string;
+    type_ : 't Type.t;
   }
 
   module Column_list : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) column

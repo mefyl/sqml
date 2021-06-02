@@ -12,7 +12,7 @@ module type META' = sig
   val unmap : mapped -> columns
 end
 
-module type S = sig
+module type S' = sig
   include Selectable.S
 
   module Meta : META'
@@ -32,15 +32,37 @@ module type S = sig
   val all : Meta.mapped Expression.t
 end
 
+type 't reference =
+  | Reference : {
+      table : (module S' with type tag = 'target);
+      column : ('t, 'target) Expression.column;
+    }
+      -> 't reference
+
 type 'tag constraint_ =
   | Foreign_key : {
-      table : (module S with type tag = 'target);
-      target_column : ('t, 'target) Expression.column;
+      target : 't reference;
       column : ('t, 'tag) Expression.column;
     }
       -> 'tag constraint_
 
-type 'tag t = (module S with type tag = 'tag)
+module Column = struct
+  type 't t = {
+    name : string;
+    type_ : 't Type.t;
+    primary : bool;
+    foreign_keys : 't reference list;
+  }
+
+  let make ?primary ?(foreign_keys = []) name type_ =
+    { name; type_; primary = Option.value ~default:false primary; foreign_keys }
+
+  module List = S_list.Make (struct
+    type nonrec 'a t = 'a t
+  end)
+end
+
+type 'tag t = (module S' with type tag = 'tag)
 
 module type META = sig
   include META'
@@ -74,4 +96,10 @@ struct
   let unmap v = v
 
   let constraints _ = []
+end
+
+module type S = sig
+  module Meta : META
+
+  include S' with module Meta := Meta
 end
