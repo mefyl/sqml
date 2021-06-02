@@ -20,19 +20,20 @@ module Make (Model : Model.S) = struct
       | `Pgsql -> Format.sprintf "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
-  let string_of_type : type t. Caqti_driver_info.t -> t Sqml.Type.t -> string =
-   fun i ->
-    let d = Caqti_driver_info.dialect_tag i in
-    function
-    | Sqml.Type.Bool -> "BOOLEAN"
-    | Sqml.Type.Int -> "INTEGER"
-    | Sqml.Type.Text -> "TEXT"
-    | Sqml.Type.Timestamp ->
-      if Poly.(d = `Sqlite) then
-        "TEXT"
-      else
-        "TIMESTAMP"
-    | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
+  let string_of_type info t =
+    let d = Caqti_driver_info.dialect_tag info in
+    let rec f : type t. t Sqml.Type.t -> string = function
+      | Sqml.Type.Bool -> "BOOLEAN"
+      | Sqml.Type.Custom { repr; _ } -> f repr
+      | Sqml.Type.Int -> "INTEGER"
+      | Sqml.Type.Text -> "TEXT"
+      | Sqml.Type.Timestamp -> (
+        match d with
+        | `Sqlite -> "TEXT"
+        | _ -> "TIMESTAMP")
+      | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
+    in
+    f t
 
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
@@ -186,14 +187,17 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let type_of_column : type t. t Sqml.Column.t -> t Caqti_type.t = function
-    | { Column.type_; _ } -> (
-      match type_ with
+  let type_of_column column =
+    let rec of_type : type t. t Sqml.Type.t -> t Caqti_type.t = function
       | Sqml.Type.Bool -> Caqti_type.bool
+      | Sqml.Type.Custom { encode; decode; repr } ->
+        Caqti_type.custom ~decode ~encode @@ of_type repr
       | Sqml.Type.Int -> Caqti_type.int
       | Sqml.Type.Text -> Caqti_type.string
       | Sqml.Type.Timestamp -> Caqti_type.ptime
-      | Sqml.Type.Varchar _ -> Caqti_type.string)
+      | Sqml.Type.Varchar _ -> Caqti_type.string
+    in
+    of_type column.Column.type_
 
   let rec type_of_s_list : type t. t Column.List.t -> t Caqti_type.t = function
     | Column.List.Empty -> Caqti_type.unit
