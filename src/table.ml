@@ -1,4 +1,4 @@
-module type Meta = sig
+module type META' = sig
   val schema : string option
 
   val name : string
@@ -17,7 +17,7 @@ end
 module type S = sig
   include Selectable.S
 
-  module Meta : Meta
+  module Meta : META'
 
   module Column : sig
     type 't t = ('t, tag) Expression.column
@@ -42,4 +42,19 @@ module type S = sig
   val columns : Meta.columns Expression.List.t
 end
 
+type 'tag constraint_ =
+  | Foreign_key : {
+      table : (module S with type tag = 'target);
+      target_column : ('t, 'target) Expression.column;
+      column : ('t, 'tag) Expression.column;
+    }
+      -> 'tag constraint_
+
 type 'tag t = (module S with type tag = 'tag)
+
+module type META = sig
+  include META'
+
+  val constraints :
+    (columns, 'tag) Bound_columns.List.t -> 'tag constraint_ list
+end

@@ -119,7 +119,7 @@ module Make (Model : Model.S) = struct
             Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
-          let create_table (module M : Table.Meta) =
+          let create_table (module M : Table.META) =
             let module M = M in
             let* () =
               match Caqti_driver_info.dialect_tag i with

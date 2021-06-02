@@ -11,13 +11,13 @@ struct
 
   type tag = unit
 
-  type t = { mutable tables : (module Table.Meta) Array.t }
+  type t = { mutable tables : (module Table.META) Array.t }
 
   let v = { tables = [||] }
 
   let tables () = v.tables
 
-  module BindTable (Meta : Table.Meta) = struct
+  module BindTable (Meta : Table.META) = struct
     type model = unit
 
     module Meta = Meta
@@ -236,6 +236,8 @@ struct
 
       let unmap { major; minor; subminor; migrated } =
         (major, (minor, (subminor, (migrated, ()))))
+
+      let constraints _ = []
     end
 
     include BindTable (Meta_)

@@ -23,12 +23,16 @@ module T1_meta = struct
   let map (id, (name, ())) = (id, name)
 
   let unmap (id, name) = (id, (name, ()))
+
+  let constraints Bound_columns.List.(Cons (_id, Cons (_name, Empty))) = []
 end
 
 module T1 = struct
   include BindTable (T1_meta)
 
   let Expression.List.(Cons (id, Cons (name, Empty))) = columns
+
+  let Column.List.(Cons (id_column, Cons (_, Empty))) = Column.columns
 end
 
 module T2_meta = struct
@@ -47,6 +51,12 @@ module T2_meta = struct
   let map = Fn.id
 
   let unmap = Fn.id
+
+  let constraints (Bound_columns.List.Cons (id, Empty)) =
+    [
+      Table.Foreign_key
+        { table = (module T1); target_column = T1.id_column; column = id };
+    ]
 end
 
 module T2 = struct
@@ -72,6 +82,8 @@ module Ts = struct
     let map (time, ()) = time
 
     let unmap time = (time, ())
+
+    let constraints _ = []
   end
 
   include BindTable (Meta_)
