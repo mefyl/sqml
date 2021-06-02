@@ -76,6 +76,8 @@ struct
           const string name ++ sp ++ const string (p ^ name)
 
       let pp = pp_ ~prefix:""
+
+      let constraints = Meta.constraints Column.columns
     end
 
     let _ = v.tables <- Array.append v.tables [| (module Res) |]

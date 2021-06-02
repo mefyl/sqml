@@ -102,4 +102,6 @@ module type S = sig
   module Meta : META
 
   include S' with module Meta := Meta
+
+  val constraints : tag constraint_ list
 end
