@@ -22,21 +22,13 @@ module type S = sig
   module Column : sig
     type 't t = ('t, tag) Expression.column
 
-    module List : module type of S_list.Make (struct
-      type 't t = ('t, tag) Expression.column
-    end)
-
-    val columns : Meta.columns List.t
+    val columns : (Meta.columns, tag) Expression.Column_list.t
   end
 
   module Expression : sig
     type 't t = ('t, tag) Expression.t
 
-    module List : module type of S_list.Make (struct
-      type 't t = ('t, tag) Expression.t
-    end)
-
-    val columns : Meta.columns List.t
+    val columns : (Meta.columns, tag) Expression.List.t
   end
 
   val all : Meta.mapped Expression.t

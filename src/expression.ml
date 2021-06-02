@@ -6,6 +6,10 @@ type ('t, 'tag) column = {
   column : 't Column.t;
 }
 
+module Column_list = S_list.Make2 (struct
+  type ('t, 'tag) t = ('t, 'tag) column
+end)
+
 type ('t, 'tag) t =
   | Column : ('t, 'tag) column -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
@@ -21,6 +25,10 @@ type ('t, 'tag) t =
   | String : string -> (string, 'tag) t
   | Unit : (unit, 'tag) t
   | Var : (_, 'tag) t
+
+module List = S_list.Make2 (struct
+  type nonrec ('t, 'tag) t = ('t, 'tag) t
+end)
 
 let null = Unit
 

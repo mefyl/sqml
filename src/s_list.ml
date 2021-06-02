@@ -1,9 +1,20 @@
+module type S2 = sig
+  type ('t, 'tag) value
+
+  type ('t, 'tag) t =
+    | Cons : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
+    | Empty : (unit, 'tag) t
+
+  val length : _ t -> int
+end
+
 module Make2 (T : sig
   type ('a, 'b) t
-end) =
-struct
+end) : S2 with type ('t, 'tag) value = ('t, 'tag) T.t = struct
+  type ('t, 'tag) value = ('t, 'tag) T.t
+
   type ('t, 'tag) t =
-    | Cons : ('hd, 'tag) T.t * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
+    | Cons : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
     | Empty : (unit, 'tag) t
 
   let length l =

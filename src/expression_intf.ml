@@ -17,6 +17,8 @@ module type Interface = sig
     column : 't Column.t;
   }
 
+  module Column_list : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) column
+
   type ('t, 'tag) t = private
     | Column : ('t, 'tag) column -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
@@ -32,6 +34,8 @@ module type Interface = sig
     | String : string -> (string, 'tag) t
     | Unit : (unit, 'tag) t
     | Var : (_, 'tag) t
+
+  module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
   val pp : Formatter.t -> ('t, 'tag) t -> unit
 
