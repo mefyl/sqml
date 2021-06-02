@@ -1,0 +1,11 @@
+(rule
+ (target sqml.%{version:sqml}.opam)
+ (deps
+  (:opam sqml.opam))
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (cat %{opam})
+    (echo
+     "url {\n  src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml}\"\n}\n")))))
