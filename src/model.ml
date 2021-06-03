@@ -255,3 +255,67 @@ struct
     include BindTable (Meta_)
   end
 end
+
+type column_creation = {
+  name : string;
+  type_ : string;
+  primary : bool;
+}
+
+let schema (module Dialect : Dialect.S) (module Model : S) =
+  let create_table (module T : Table.S) =
+    let columns =
+      Table.Column.List.map
+        ~f:
+          {
+            f =
+              (fun { name; primary; type_; _ } ->
+                Some { name; primary; type_ = Dialect.string_of_type type_ });
+          }
+        T.Meta.columns
+    in
+    let definitions =
+      List.map ~f:(fun { name; type_; _ } -> Fmt.str "%s %s" name type_) columns
+    in
+    let definitions =
+      match List.filter ~f:(fun c -> c.primary) columns with
+      | [] -> definitions
+      | primary ->
+        definitions
+        @ [
+            Fmt.(
+              str "PRIMARY KEY (%a)"
+                (hbox @@ list ~sep:comma (using (fun c -> c.name) string))
+                primary);
+          ]
+    in
+    let definitions =
+      let f = function
+        | Table.Foreign_key references ->
+          let f (Table.Foreign_reference { target; column }) =
+            (column.name, target.column.name)
+          in
+          let columns, references =
+            Table.Nonempty_list.to_list references |> List.map ~f |> List.unzip
+          and target_table =
+            let (Table.Foreign_reference { target; _ }) =
+              Table.Nonempty_list.hd_nonempty references
+            in
+            Table.name target.table
+          in
+          Fmt.(
+            str "FOREIGN KEY (%a) REFERENCES %s(%a)"
+              (hbox @@ list ~sep:comma string)
+              columns target_table
+              (hbox @@ list ~sep:comma string)
+              references)
+      in
+      definitions @ List.map ~f T.constraints
+    in
+    Fmt.(
+      str "CREATE TABLE %s (%a)"
+        (Dialect.table_name ?schema:T.Meta.schema T.Meta.name)
+        (hbox @@ list ~sep:comma string)
+        definitions)
+  in
+  Array.map ~f:create_table (Model.tables ()) |> Array.to_list

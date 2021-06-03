@@ -94,3 +94,5 @@ module type S = sig
     ('res, 'tag) Expression.t ->
     ('res, Query.many) Query.t
 end
+
+type t = (module S)

@@ -1,4 +1,5 @@
 module Column = Table.Column
+module Dialect = Dialect
 module Engine = Engine
 
 module Expression :
