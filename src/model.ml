@@ -31,15 +31,23 @@ struct
         type nonrec 't t = ('t, tag) Expression.column
 
         let rec bind_columns :
-            type l. l Table.Column.List.t -> (l, tag) Expression.Column_list.t =
+            type l.
+            l Table.Column.List.t ->
+            (l, tag) Expression.Column_list.t * tag Table.constraint_ list =
           function
-          | Table.Column.List.Cons ({ name; type_; _ }, tl) ->
-            Expression.Column_list.Cons
-              ( Expression.make_column ~selectable:Meta.name ~name type_,
-                bind_columns tl )
-          | Empty -> Expression.Column_list.Empty
+          | Table.Column.List.Cons ({ name; type_; foreign_keys; _ }, tl) ->
+            let column =
+              Expression.make_column ~selectable:Meta.name ~name type_
+            in
+            let constraints =
+              let f target = Table.Foreign_key { target; column } in
+              List.map ~f foreign_keys
+            and rest, rest_constraints = bind_columns tl in
+            ( Expression.Column_list.Cons (column, rest),
+              constraints @ rest_constraints )
+          | Empty -> (Expression.Column_list.Empty, [])
 
-        let columns = bind_columns Meta.columns
+        let columns, constraints = bind_columns Meta.columns
       end
 
       module Expression = struct
@@ -77,7 +85,7 @@ struct
 
       let pp = pp_ ~prefix:""
 
-      let constraints = Meta.constraints Column.columns
+      let constraints = Column.constraints @ Meta.constraints Column.columns
     end
 
     let _ = v.tables <- Array.append v.tables [| (module Res) |]
