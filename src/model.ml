@@ -40,7 +40,12 @@ struct
               Expression.make_column ~selectable:Meta.name ~name type_
             in
             let constraints =
-              let f target = Table.Foreign_key { target; column } in
+              let f (Table.Column.Reference target) =
+                Table.(
+                  Foreign_key
+                    (Table.Nonempty_list.make
+                       (Foreign_reference { target; column })))
+              in
               List.map ~f foreign_keys
             and rest, rest_constraints = bind_columns tl in
             ( Expression.Column_list.Cons (column, rest),

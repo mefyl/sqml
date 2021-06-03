@@ -145,6 +145,28 @@ module Make (Model : Model.S) = struct
                     @@ String.concat ~sep:", " primary;
                   ]
             in
+            let columns =
+              let f = function
+                | Table.Foreign_key references ->
+                  let f (Table.Foreign_reference { target; column }) =
+                    (column.name, target.column.name)
+                  in
+                  let columns, references =
+                    Table.Nonempty_list.to_list references
+                    |> List.map ~f |> List.unzip
+                  and target_table =
+                    let (Table.Foreign_reference { target; _ }) =
+                      Table.Nonempty_list.hd_nonempty references
+                    in
+                    Table.name target.table
+                  in
+                  Fmt.(
+                    str "FOREIGN KEY (%a) REFERENCES %s(%a)"
+                      (list ~sep:comma string) columns target_table
+                      (list ~sep:comma string) references)
+              in
+              columns @ List.map ~f T.constraints
+            in
             let query =
               Fmt.str "CREATE TABLE %s (%s)"
                 (table_name i T.Meta.schema T.Meta.name)

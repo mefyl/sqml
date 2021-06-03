@@ -1,3 +1,5 @@
+open Acid
+
 module type META' = sig
   val schema : string option
 
@@ -32,26 +34,49 @@ module type S' = sig
   val all : Meta.mapped Expression.t
 end
 
-type 't reference =
-  | Reference : {
-      table : (module S' with type tag = 'target);
-      column : ('t, 'target) Expression.column;
-    }
-      -> 't reference
+type ('t, 'target) reference = {
+  table : (module S' with type tag = 'target);
+  column : ('t, 'target) Expression.column;
+}
 
-type 'tag constraint_ =
-  | Foreign_key : {
-      target : 't reference;
+type ('tag, 'target) foreign_reference =
+  | Foreign_reference : {
+      target : ('t, 'target) reference;
       column : ('t, 'tag) Expression.column;
     }
+      -> ('tag, 'target) foreign_reference
+
+module type COLLECTION = sig
+  type 'a t
+
+  val map : 'a t -> f:('a -> 'b) -> 'b t
+end
+
+module Nonempty_list = struct
+  type 'a t = 'a * 'a list
+
+  let map (hd, tl) ~f = (f hd, List.map ~f tl)
+
+  let make ?(tail = []) hd = (hd, tail)
+
+  let hd_nonempty (v, _) = v
+
+  let to_list (hd, tl) = hd :: tl
+end
+
+type 'tag constraint_ =
+  | Foreign_key :
+      ('tag, 'target) foreign_reference Nonempty_list.t
       -> 'tag constraint_
 
 module Column = struct
+  type 't foreign_key = Reference : ('t, _) reference -> 't foreign_key
+
   type 't t = {
     name : string;
     type_ : 't Type.t;
     primary : bool;
-    foreign_keys : 't reference list;
+    foreign_keys : 't foreign_key list;
   }
 
   let make ?primary ?(foreign_keys = []) name type_ =
@@ -63,6 +88,8 @@ module Column = struct
 end
 
 type 'tag t = (module S' with type tag = 'tag)
+
+let name (type tag) (module T : S' with type tag = tag) = T.Meta.name
 
 module type META = sig
   include META'

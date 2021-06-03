@@ -36,32 +36,21 @@ module T1 = struct
     Column.columns
 end
 
-module T2_meta = struct
-  let schema = None
-
+module T2_meta = Table.Meta (struct
   let name = "table2"
 
-  let id = Column.make "id" Type.Int
+  let id =
+    Column.make "id"
+      ~foreign_keys:
+        [
+          Table.Column.Reference { table = (module T1); column = T1.id_column };
+        ]
+      Type.Int
 
   type columns = int * unit
 
   let columns = Column.List.(Cons (id, Empty))
-
-  type mapped = columns
-
-  let map = Fn.id
-
-  let unmap = Fn.id
-
-  let constraints (Expression.Column_list.Cons (id, Empty)) =
-    [
-      Table.Foreign_key
-        {
-          target = Reference { table = (module T1); column = T1.id_column };
-          column = id;
-        };
-    ]
-end
+end)
 
 module T2 = struct
   include BindTable (T2_meta)
