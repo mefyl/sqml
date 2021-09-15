@@ -21,19 +21,9 @@ module Make (Model : Model.S) = struct
       | _ -> failwith "dialect not handled")
 
   let string_of_type info t =
-    let d = Caqti_driver_info.dialect_tag info in
-    let rec f : type t. t Sqml.Type.t -> string = function
-      | Sqml.Type.Bool -> "BOOLEAN"
-      | Sqml.Type.Custom { repr; _ } -> f repr
-      | Sqml.Type.Int -> "INTEGER"
-      | Sqml.Type.Text -> "TEXT"
-      | Sqml.Type.Time -> (
-        match d with
-        | `Sqlite -> "TEXT"
-        | _ -> "TIMESTAMP")
-      | Sqml.Type.Varchar len -> Format.sprintf "VARCHAR(%i)" len
-    in
-    f t
+    match Caqti_driver_info.dialect_tag info with
+    | `Sqlite -> Dialect.Sqlite.string_of_type t
+    | _ -> Dialect.Postgresql.string_of_type t
 
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
