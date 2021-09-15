@@ -14,26 +14,31 @@ module T1_meta = struct
 
   let name_ = Column.make "name" Type.Text
 
-  type columns = int * (string * unit)
+  let description = Column.make_nullable "description" Type.Text
 
-  let columns = Column.List.(Cons (id, Cons (name_, Empty)))
+  type columns = int * (string * (string option * unit))
 
-  type mapped = int * string
+  let columns = Column.List.(Cons (id, Cons (name_, Cons (description, Empty))))
 
-  let map (id, (name, ())) = (id, name)
+  type mapped = int * string * string option
 
-  let unmap (id, name) = (id, (name, ()))
+  let map (id, (name, (desc, ()))) = (id, name, desc)
 
-  let constraints Expression.Column_list.(Cons (_id, Cons (_name, Empty))) = []
+  let unmap (id, name, desc) = (id, (name, (desc, ())))
+
+  let constraints
+      Expression.Column_list.(
+        Cons (_id, Cons (_name, Cons (_description, Empty)))) =
+    []
 end
 
 module T1 = struct
   include BindTable (T1_meta)
 
-  let Sqml.Expression.List.(Cons (id, Cons (name, Empty))) = Expression.columns
+  let Sqml.Expression.List.(Cons (id, Cons (name, Cons (description, Empty)))) =
+    Expression.columns
 
-  let Sqml.Expression.Column_list.(Cons (id_column, Cons (_, Empty))) =
-    Column.columns
+  let Sqml.Expression.Column_list.(Cons (id_column, _)) = Column.columns
 end
 
 module T2_meta = Table.Meta (struct

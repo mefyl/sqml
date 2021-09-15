@@ -11,6 +11,7 @@ module Postgresql : S = struct
       | Type.Bool -> "BOOLEAN"
       | Type.Custom { repr; _ } -> f repr
       | Type.Int -> "INTEGER"
+      | Type.Nullable t -> f t
       | Type.Text -> "TEXT"
       | Type.Time -> "TIMESTAMP"
       | Type.Varchar len -> Fmt.str "VARCHAR(%i)" len

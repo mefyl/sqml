@@ -82,6 +82,14 @@ module Column = struct
   let make ?primary ?(foreign_keys = []) name type_ =
     { name; type_; primary = Option.value ~default:false primary; foreign_keys }
 
+  let make_nullable ?primary ?(foreign_keys = []) name type_ =
+    {
+      name;
+      type_ = Nullable type_;
+      primary = Option.value ~default:false primary;
+      foreign_keys;
+    }
+
   module List = S_list.Make (struct
     type nonrec 'a t = 'a t
   end)

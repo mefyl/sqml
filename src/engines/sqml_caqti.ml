@@ -20,10 +20,20 @@ module Make (Model : Model.S) = struct
       | `Pgsql -> Format.sprintf "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
+  let nullable : type t. t Type.t -> bool = function
+    | Type.Nullable _ -> true
+    | _ -> false
+
   let string_of_type info t =
-    match Caqti_driver_info.dialect_tag info with
-    | `Sqlite -> Dialect.Sqlite.string_of_type t
-    | _ -> Dialect.Postgresql.string_of_type t
+    let type_ =
+      match Caqti_driver_info.dialect_tag info with
+      | `Sqlite -> Dialect.Sqlite.string_of_type t
+      | _ -> Dialect.Postgresql.string_of_type t
+    in
+    if nullable t then
+      Fmt.str "%s NULL" type_
+    else
+      Fmt.str "%s NOT NULL" type_
 
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
@@ -203,6 +213,7 @@ module Make (Model : Model.S) = struct
     | Sqml.Type.Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
     | Sqml.Type.Int -> Caqti_type.int
+    | Sqml.Type.Nullable t -> Caqti_type.option (type_of_type t)
     | Sqml.Type.Text -> Caqti_type.string
     | Sqml.Type.Time ->
       let encode t = Result.return @@ Timmy.Time.to_ptime t

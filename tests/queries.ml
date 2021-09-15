@@ -39,10 +39,16 @@ let convert_error =
   let f e = `Sqml_engine (Caqti_error.show e) in
   Result.map_error ~f
 
-let t1 = Alcotest.(testable Fmt.(pair int string) Poly.equal)
+let t1 =
+  Alcotest.(
+    testable
+      (fun f (i, name, desc) ->
+        Fmt.(pf f "(%i, %s, %a)" i name (option string) desc))
+      Poly.equal)
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
-  let default_t1s = [ (0, "zero"); (1, "one"); (2, "two") ]
+  let default_t1s =
+    [ (0, "zero", None); (1, "one", Some "1"); (2, "two", Some "2") ]
 
   let populate ?(t1s = default_t1s) db =
     let f t1 =
@@ -68,7 +74,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           (Fmt.str "%a" Model.Query.pp q))
     and () =
       Alcotest.(
-        check string "repr" "SELECT table1.id, table1.name FROM table1"
+        check string "repr"
+          "SELECT table1.id, table1.name, table1.description FROM table1"
           (Fmt.str "%a" Model.Query.pp q_all))
     in
     let* db = make () in
@@ -85,7 +92,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* () =
       let* (Many res) = Engine.query db q in
       let* res = Sequence.to_list res in
-      Alcotest.(check (list int) "selected" [ 0; 1; 2 ] res)
+      Alcotest.(
+        check (list int) "selected" [ 0; 1; 2 ]
+          (List.sort ~compare:Int.compare res))
       |> Lwt_result.return
     and* () =
       let* (Many res) = Engine.query db q_all in
@@ -97,7 +106,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let insert make () =
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
       Engine.query db q
     in
     let* (Many res) =
@@ -184,11 +193,11 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let conflict make () =
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
       Engine.query db q
     in
     let* () =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero") in
+      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
       let%lwt res = Engine.query db q in
       Lwt_result.return
         Alcotest.(
@@ -198,7 +207,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* Zero =
       let q =
-        Model.insert ~into:(module Model.T1) ~on_conflict:Ignore (0, "one")
+        Model.insert
+          ~into:(module Model.T1)
+          ~on_conflict:Ignore (0, "one", Some "1")
       in
       Engine.query db q
     in
@@ -210,7 +221,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let () = Alcotest.(check (list string) "untouched row" [ "zero" ] res) in
     let* Zero =
       let q =
-        Model.insert ~into:(module Model.T1) ~on_conflict:Update (0, "two")
+        Model.insert
+          ~into:(module Model.T1)
+          ~on_conflict:Update (0, "two", Some "2")
       in
       Engine.query db q
     in
