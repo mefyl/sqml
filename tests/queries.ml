@@ -7,7 +7,7 @@ module Sequence = Sqml.Utils.Sequence
 module Alcotest = struct
   include Alcotest
 
-  let ptime = testable Ptime.pp Ptime.equal
+  let time = Alcotest.testable Timmy.Time.pp Timmy.Time.equal
 end
 
 let () =
@@ -161,10 +161,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Lwt_result.return ()
 
   let timestamp make () =
-    let now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
-    let later =
-      Option.value_exn (Ptime.of_float_s @@ (Unix.time () +. 3600.))
+    let now =
+      Ptime_clock.now () |> Ptime.truncate ~frac_s:0 |> Timmy.Time.of_ptime
     in
+    let later = Timmy.Time.(now + Timmy.Span.seconds 3600) in
     let* db = make () in
     let* Zero =
       let q = Model.insert ~into:(module Model.Ts) now in
@@ -179,7 +179,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* (Many res) = Engine.query db q in
     let* res = Sequence.to_list res in
     Lwt_result.return
-    @@ Alcotest.(check (list ptime) "inserted timestamps" [ now; later ] res)
+    @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res)
 
   let conflict make () =
     let* db = make () in

@@ -12,7 +12,7 @@ module Postgresql : S = struct
       | Type.Custom { repr; _ } -> f repr
       | Type.Int -> "INTEGER"
       | Type.Text -> "TEXT"
-      | Type.Timestamp -> "TIMESTAMP"
+      | Type.Time -> "TIMESTAMP"
       | Type.Varchar len -> Fmt.str "VARCHAR(%i)" len
     in
     f t
@@ -29,7 +29,7 @@ module Sqlite : S = struct
   let string_of_type t =
     let rec f : type t. t Type.t -> string = function
       | Type.Custom { repr; _ } -> f repr
-      | Type.Timestamp -> "TEXT"
+      | Type.Time -> "TEXT"
       | t -> Postgresql.string_of_type t
     in
     f t

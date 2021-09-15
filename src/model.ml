@@ -219,7 +219,7 @@ struct
       major : int;
       minor : int;
       subminor : int;
-      migrated : Ptime.t;
+      migrated : Timmy.Time.t;
     }
 
     module Meta_ = struct
@@ -235,9 +235,9 @@ struct
 
       let subminor = Table.Column.make "subminor" Type.Int
 
-      let migrated = Table.Column.make "migrated" Type.Timestamp
+      let migrated = Table.Column.make "migrated" Type.Time
 
-      type columns = int * (int * (int * (Ptime.t * unit)))
+      type columns = int * (int * (int * (Timmy.Time.t * unit)))
 
       let columns =
         Table.Column.List.(

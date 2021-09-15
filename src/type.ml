@@ -8,5 +8,5 @@ type 'a t =
       -> 'a t
   | Int : int t
   | Text : string t
-  | Timestamp : Ptime.t t
+  | Time : Timmy.Time.t t
   | Varchar : int -> string t

@@ -1,4 +1,4 @@
 (library
  (name sqml)
  (public_name sqml)
- (libraries acid fmt logs logs.lwt lwt ptime semver))
+ (libraries acid fmt logs logs.lwt lwt ptime ptime.clock.os semver timmy))

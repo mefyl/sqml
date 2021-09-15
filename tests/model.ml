@@ -63,14 +63,14 @@ module Ts = struct
     include Table.Meta (struct
       let name = "ts"
 
-      let time = Column.make "time" Type.Timestamp
+      let time = Column.make "time" Type.Time
 
-      type columns = Ptime.t * unit
+      type columns = Timmy.Time.t * unit
 
       let columns = Column.List.(Cons (time, Empty))
     end)
 
-    type mapped = Ptime.t
+    type mapped = Timmy.Time.t
 
     let map (time, ()) = time
 

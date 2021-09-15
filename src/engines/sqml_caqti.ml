@@ -27,7 +27,7 @@ module Make (Model : Model.S) = struct
       | Sqml.Type.Custom { repr; _ } -> f repr
       | Sqml.Type.Int -> "INTEGER"
       | Sqml.Type.Text -> "TEXT"
-      | Sqml.Type.Timestamp -> (
+      | Sqml.Type.Time -> (
         match d with
         | `Sqlite -> "TEXT"
         | _ -> "TIMESTAMP")
@@ -214,7 +214,10 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
     | Sqml.Type.Int -> Caqti_type.int
     | Sqml.Type.Text -> Caqti_type.string
-    | Sqml.Type.Timestamp -> Caqti_type.ptime
+    | Sqml.Type.Time ->
+      let encode t = Result.return @@ Timmy.Time.to_ptime t
+      and decode t = Result.return @@ Timmy.Time.of_ptime t in
+      Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Sqml.Type.Varchar _ -> Caqti_type.string
 
   let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =

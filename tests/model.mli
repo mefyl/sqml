@@ -17,7 +17,7 @@ module T2 : sig
 end
 
 module Ts : sig
-  include Table.S with type model = tag and type Meta.mapped = Ptime.t
+  include Table.S with type model = tag and type Meta.mapped = Timmy.Time.t
 
-  val time : Ptime.t Expression.t
+  val time : Timmy.Time.t Expression.t
 end
