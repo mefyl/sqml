@@ -11,10 +11,10 @@ depends: [
   "dune" {>= "2.8"}
   "acid" {= "0.1.0"}
   "alcotest-lwt" {>= "1.1.0" & with-test}
-  "caqti-driver-sqlite3" {>= "1.2.1" & with-test}
-  "caqti-driver-postgresql" {>= "1.2.1" & with-test}
-  "caqti" {>= "1.2.0"}
-  "caqti-lwt" {>= "1.2.0"}
+  "caqti-driver-postgresql" {>= "1.6.0" & with-test}
+  "caqti-driver-sqlite3" {= "1.6.0" & with-test}
+  "caqti" {>= "1.6.0"}
+  "caqti-lwt" {>= "1.6.0"}
   "fmt" {>= "0.8.8"}
   "lwt" {>= "5.3.0"}
   "lwt_ppx" {>= "2.0.0"}
