@@ -35,7 +35,7 @@ struct
             l Table.Column.List.t ->
             (l, tag) Expression.Column_list.t * tag Table.constraint_ list =
           function
-          | Table.Column.List.Cons ({ name; type_; foreign_keys; _ }, tl) ->
+          | Table.Column.List.({ name; type_; foreign_keys; _ } :: tl) ->
             let column =
               Expression.make_column ~selectable:Meta.name ~name type_
             in
@@ -48,9 +48,9 @@ struct
               in
               List.map ~f foreign_keys
             and rest, rest_constraints = bind_columns tl in
-            ( Expression.Column_list.Cons (column, rest),
+            ( Expression.Column_list.(column :: rest),
               constraints @ rest_constraints )
-          | Empty -> (Expression.Column_list.Empty, [])
+          | [] -> (Expression.Column_list.[], [])
 
         let columns, constraints = bind_columns Meta.columns
       end
@@ -64,9 +64,9 @@ struct
             type l tag.
             (l, tag) Expression.Column_list.t -> (l, tag) Expression.List.t =
           function
-          | Expression.Column_list.Cons (hd, tl) ->
-            List.Cons (column hd, bind_expressions tl)
-          | Empty -> List.Empty
+          | Expression.Column_list.(hd :: tl) ->
+            List.(column hd :: bind_expressions tl)
+          | Expression.Column_list.[] -> List.[]
 
         let columns = bind_expressions Column.columns
       end
@@ -74,8 +74,8 @@ struct
       let all =
         let rec pairs_of_list :
             type l. (l, tag) Expression.List.t -> l Expression.t = function
-          | Expression.List.Cons (hd, tl) -> Expression.(hd @ pairs_of_list tl)
-          | Expression.List.Empty -> Expression.null
+          | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
+          | Expression.List.[] -> Expression.null
         in
         Expression.map ~encode:Meta.unmap ~decode:Meta.map
           (pairs_of_list Expression.columns)
@@ -239,9 +239,7 @@ struct
 
       type columns = int * (int * (int * (Timmy.Time.t * unit)))
 
-      let columns =
-        Table.Column.List.(
-          Cons (major, Cons (minor, Cons (subminor, Cons (migrated, Empty)))))
+      let columns = Table.Column.List.[ major; minor; subminor; migrated ]
 
       let map (major, (minor, (subminor, (migrated, ())))) =
         { major; minor; subminor; migrated }

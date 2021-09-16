@@ -48,11 +48,11 @@ module Make (Model : Model.S) = struct
 
   let column_map (f : 'res column_mapper) =
     let rec map : type t. t Column.List.t -> 'res list = function
-      | Column.List.Cons (column, tl) -> (
+      | Column.List.(column :: tl) -> (
         match f.f column with
         | Some value -> value :: map tl
         | None -> map tl)
-      | Column.List.Empty -> []
+      | [] -> []
     in
     map
 
@@ -240,8 +240,8 @@ module Make (Model : Model.S) = struct
 
   let rec type_of_expressions :
       type t tag. (t, tag) Expression.List.t -> t Caqti_type.t = function
-    | Expression.List.Empty -> Caqti_type.unit
-    | Cons (c, tl) -> Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
+    | Expression.List.[] -> Caqti_type.unit
+    | c :: tl -> Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function

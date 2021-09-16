@@ -18,7 +18,7 @@ module T1_meta = struct
 
   type columns = int * (string * (string option * unit))
 
-  let columns = Column.List.(Cons (id, Cons (name_, Cons (description, Empty))))
+  let columns = Column.List.[ id; name_; description ]
 
   type mapped = int * string * string option
 
@@ -26,19 +26,15 @@ module T1_meta = struct
 
   let unmap (id, name, desc) = (id, (name, (desc, ())))
 
-  let constraints
-      Expression.Column_list.(
-        Cons (_id, Cons (_name, Cons (_description, Empty)))) =
-    []
+  let constraints Expression.Column_list.[ _id; _name; _description ] = []
 end
 
 module T1 = struct
   include BindTable (T1_meta)
 
-  let Sqml.Expression.List.(Cons (id, Cons (name, Cons (description, Empty)))) =
-    Expression.columns
+  let Sqml.Expression.List.[ id; name; description ] = Expression.columns
 
-  let Sqml.Expression.Column_list.(Cons (id_column, _)) = Column.columns
+  let Sqml.Expression.Column_list.(id_column :: _) = Column.columns
 end
 
 module T2_meta = Table.Meta (struct
@@ -54,13 +50,13 @@ module T2_meta = Table.Meta (struct
 
   type columns = int * unit
 
-  let columns = Column.List.(Cons (id, Empty))
+  let columns = Column.List.[ id ]
 end)
 
 module T2 = struct
   include BindTable (T2_meta)
 
-  let Sqml.Expression.List.(Cons (id, Empty)) = Expression.columns
+  let Sqml.Expression.List.[ id ] = Expression.columns
 end
 
 module Ts = struct
@@ -72,7 +68,7 @@ module Ts = struct
 
       type columns = Timmy.Time.t * unit
 
-      let columns = Column.List.(Cons (time, Empty))
+      let columns = Column.List.[ time ]
     end)
 
     type mapped = Timmy.Time.t
@@ -84,5 +80,5 @@ module Ts = struct
 
   include BindTable (Meta_)
 
-  let Sqml.Expression.List.(Cons (time, Empty)) = Expression.columns
+  let Sqml.Expression.List.[ time ] = Expression.columns
 end

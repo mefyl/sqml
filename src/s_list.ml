@@ -2,8 +2,8 @@ module type S2 = sig
   type ('t, 'tag) value
 
   type ('t, 'tag) t =
-    | Cons : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
-    | Empty : (unit, 'tag) t
+    | ( :: ) : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
+    | [] : (unit, 'tag) t
 
   val length : _ t -> int
 
@@ -18,14 +18,14 @@ end) : S2 with type ('t, 'tag) value = ('t, 'tag) T.t = struct
   type ('t, 'tag) value = ('t, 'tag) T.t
 
   type ('t, 'tag) t =
-    | Cons : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
-    | Empty : (unit, 'tag) t
+    | ( :: ) : ('hd, 'tag) value * ('tl, 'tag) t -> ('hd * 'tl, 'tag) t
+    | [] : (unit, 'tag) t
 
   let length l =
     let rec loop : type l tag. int -> (l, tag) t -> int =
      fun acc -> function
-      | Cons (_, tl) -> loop (acc + 1) tl
-      | Empty -> acc
+      | _ :: tl -> loop (acc + 1) tl
+      | [] -> acc
     in
     loop 0 l
 
@@ -33,11 +33,11 @@ end) : S2 with type ('t, 'tag) value = ('t, 'tag) T.t = struct
 
   let map l ~(f : 'res mapper) =
     let rec map : type a tag. (a, tag) t -> 'res list = function
-      | Cons (hd, tl) -> (
+      | hd :: tl -> (
         match f.f hd with
-        | Some value -> value :: map tl
+        | Some value -> List.cons value (map tl)
         | None -> map tl)
-      | Empty -> []
+      | [] -> List.[]
     in
     map l
 end
@@ -46,8 +46,8 @@ module type S = sig
   type 't value
 
   type 't t =
-    | Cons : 'hd value * 'tl t -> ('hd * 'tl) t
-    | Empty : unit t
+    | ( :: ) : 'hd value * 'tl t -> ('hd * 'tl) t
+    | [] : unit t
 
   val length : _ t -> int
 
@@ -62,14 +62,14 @@ end) : S with type 'a value = 'a T.t = struct
   type 't value = 't T.t
 
   type 't t =
-    | Cons : 'hd value * 'tl t -> ('hd * 'tl) t
-    | Empty : unit t
+    | ( :: ) : 'hd value * 'tl t -> ('hd * 'tl) t
+    | [] : unit t
 
   let length l =
     let rec loop : type l. int -> l t -> int =
      fun acc -> function
-      | Cons (_, tl) -> loop (acc + 1) tl
-      | Empty -> acc
+      | _ :: tl -> loop (acc + 1) tl
+      | [] -> acc
     in
     loop 0 l
 
@@ -77,11 +77,11 @@ end) : S with type 'a value = 'a T.t = struct
 
   let map l ~(f : 'res mapper) =
     let rec map : type a. a t -> 'res list = function
-      | Cons (hd, tl) -> (
+      | hd :: tl -> (
         match f.f hd with
-        | Some value -> value :: map tl
+        | Some value -> List.cons value (map tl)
         | None -> map tl)
-      | Empty -> []
+      | [] -> List.[]
     in
     map l
 end
