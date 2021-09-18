@@ -27,7 +27,7 @@ type ('t, 'tag) t =
   | Var : (_, 'tag) t
   | ( :: ) :
       ('a, 'tag) t * ('b H_list.t, 'tag) t
-      -> (('a * 'b) H_list.t, 'tag) t
+      -> (('a -> 'b) H_list.t, 'tag) t
   | [] : (unit H_list.t, 'tag) t
 
 module List = S_list.Make2 (struct

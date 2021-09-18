@@ -238,7 +238,7 @@ struct
 
       let migrated = Table.Column.make "migrated" Type.Time
 
-      type columns = int * (int * (int * (Timmy.Time.t * unit)))
+      type columns = int -> int -> int -> Timmy.Time.t -> unit
 
       let columns = Table.Column.List.[ major; minor; subminor; migrated ]
 

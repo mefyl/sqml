@@ -16,7 +16,7 @@ module T1_meta = struct
 
   let description = Column.make_nullable "description" Type.Text
 
-  type columns = int * (string * (string option * unit))
+  type columns = int -> string -> string option -> unit
 
   let columns = Column.List.[ id; name_; description ]
 
@@ -48,7 +48,7 @@ module T2_meta = Table.Meta (struct
         ]
       Type.Int
 
-  type columns = int * unit
+  type columns = int -> unit
 
   let columns = Column.List.[ id ]
 end)
@@ -66,7 +66,7 @@ module Ts = struct
 
       let time = Column.make "time" Type.Time
 
-      type columns = Timmy.Time.t * unit
+      type columns = Timmy.Time.t -> unit
 
       let columns = Column.List.[ time ]
     end)

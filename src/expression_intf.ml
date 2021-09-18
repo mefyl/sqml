@@ -36,7 +36,7 @@ module type Interface = sig
     | Var : (_, 'tag) t
     | ( :: ) :
         ('a, 'tag) t * ('b H_list.t, 'tag) t
-        -> (('a * 'b) H_list.t, 'tag) t
+        -> (('a -> 'b) H_list.t, 'tag) t
     | [] : (unit H_list.t, 'tag) t
 
   module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
@@ -60,7 +60,7 @@ module type Interface = sig
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
   val ( @ ) :
-    ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a * 'b) H_list.t, 'tag) t
+    ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t
 
   val empty_list : (unit H_list.t, 'tag) t
 
