@@ -1,6 +1,7 @@
 module Column = Table.Column
 module Dialect = Dialect
 module Engine = Engine
+module H_list = H_list
 
 module Expression :
   Expression.Interface
