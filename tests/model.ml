@@ -32,9 +32,13 @@ end
 module T1 = struct
   include BindTable (T1_meta)
 
-  let Sqml.Expression.List.[ id; name; description ] = Expression.columns
+  module Column = struct
+    include Column
 
-  let Sqml.Expression.Column_list.(id_column :: _) = Column.columns
+    let Sqml.Expression.Column_list.[ id; name; description ] = columns
+  end
+
+  let Sqml.Expression.List.[ id; name; description ] = Expression.columns
 end
 
 module T2_meta = Table.Meta (struct
@@ -44,7 +48,7 @@ module T2_meta = Table.Meta (struct
     Column.make "id"
       ~foreign_keys:
         [
-          Table.Column.Reference { table = (module T1); column = T1.id_column };
+          Table.Column.Reference { table = (module T1); column = T1.Column.id };
         ]
       Type.Int
 

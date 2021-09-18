@@ -93,13 +93,16 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let* (Many res) = Engine.query db q in
       let* res = Sequence.to_list res in
       Alcotest.(
-        check (list int) "selected" [ 0; 1; 2 ]
+        check (list int) "selected ids" [ 0; 1; 2 ]
           (List.sort ~compare:Int.compare res))
       |> Lwt_result.return
     and* () =
       let* (Many res) = Engine.query db q_all in
       let* res = Sequence.to_list res in
-      Alcotest.(check (list t1) "selected" default_t1s res) |> Lwt_result.return
+      Alcotest.(
+        check (list t1) "selected t1s" default_t1s
+        @@ List.sort ~compare:(fun (l, _, _) (r, _, _) -> Int.compare l r) res)
+      |> Lwt_result.return
     in
     Lwt_result.return ()
 
@@ -190,7 +193,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Lwt_result.return
     @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res)
 
-  let conflict make () =
+  let conflict psql make () =
     let* db = make () in
     let* Zero =
       let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
@@ -233,6 +236,43 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* res = Sequence.to_list res in
     let () = Alcotest.(check (list string) "updated row" [ "two" ] res) in
+    let* () =
+      let open Sqml.Expression in
+      if psql then
+        let* Zero =
+          let q =
+            Model.insert
+              ~into:(module Model.T1)
+              ~on_conflict:
+                (Set
+                   (fun { excluded } ->
+                     [
+                       Model.T1.Column.name := Model.T1.name ^ string "'";
+                       Model.T1.Column.description :=
+                         excluded Model.T1.description;
+                     ]))
+              (0, "three", Some "3")
+          in
+          Engine.query db q
+        in
+        let* (Many res) =
+          let q =
+            Model.select
+              ~from:(module Model.T1)
+              Model.T1.(name @ description @ empty_list)
+          in
+          Engine.query db q
+        in
+        Sequence.to_list res >>| function
+        | [ Sqml.H_list.[ name; description ] ] ->
+          Alcotest.(check string "updated row name" "two'" name);
+          Alcotest.(
+            check (option string) "updated row description" (Some "3")
+              description)
+        | _ -> Alcotest.fail "wrong number of lines"
+      else
+        Lwt_result.return ()
+    in
     Lwt_result.return ()
 
   let prepared make () =
@@ -289,7 +329,7 @@ let () =
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
              test_case "join" @@ make Caqti_test.join;
-             test_case "conflict" @@ make Caqti_test.conflict;
+             test_case "conflict" @@ make @@ Caqti_test.conflict false;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
              test_case "prepared" @@ make Caqti_test.prepared;
@@ -346,7 +386,7 @@ let () =
              @@ make "delete_returning" Caqti_test.delete_returning;
              test_case "join" @@ make "join" Caqti_test.join;
              test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
-             test_case "conflict" @@ make "conflict" Caqti_test.conflict;
+             test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
              test_case "versioning-stable"
              @@ make "versioning_stable" Caqti_test.Versioning.stable;
              test_case "prepared" @@ make "prepared" Caqti_test.prepared;

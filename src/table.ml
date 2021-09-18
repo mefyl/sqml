@@ -28,6 +28,8 @@ module type S' = sig
   module Expression : sig
     type 't t = ('t, tag) Expression.t
 
+    type 't column = ('t, tag) Expression.column
+
     val columns : (Meta.columns, tag) Expression.List.t
   end
 

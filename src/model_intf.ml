@@ -34,9 +34,16 @@ module type S = sig
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
       | Zero : ('t, zero, 'error) result
 
-    type on_conflict =
-      | Ignore
-      | Update
+    type 'tag excluded = {
+      excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
+    }
+
+    type 'tag on_conflict =
+      | Ignore : _ on_conflict
+      | Set :
+          ('tag excluded -> 'tag Expression.assignment list)
+          -> 'tag on_conflict
+      | Update : _ on_conflict
 
     type ('t, 'arity) t = private
       | Delete : {
@@ -51,9 +58,13 @@ module type S = sig
         }
           -> ('t, many) t
       | Insert : {
+          excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
-            (module Table.S with type model = tag and type Meta.mapped = 'mapped);
-          on_conflict : on_conflict option;
+            (module Table.S
+               with type model = tag
+                and type Meta.mapped = 'mapped
+                and type tag = 'tag);
+          on_conflict : 'tag on_conflict option;
           value : 'mapped;
         }
           -> (unit, zero) t
@@ -77,8 +88,12 @@ module type S = sig
     ('t, Query.many) Query.t
 
   val insert :
-    into:(module Table.S with type model = tag and type Meta.mapped = 'mapped) ->
-    ?on_conflict:Query.on_conflict ->
+    into:
+      (module Table.S
+         with type model = tag
+          and type Meta.mapped = 'mapped
+          and type tag = 'tag) ->
+    ?on_conflict:'tag Query.on_conflict ->
     'mapped ->
     (unit, Query.zero) Query.t
 

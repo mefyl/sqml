@@ -23,6 +23,7 @@ module type Interface = sig
   type ('t, 'tag) t = private
     | Column : ('t, 'tag) column -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
+    | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
     | Int : int -> (int, 'tag) t
     | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
     | Map : {
@@ -38,6 +39,15 @@ module type Interface = sig
         ('a, 'tag) t * ('b H_list.t, 'tag) t
         -> (('a -> 'b) H_list.t, 'tag) t
     | [] : (unit H_list.t, 'tag) t
+
+  type 'tag assignment = private
+    | Set : {
+        column : ('t, 'tag) column;
+        value : ('t, 'tag) t;
+      }
+        -> 'tag assignment
+
+  val ( := ) : ('t, 'tag) column -> ('t, 'tag) t -> 'tag assignment
 
   module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
@@ -61,6 +71,8 @@ module type Interface = sig
 
   val ( @ ) :
     ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t
+
+  val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
 
   val empty_list : (unit H_list.t, 'tag) t
 

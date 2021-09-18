@@ -60,6 +60,8 @@ struct
 
         type nonrec 't t = ('t, tag) t
 
+        type nonrec 't column = ('t, tag) column
+
         let rec bind_expressions :
             type l tag.
             (l, tag) Expression.Column_list.t -> (l, tag) Expression.List.t =
@@ -135,9 +137,16 @@ struct
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
       | Zero : ('t, zero, 'error) result
 
-    type on_conflict =
-      | Ignore
-      | Update
+    type 'tag excluded = {
+      excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
+    }
+
+    type 'tag on_conflict =
+      | Ignore : _ on_conflict
+      | Set :
+          ('tag excluded -> 'tag Expression.assignment list)
+          -> 'tag on_conflict
+      | Update : _ on_conflict
 
     type ('t, 'arity) t =
       | Delete : {
@@ -152,9 +161,13 @@ struct
         }
           -> ('t, many) t
       | Insert : {
+          excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
-            (module Table.S with type model = tag and type Meta.mapped = 'mapped);
-          on_conflict : on_conflict option;
+            (module Table.S
+               with type model = tag
+                and type Meta.mapped = 'mapped
+                and type tag = 'tag);
+          on_conflict : 'tag on_conflict option;
           value : 'mapped;
         }
           -> (unit, zero) t
@@ -206,7 +219,13 @@ struct
   let select ~from ?where what = Query.Select { from; what; where }
 
   let insert ~into ?on_conflict value =
-    Query.Insert { into; on_conflict; value }
+    Query.Insert
+      {
+        excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
+        into;
+        on_conflict;
+        value;
+      }
 
   let delete ~from ?where () = Query.Delete { from; where }
 

@@ -8,6 +8,16 @@ module T1 : sig
       with type model = tag
        and type Meta.mapped = int * string * string option
 
+  module Column : sig
+    include module type of Column
+
+    val id : int Expression.column
+
+    val name : string Expression.column
+
+    val description : string option Expression.column
+  end
+
   val id : int Expression.t
 
   val name : string Expression.t

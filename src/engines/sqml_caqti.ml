@@ -235,6 +235,7 @@ module Make (Model : Model.S) = struct
     function
     | Expression.Column { type_; _ } -> type_of_type type_
     | Expression.Comparison _ -> Caqti_type.bool
+    | Expression.Concat _ -> Caqti_type.string
     | Expression.Int _ -> Caqti_type.int
     | Expression.Logic _ -> Caqti_type.bool
     | Expression.Map { mapped; encode; decode } ->
@@ -277,6 +278,10 @@ module Make (Model : Model.S) = struct
     | Insert _ -> Caqti_type.unit
     | Select { what; _ } -> type_of_expr what
 
+  let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
+   fun fmt (Sqml.Expression.Set { column; value }) ->
+    Fmt.pf fmt "%s = %a" column.name Expression.pp value
+
   let query { pool } query =
     let query_str = Fmt.str "%a" Model.Query.pp query in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
@@ -317,25 +322,43 @@ module Make (Model : Model.S) = struct
           Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
         in
         collect query
-      | Insert { into; on_conflict; value } ->
+      | Insert { excluded; into; on_conflict; value } ->
         let module T = (val into) in
         let insert value (module C : Caqti_lwt.CONNECTION) =
-          let i = C.driver_info in
+          let dialect =
+            match Caqti_driver_info.dialect_tag C.driver_info with
+            | #Caqti_driver_info.sql_dialect_tag as t -> t
+            | _ -> failwith "unknown dialect"
+          in
           let conflict_sqlite, conflict_pg =
-            match (Caqti_driver_info.dialect_tag i, on_conflict) with
-            | _, None -> ("", "")
-            | `Pgsql, Some Ignore -> ("", " ON CONFLICT DO NOTHING")
+            let open Fmt in
+            match (dialect, on_conflict) with
+            | _, None -> (nop, nop)
+            | `Pgsql, Some Ignore ->
+              (nop, const string " ON CONFLICT DO NOTHING")
+            | `Pgsql, Some (Set assignments) ->
+              ( nop,
+                const string " ON CONFLICT ("
+                ++ const (list ~sep:comma string) (primary T.Meta.columns)
+                ++ const string ") DO UPDATE SET "
+                ++ const
+                     (list ~sep:comma pp_assignment)
+                     (assignments { excluded }) )
             | `Pgsql, Some Update ->
               let f { Column.name; _ } =
                 Option.return @@ Fmt.str "%s = excluded.%s" name name
               in
-              ( "",
-                Fmt.str " ON CONFLICT (%s) DO UPDATE SET %s"
-                  (String.concat ~sep:", " (primary T.Meta.columns))
-                  (String.concat ~sep:", " (column_map { f } T.Meta.columns)) )
-            | `Sqlite, Some Ignore -> (" OR IGNORE", "")
-            | `Sqlite, Some Update -> (" OR REPLACE", "")
-            | _ -> failwith "dialect not handled"
+              ( nop,
+                const string " ON CONFLICT ("
+                ++ const (list ~sep:comma string) (primary T.Meta.columns)
+                ++ const string ") DO UPDATE SET "
+                ++ const (list ~sep:comma string)
+                     (column_map { f } T.Meta.columns) )
+            | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
+            | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
+            | `Sqlite, Some (Set _)
+            | `Mysql, _ ->
+              failwith "dialect not handled"
           in
           let* query =
             let t =
@@ -346,13 +369,13 @@ module Make (Model : Model.S) = struct
                 (type_of_expressions T.Expression.columns)
             in
             let q =
-              Fmt.str "INSERT%s INTO %S VALUES (%s)%s" conflict_sqlite
+              Fmt.str "INSERT%a INTO %S VALUES (%s)%a" conflict_sqlite ()
                 T.Meta.name
                 (String.concat ~sep:", "
                    (List.init
                       ~f:(fun _ -> "?")
                       (Expression.List.length T.Expression.columns)))
-                conflict_pg
+                conflict_pg ()
             in
             let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
             Caqti_request.exec t q

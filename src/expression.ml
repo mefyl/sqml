@@ -14,6 +14,7 @@ end)
 type ('t, 'tag) t =
   | Column : ('t, 'tag) column -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
+  | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
   | Int : int -> (int, 'tag) t
   | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
   | Map : {
@@ -42,6 +43,8 @@ let make_column ~selectable ~name type_ = { selectable; name; type_ }
 
 let ( @ ) a b = a :: b
 
+let ( ^ ) a b = Concat (a, b)
+
 let empty_list = []
 
 let quote_pattern = String.Search_pattern.create "'"
@@ -52,6 +55,9 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
   function
   | Column { selectable; name; _ } ->
     (const string selectable ++ const string "." ++ const string name) f ()
+  | Concat (l, r) ->
+    let fmt = const pp l ++ sp ++ const string "||" ++ sp ++ const pp r in
+    fmt f ()
   | Comparison (op, l, r) ->
     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
     fmt f ()
@@ -104,6 +110,7 @@ let rec map_name :
   | Column ({ selectable; _ } as pl) ->
     Column { pl with selectable = f selectable }
   | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
+  | Concat (l, r) -> Concat (map_name f l, map_name f r)
   | Int _ as e -> e
   | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)
   | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
@@ -112,3 +119,12 @@ let rec map_name :
   | Var as e -> e
   | a :: b -> map_name f a :: map_name f b
   | [] as e -> e
+
+type 'tag assignment =
+  | Set : {
+      column : ('t, 'tag) column;
+      value : ('t, 'tag) t;
+    }
+      -> 'tag assignment
+
+let ( := ) column value = Set { column; value }
