@@ -10,6 +10,7 @@ module Postgresql : S = struct
     let rec f : type t. t Type.t -> string = function
       | Type.Bool -> "BOOLEAN"
       | Type.Custom { repr; _ } -> f repr
+      | Type.Date -> "DATE"
       | Type.Int -> "INTEGER"
       | Type.Nullable t -> f t
       | Type.Text -> "TEXT"
@@ -30,7 +31,9 @@ module Sqlite : S = struct
   let string_of_type t =
     let rec f : type t. t Type.t -> string = function
       | Type.Custom { repr; _ } -> f repr
-      | Type.Time -> "TEXT"
+      | Type.Date
+      | Type.Time ->
+        "TEXT"
       | t -> Postgresql.string_of_type t
     in
     f t

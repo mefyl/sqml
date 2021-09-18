@@ -212,6 +212,16 @@ module Make (Model : Model.S) = struct
     | Sqml.Type.Bool -> Caqti_type.bool
     | Sqml.Type.Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
+    | Sqml.Type.Date ->
+      let encode d =
+        Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
+        |> Timmy.Time.to_ptime |> Result.return
+      and decode t =
+        Timmy.Time.of_ptime t
+        |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
+        |> Result.return
+      in
+      Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
     | Sqml.Type.Int -> Caqti_type.int
     | Sqml.Type.Nullable t -> Caqti_type.option (type_of_type t)
     | Sqml.Type.Text -> Caqti_type.string

@@ -6,6 +6,7 @@ type 'a t =
       decode : 'repr -> ('a, string) Result.t;
     }
       -> 'a t
+  | Date : Timmy.Date.t t
   | Int : int t
   | Nullable : 't t -> 't option t
   | Text : string t
