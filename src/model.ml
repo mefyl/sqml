@@ -73,9 +73,10 @@ struct
 
       let all =
         let rec pairs_of_list :
-            type l. (l, tag) Expression.List.t -> l Expression.t = function
+            type l. (l, tag) Expression.List.t -> l H_list.t Expression.t =
+          function
           | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
-          | Expression.List.[] -> Expression.null
+          | Expression.List.[] -> Expression.empty_list
         in
         Expression.map ~encode:Meta.unmap ~decode:Meta.map
           (pairs_of_list Expression.columns)
@@ -241,11 +242,11 @@ struct
 
       let columns = Table.Column.List.[ major; minor; subminor; migrated ]
 
-      let map (major, (minor, (subminor, (migrated, ())))) =
+      let map H_list.[ major; minor; subminor; migrated ] =
         { major; minor; subminor; migrated }
 
       let unmap { major; minor; subminor; migrated } =
-        (major, (minor, (subminor, (migrated, ()))))
+        H_list.[ major; minor; subminor; migrated ]
 
       let constraints _ = []
     end

@@ -31,10 +31,13 @@ module type Interface = sig
         mapped : ('mapped, 'tag) t;
       }
         -> ('t, 'tag) t
-    | Pair : ('a, 'tag) t * ('b, 'tag) t -> ('a * 'b, 'tag) t
     | String : string -> (string, 'tag) t
     | Unit : (unit, 'tag) t
     | Var : (_, 'tag) t
+    | ( :: ) :
+        ('a, 'tag) t * ('b H_list.t, 'tag) t
+        -> (('a * 'b) H_list.t, 'tag) t
+    | [] : (unit H_list.t, 'tag) t
 
   module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
@@ -56,7 +59,10 @@ module type Interface = sig
 
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
-  val ( @ ) : ('a, 'tag) t -> ('b, 'tag) t -> ('a * 'b, 'tag) t
+  val ( @ ) :
+    ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a * 'b) H_list.t, 'tag) t
+
+  val empty_list : (unit H_list.t, 'tag) t
 
   val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 

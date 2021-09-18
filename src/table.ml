@@ -9,9 +9,9 @@ module type META' = sig
 
   type mapped
 
-  val map : columns -> mapped
+  val map : columns H_list.t -> mapped
 
-  val unmap : mapped -> columns
+  val unmap : mapped -> columns H_list.t
 end
 
 module type S' = sig
@@ -124,7 +124,7 @@ struct
 
   let columns = Minimal.columns
 
-  type mapped = columns
+  type mapped = columns H_list.t
 
   let map v = v
 

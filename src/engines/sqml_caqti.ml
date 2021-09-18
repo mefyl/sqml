@@ -242,16 +242,33 @@ module Make (Model : Model.S) = struct
         ~decode:(fun x -> Result.Ok (decode x))
         ~encode:(fun x -> Result.Ok (encode x))
       @@ type_of_expr mapped
-    | Expression.Pair (a, b) ->
-      Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
     | Expression.String _ -> Caqti_type.string
     | Expression.Unit -> Caqti_type.unit
     | Expression.Var -> failwith "prepared query of variable type not supported"
+    | a :: b ->
+      Caqti_type.custom
+        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
+        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
+      @@ Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
+    | [] ->
+      Caqti_type.custom
+        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
+        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
+      @@ Caqti_type.unit
 
   let rec type_of_expressions :
-      type t tag. (t, tag) Expression.List.t -> t Caqti_type.t = function
-    | Expression.List.[] -> Caqti_type.unit
-    | c :: tl -> Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
+      type t tag. (t, tag) Expression.List.t -> t H_list.t Caqti_type.t =
+    function
+    | Expression.List.[] ->
+      Caqti_type.custom
+        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
+        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
+      @@ Caqti_type.unit
+    | c :: tl ->
+      Caqti_type.custom
+        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
+        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
+      @@ Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function
