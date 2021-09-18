@@ -65,9 +65,10 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
+          returning : ('t, 'tag) Expression.t;
           value : 'mapped;
         }
-          -> (unit, zero) t
+          -> ('t, zero) t
       | Select : {
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
@@ -96,6 +97,17 @@ module type S = sig
     ?on_conflict:'tag Query.on_conflict ->
     'mapped ->
     (unit, Query.zero) Query.t
+
+  val insert_returning :
+    into:
+      (module Table.S
+         with type model = tag
+          and type Meta.mapped = 'mapped
+          and type tag = 'tag) ->
+    returning:('t, 'tag) Expression.t ->
+    ?on_conflict:'tag Query.on_conflict ->
+    'mapped ->
+    ('t, Query.zero) Query.t
 
   val delete :
     from:(module Table.S with type model = tag) ->

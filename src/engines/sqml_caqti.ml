@@ -275,7 +275,7 @@ module Make (Model : Model.S) = struct
     function
     | Model.Query.Delete _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
-    | Insert _ -> Caqti_type.unit
+    | Insert { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
@@ -322,7 +322,7 @@ module Make (Model : Model.S) = struct
           Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
         in
         collect query
-      | Insert { excluded; into; on_conflict; value } ->
+      | Insert { excluded; into; on_conflict; returning; value } ->
         let module T = (val into) in
         let insert value (module C : Caqti_lwt.CONNECTION) =
           let dialect =
@@ -359,6 +359,12 @@ module Make (Model : Model.S) = struct
             | `Sqlite, Some (Set _)
             | `Mysql, _ ->
               failwith "dialect not handled"
+          and returning =
+            match returning with
+            | Expression.Unit -> Fmt.nop
+            | e ->
+              Fmt.(
+                sp ++ const string "RETURNING" ++ sp ++ const Expression.pp e)
           in
           let* query =
             let t =
@@ -369,13 +375,13 @@ module Make (Model : Model.S) = struct
                 (type_of_expressions T.Expression.columns)
             in
             let q =
-              Fmt.str "INSERT%a INTO %S VALUES (%s)%a" conflict_sqlite ()
+              Fmt.str "INSERT%a INTO %S VALUES (%s)%a%a" conflict_sqlite ()
                 T.Meta.name
                 (String.concat ~sep:", "
                    (List.init
                       ~f:(fun _ -> "?")
                       (Expression.List.length T.Expression.columns)))
-                conflict_pg ()
+                conflict_pg () returning ()
             in
             let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
             Caqti_request.exec t q

@@ -168,9 +168,10 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
+          returning : ('t, 'tag) Expression.t;
           value : 'mapped;
         }
-          -> (unit, zero) t
+          -> ('t, zero) t
       | Select : {
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
@@ -224,6 +225,17 @@ struct
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
+        returning = Expression.null;
+        value;
+      }
+
+  let insert_returning ~into ~returning ?on_conflict value =
+    Query.Insert
+      {
+        excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
+        into;
+        on_conflict;
+        returning;
         value;
       }
 
