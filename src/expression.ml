@@ -41,10 +41,6 @@ let var () = Var
 
 let make_column ~selectable ~name type_ = { selectable; name; type_ }
 
-let ( @ ) a b = a :: b
-
-let ( ^ ) a b = Concat (a, b)
-
 let empty_list = []
 
 let quote_pattern = String.Search_pattern.create "'"
@@ -90,12 +86,6 @@ and pp_logic =
   | And -> const string "AND"
   | Or -> const string "OR"
 
-let ( = ) l r = Comparison (Eq, l, r)
-
-let ( && ) l r = Logic (And, l, r)
-
-let ( || ) l r = Logic (And, l, r)
-
 let column c = Column c
 
 let int i = Int i
@@ -127,4 +117,18 @@ type 'tag assignment =
     }
       -> 'tag assignment
 
-let ( := ) column value = Set { column; value }
+module Infix = struct
+  let ( && ) l r = Logic (And, l, r)
+
+  let ( := ) column value = Set { column; value }
+
+  let ( = ) l r = Comparison (Eq, l, r)
+
+  let ( @ ) a b = a :: b
+
+  let ( ^ ) a b = Concat (a, b)
+
+  let ( || ) l r = Logic (And, l, r)
+end
+
+include Infix

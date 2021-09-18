@@ -47,8 +47,6 @@ module type Interface = sig
       }
         -> 'tag assignment
 
-  val ( := ) : ('t, 'tag) column -> ('t, 'tag) t -> 'tag assignment
-
   module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
   val pp : Formatter.t -> ('t, 'tag) t -> unit
@@ -69,16 +67,22 @@ module type Interface = sig
 
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
-  val ( @ ) :
-    ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t
-
-  val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
-
   val empty_list : (unit H_list.t, 'tag) t
 
-  val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  module Infix : sig
+    val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
 
-  val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+    val ( := ) : ('t, 'tag) column -> ('t, 'tag) t -> 'tag assignment
 
-  val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+    val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
+    val ( @ ) :
+      ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t
+
+    val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
+
+    val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+  end
+
+  include module type of Infix
 end
