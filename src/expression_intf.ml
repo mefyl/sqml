@@ -20,11 +20,17 @@ module type Interface = sig
 
   module Column_list : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) column
 
+  type free
+
   type ('t, 'tag) t = private
     | Column : ('t, 'tag) column -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
     | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
-    | Int : int -> (int, 'tag) t
+    | Const : {
+        type_ : 't Type.extended;
+        value : 't;
+      }
+        -> ('t, 'tag) t
     | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
     | Map : {
         decode : 'mapped -> 't;
@@ -33,7 +39,6 @@ module type Interface = sig
       }
         -> ('t, 'tag) t
     | Null : (_ option, 'tag) t
-    | String : string -> (string, 'tag) t
     | Var : (_, 'tag) t
     | ( :: ) :
         ('a, 'tag) t * ('b H_list.t, 'tag) t
@@ -53,9 +58,9 @@ module type Interface = sig
 
   module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
-  val pp : Formatter.t -> ('t, 'tag) t -> unit
-
   val column : ('t, 'tag) column -> ('t, 'tag) t
+
+  val const : 't Type.extended -> 't -> ('t, 'tag) t
 
   val int : int -> (int, 'tag) t
 
@@ -65,9 +70,9 @@ module type Interface = sig
     ('mapped, 'tag) t ->
     ('t, 'tag) t
 
-  val string : string -> (string, 'tag) t
-
   val null : (_ Option.t, 'tag) t
+
+  val string : string -> (string, 'tag) t
 
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
@@ -90,5 +95,5 @@ module type Interface = sig
 
   include module type of Infix
 
-  val to_type : ('t, 'tag) t -> 't Type.extended
+  (* val to_type : ('t, 'tag) t -> 't Type.extended *)
 end

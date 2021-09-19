@@ -52,7 +52,11 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
 
   let populate ?(t1s = default_t1s) db =
     let f t1 =
-      let q = Model.insert ~into:(module Model.T1) t1 in
+      let q =
+        Model.insert
+          ~into:(module Model.T1)
+          Sqml.Expression.(const Model.T1.type_ t1)
+      in
       let+ Zero = Engine.query db q in
       ()
     in
@@ -68,16 +72,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let select make () =
     let q = Model.select ~from:(module Model.T1) Model.T1.id
     and q_all = Model.select ~from:(module Model.T1) Model.T1.all in
-    let () =
-      Alcotest.(
-        check string "repr" "SELECT table1.id FROM table1"
-          (Fmt.str "%a" Model.Query.pp q))
-    and () =
-      Alcotest.(
-        check string "repr"
-          "SELECT table1.id, table1.name, table1.description FROM table1"
-          (Fmt.str "%a" Model.Query.pp q_all))
-    in
     let* db = make () in
     let* () =
       let* (Many res) = Engine.query db q in
@@ -109,7 +103,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let insert make () =
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
+      let q =
+        Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
+      in
       Engine.query db q
     in
     let* (Many res) =
@@ -157,21 +153,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     check_t1s db []
 
-  let join _make () =
-    let module J = Model.Join (Model.T1) (Model.T2) in
-    let q = Model.select ~from:(module J) (J.left Model.T1.id) in
-    Alcotest.(
-      check string "simple"
-        "SELECT l_table1.id FROM table1 l_table1 JOIN table2 r_table2"
-        (Fmt.str "%a" Model.Query.pp q));
-    let module J = Model.Join (Model.T1) (Model.T1) in
-    let q = Model.select ~from:(module J) (J.right Model.T1.id) in
-    Alcotest.(
-      check string "self"
-        "SELECT r_table1.id FROM table1 l_table1 JOIN table1 r_table1"
-        (Fmt.str "%a" Model.Query.pp q));
-    Lwt_result.return ()
-
   let timestamp make () =
     let now =
       Ptime_clock.now () |> Ptime.truncate ~frac_s:0 |> Timmy.Time.of_ptime
@@ -179,12 +160,12 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let later = Timmy.Time.(now + Timmy.Span.seconds 3600) in
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.Ts) now in
+      let q = Model.insert ~into:(module Model.Ts) @@ Model.Ts.const now in
       Engine.query db q
     in
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.Ts) later in
+      let q = Model.insert ~into:(module Model.Ts) @@ Model.Ts.const later in
       Engine.query db q
     in
     let q = Model.select ~from:(module Model.Ts) Model.Ts.time in
@@ -196,11 +177,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let conflict psql make () =
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
+      let q =
+        Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
+      in
       Engine.query db q
     in
     let* () =
-      let q = Model.insert ~into:(module Model.T1) (0, "zero", None) in
+      let q =
+        Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
+      in
       let%lwt res = Engine.query db q in
       Lwt_result.return
         Alcotest.(
@@ -210,9 +195,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* Zero =
       let q =
-        Model.insert
-          ~into:(module Model.T1)
-          ~on_conflict:Ignore (0, "one", Some "1")
+        Model.insert ~into:(module Model.T1) ~on_conflict:Ignore
+        @@ Model.T1.const (0, "one", Some "1")
       in
       Engine.query db q
     in
@@ -224,9 +208,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let () = Alcotest.(check (list string) "untouched row" [ "zero" ] res) in
     let* Zero =
       let q =
-        Model.insert
-          ~into:(module Model.T1)
-          ~on_conflict:Update (0, "two", Some "2")
+        Model.insert ~into:(module Model.T1) ~on_conflict:Update
+        @@ Model.T1.const (0, "two", Some "2")
       in
       Engine.query db q
     in
@@ -251,7 +234,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
                        Model.T1.Column.description :=
                          excluded Model.T1.description;
                      ]))
-              (0, "three", Some "3")
+            @@ Model.T1.const (0, "three", Some "3")
           in
           Engine.query db q
         in
@@ -328,7 +311,6 @@ let () =
              test_case "insert" @@ make Caqti_test.insert;
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
-             test_case "join" @@ make Caqti_test.join;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
              test_case "timestamp" @@ make Caqti_test.timestamp;
              test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
@@ -384,7 +366,6 @@ let () =
              test_case "delete" @@ make "delete" Caqti_test.delete;
              test_case "delete_returning"
              @@ make "delete_returning" Caqti_test.delete_returning;
-             test_case "join" @@ make "join" Caqti_test.join;
              test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
              test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
              test_case "versioning-stable"

@@ -10,6 +10,98 @@ module Make (Model : Model.S) = struct
     pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t;
   }
 
+  let quote_pattern = String.Search_pattern.create "'"
+
+  let pp_literal_string f value =
+    let open Fmt in
+    let fmt = const char '\'' ++ string ++ const char '\'' in
+    fmt f
+      (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
+
+  let rec pp_from_atomic_type : type t. t Sqml.Type.t -> t Fmt.t =
+    let open Fmt in
+    function
+    | Bool -> Fmt.bool
+    | Custom { encode; repr; _ } -> (
+      fun f value ->
+        match encode value with
+        | Result.Ok value -> pp_from_atomic_type repr f value
+        | Result.Error e -> (* FIXME *) failwith "pp_from_atomic_type: %s" e)
+    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
+    | Int -> Fmt.int
+    | Nullable t ->
+      Fmt.(option ~none:(const string "NULL") @@ pp_from_atomic_type t)
+    | Text -> pp_literal_string
+    | Time ->
+      fun fmt t ->
+        char fmt '\'';
+        string fmt (Timmy.Time.to_rfc3339 t);
+        char fmt '\''
+    | Varchar _ -> pp_literal_string
+
+  let rec pp_from_type : type t. t Sqml.Type.extended -> t Fmt.t =
+    let open Fmt in
+    let rec pp_values :
+        type l. l H_list.t Sqml.Type.extended -> l H_list.t Fmt.t = function
+      | Empty -> nop
+      | Pair (hd, Empty) -> fun f [ hd_v ] -> pp_from_type hd f hd_v
+      | Pair (hd, tl) ->
+        fun f (hd_v :: tl_v) ->
+          pp_from_type hd f hd_v;
+          comma f ();
+          pp_values tl f tl_v
+      | _ -> failwith "FIXME"
+    in
+    function
+    | Atomic t -> pp_from_atomic_type t
+    | Custom { encode; repr; _ } -> (
+      fun f value ->
+        match encode value with
+        | Result.Ok value -> pp_from_type repr f value
+        | Result.Error e -> (* FIXME *) failwith "pp_from_type: " e)
+    | Empty -> const string "VALUES ()"
+    | Pair _ as l -> const string "VALUES (" ++ pp_values l ++ const char ')'
+
+  and pp_expression =
+    let open Fmt in
+    let rec pp : type a. (a, 'tag) Expression.t Fmt.t =
+     fun f -> function
+      | Column { selectable; name; _ } ->
+        (const string selectable ++ const string "." ++ const string name) f ()
+      | Concat (l, r) ->
+        let fmt = const pp l ++ sp ++ const string "||" ++ sp ++ const pp r in
+        fmt f ()
+      | Comparison (op, l, r) ->
+        let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
+        fmt f ()
+      | Const { type_; value } -> pp_from_type type_ f value
+      | Logic (op, l, r) ->
+        let fmt = const pp l ++ sp ++ pp_logic op ++ sp ++ const pp r in
+        fmt f ()
+      | Map { mapped; _ } -> pp f mapped
+      | Null -> Fmt.string f "NULL"
+      | Var -> Fmt.string f "?"
+      | [] -> ()
+      | [ a ] -> pp f a
+      | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
+    in
+    pp
+
+  and pp_operator =
+    let open Fmt in
+    function
+    | Eq -> const char '='
+    | Gt -> const char '>'
+    | Gte -> const string ">="
+    | Lt -> const char '<'
+    | Lte -> const string "<="
+
+  and pp_logic =
+    let open Fmt in
+    function
+    | And -> const string "AND"
+    | Or -> const string "OR"
+
   let table_name info schema name =
     match schema with
     | None -> Format.sprintf "%S" name
@@ -247,7 +339,30 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode
       @@ Caqti_type.tup2 (type_of_type l) (type_of_type r)
 
-  let type_of_expr e = Sqml.Expression.to_type e |> type_of_type
+  let rec type_of_expr : type a. (a, _) Expression.t -> a Caqti_type.t =
+    function
+    | Column { type_; _ } -> type_of_atomic_type type_
+    | Comparison _ -> Caqti_type.bool
+    | Concat _ -> Caqti_type.string
+    | Const { type_; _ } -> type_of_type type_
+    | Logic _ -> Caqti_type.bool
+    | Map { decode; encode; mapped } ->
+      Caqti_type.custom
+        ~decode:(fun x -> Result.Ok (decode x))
+        ~encode:(fun x -> Result.Ok (encode x))
+      @@ type_of_expr mapped
+    | a :: b ->
+      Caqti_type.custom
+        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
+        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
+      @@ Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
+    | [] ->
+      Caqti_type.custom
+        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
+        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
+      @@ Caqti_type.unit
+    | Null -> failwith "can't deduce type of NULL"
+    | Var -> failwith "prepared query of variable type not supported"
 
   let rec type_of_expressions :
       type t tag. (t, tag) Expression.List.t -> t H_list.t Caqti_type.t =
@@ -275,10 +390,41 @@ module Make (Model : Model.S) = struct
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
    fun fmt (Sqml.Expression.Set { column; value }) ->
-    Fmt.pf fmt "%s = %a" column.name Expression.pp value
+    Fmt.pf fmt "%s = %a" column.name pp_expression value
+
+  let pp_query : type tag arity. (tag, arity) Model.Query.t Fmt.t =
+    let open Fmt in
+    let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
+    fun f -> function
+      | Delete { from; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
+          (option (pp_clause "WHERE"))
+          where
+      | Delete_returning { from; returning; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
+          (option (pp_clause "WHERE"))
+          where (pp_clause "RETURNING") returning
+      | Insert { into; _ } ->
+        let module Table = (val into) in
+        (box
+        @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
+           ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
+           ++ const char '(' ++ const string "<val>" ++ const char ')')
+          f ()
+      | Select { from; what; where } ->
+        let module Selectable = (val from) in
+        (box
+        @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
+           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                where)
+          f ()
 
   let query { pool } query =
-    let query_str = Fmt.str "%a" Model.Query.pp query in
+    let query_str = Fmt.str "%a" pp_query query in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
     let collect query =
       let get (module C : Caqti_lwt.CONNECTION) =
@@ -359,29 +505,17 @@ module Make (Model : Model.S) = struct
             | None -> Fmt.nop
             | Some e ->
               Fmt.(
-                sp ++ const string "RETURNING" ++ sp ++ const Expression.pp e)
+                sp ++ const string "RETURNING" ++ sp ++ const pp_expression e)
           in
           let* query =
-            let t =
-              let ( % ) = Fn.compose in
-              let encode = Result.return % T.Meta.unmap
-              and decode = Result.return % T.Meta.map in
-              Caqti_type.custom ~encode ~decode
-                (type_of_expressions T.Expression.columns)
-            in
             let q =
-              Fmt.str "INSERT%a INTO %S VALUES (%s)%a%a" conflict_sqlite ()
-                T.Meta.name
-                (String.concat ~sep:", "
-                   (List.init
-                      ~f:(fun _ -> "?")
-                      (Expression.List.length T.Expression.columns)))
-                conflict_pg () returning ()
+              Fmt.str "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
+                pp_expression value conflict_pg () returning ()
             in
             let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
-            Caqti_request.exec t q
+            Caqti_request.exec Caqti_type.unit q
           in
-          C.exec query value
+          C.exec query ()
         in
         let* () = Caqti_lwt.Pool.use (insert value) pool |> error in
         Lwt_result.return Model.Query.Zero
@@ -406,7 +540,7 @@ module Make (Model : Model.S) = struct
         Lwt_result.t =
       let query = f (Expression.var ())
       and arg = type_of_type arg in
-      let query_str = Fmt.str "%a" Model.Query.pp query in
+      let query_str = Fmt.str "%a" pp_query query in
       match Model.Query.arity query with
       | Zero ->
         let prepared = Caqti_request.exec arg query_str in

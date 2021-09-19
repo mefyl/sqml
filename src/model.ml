@@ -84,14 +84,17 @@ struct
           (pairs_of_list Expression.columns)
 
       let type_ =
+        let rec type_of_columns :
+            type a. (a, _) Expression.Column_list.t -> a H_list.t Type.extended
+            = function
+          | hd :: tl -> Pair (Atomic hd.type_, type_of_columns tl)
+          | [] -> Empty
+        in
         let decode columns = Meta.map columns |> Result.return
         and encode v = Meta.unmap v |> Result.return in
-        Type.Custom
-          {
-            decode;
-            encode;
-            repr = Expression.to_type (pairs_of_list Expression.columns);
-          }
+        Type.Custom { decode; encode; repr = type_of_columns Column.columns }
+
+      let const v = Expression.const type_ v
 
       let pp_ ~prefix:p =
         if p = "" then
@@ -179,7 +182,7 @@ struct
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
           returning : ('t, 'tag) Expression.option;
-          value : 'mapped;
+          value : ('mapped, Expression.free) Expression.t;
         }
           -> ('t, zero) t
       | Select : {
@@ -195,36 +198,6 @@ struct
       | Delete_returning _ -> Many
       | Insert _ -> Zero
       | Select _ -> Many
-
-    let rec pp : type tag arity. Formatter.t -> (tag, arity) t -> unit =
-      let open Fmt in
-      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword Expression.pp e in
-      fun f -> function
-        | Delete { from; where } ->
-          let module Table = (val from) in
-          Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
-            (option (pp_clause "WHERE"))
-            where
-        | Delete_returning { from; returning; where } ->
-          Fmt.pf f "%a%a" pp
-            (Delete { from; where })
-            (pp_clause "RETURNING") returning
-        | Insert { into; _ } ->
-          let module Table = (val into) in
-          (box
-          @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
-             ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
-             ++ const char '(' ++ const string "<val>" ++ const char ')')
-            f ()
-        | Select { from; what; where } ->
-          let module Selectable = (val from) in
-          (box
-          @@ const string "SELECT" ++ sp ++ const Expression.pp what ++ sp
-             ++ const string "FROM" ++ sp ++ const Selectable.pp ()
-             ++ const
-                  (option (sp ++ const string "WHERE" ++ sp ++ Expression.pp))
-                  where)
-            f ()
   end
 
   let select ~from ?where what = Query.Select { from; what; where }

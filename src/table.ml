@@ -25,6 +25,8 @@ module type S' = sig
     val columns : (Meta.columns, tag) Expression.Column_list.t
   end
 
+  val const : Meta.mapped -> (Meta.mapped, _) Expression.t
+
   module Expression : sig
     type 't t = ('t, tag) Expression.t
 
@@ -33,9 +35,9 @@ module type S' = sig
     val columns : (Meta.columns, tag) Expression.List.t
   end
 
-  val type_ : Meta.mapped Type.extended
-
   val all : Meta.mapped Expression.t
+
+  val type_ : Meta.mapped Type.extended
 end
 
 type ('t, 'target) reference = {
