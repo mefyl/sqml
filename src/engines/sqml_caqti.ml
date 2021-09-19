@@ -402,14 +402,15 @@ module Make (Model : Model.S) = struct
 
     let arg
         (type a res arity)
-        (arg : a arg)
+        (arg : a Type.t)
         (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
         Model.tag t ->
         a ->
         ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
           'error )
         Lwt_result.t =
-      let query = f (Expression.var ()) in
+      let query = f (Expression.var ())
+      and arg = type_of_type arg in
       let query_str = Fmt.str "%a" Model.Query.pp query in
       match Model.Query.arity query with
       | Zero ->

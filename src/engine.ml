@@ -15,14 +15,8 @@ module type S = sig
     Lwt_result.t
 
   module Prepare : sig
-    type 't arg
-
-    val int : int arg
-
-    val string : string arg
-
     val arg :
-      'arg arg ->
+      'arg Type.t ->
       (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
       Model.tag t ->
       'arg ->
