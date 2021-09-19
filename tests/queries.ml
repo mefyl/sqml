@@ -260,14 +260,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
 
   let prepared make () =
     let* db = make () in
-    let* () = populate db in
     let get id =
       Model.select
         ~from:(module Model.T1)
         ~where:Sqml.Expression.(Model.T1.id = id)
         Model.T1.name
-    in
-    let get = Engine.(prepare Sqml.Type.(Atomic Int) get) in
+    and put t1 = Model.insert ~into:(module Model.T1) t1 in
+    let get = Engine.prepare Sqml.Type.(Atomic Int) get
+    and put = Engine.prepare Model.T1.type_ put in
+    let* Zero = put db (271, "prepared", Some "prepared") in
     let* (Many res) = get db 1 in
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "one" ] res)

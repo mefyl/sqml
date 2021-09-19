@@ -392,82 +392,25 @@ module Make (Model : Model.S) = struct
    fun fmt (Sqml.Expression.Set { column; value }) ->
     Fmt.pf fmt "%s = %a" column.name pp_expression value
 
-  let pp_query : type tag arity. (tag, arity) Model.Query.t Fmt.t =
-    let open Fmt in
-    let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
-    fun f -> function
-      | Delete { from; where } ->
-        let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
-          (option (pp_clause "WHERE"))
-          where
-      | Delete_returning { from; returning; where } ->
-        let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
-          (option (pp_clause "WHERE"))
-          where (pp_clause "RETURNING") returning
-      | Insert { into; _ } ->
-        let module Table = (val into) in
-        (box
-        @@ const string "INSERT" ++ sp ++ const string "INTO" ++ sp
-           ++ const Table.pp () ++ sp ++ const string "VALUES" ++ sp
-           ++ const char '(' ++ const string "<val>" ++ const char ')')
-          f ()
-      | Select { from; what; where } ->
-        let module Selectable = (val from) in
-        (box
-        @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
-           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                where)
-          f ()
-
-  let query { pool } query =
-    let query_str = Fmt.str "%a" pp_query query in
-    let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
-    let collect query =
-      let get (module C : Caqti_lwt.CONNECTION) =
-        let f response =
-          let f stream =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
-        in
-        C.call ~f query ()
-      in
-      Caqti_lwt.Pool.use get pool |> error
-    in
-    let exec :
-        type res arity.
-        (res, arity) Model.Query.t ->
-        ( (res, arity, 'error) Model.Query.result,
-          [> `Sqml_engine of string ] )
-        Lwt_result.t = function
-      | Delete _ ->
-        let query = Caqti_request.exec Caqti_type.unit query_str in
-        let delete (module C : Caqti_lwt.CONNECTION) = C.exec query () in
-        let+ () = Caqti_lwt.Pool.use delete pool |> error in
-        Model.Query.Zero
-      | Delete_returning { returning; _ } ->
-        let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-            query_str
-        in
-        collect query
-      | Select { what; _ } ->
-        let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
-        in
-        collect query
-      | Insert { excluded; into; on_conflict; returning; value } ->
-        let module T = (val into) in
-        let insert value (module C : Caqti_lwt.CONNECTION) =
+  let pp_query driver_info =
+    let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
+      let open Fmt in
+      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
+      fun f -> function
+        | Delete { from; where } ->
+          let module Table = (val from) in
+          Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
+            (option (pp_clause "WHERE"))
+            where
+        | Delete_returning { from; returning; where } ->
+          let module Table = (val from) in
+          Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
+            (option (pp_clause "WHERE"))
+            where (pp_clause "RETURNING") returning
+        | Insert { excluded; into; on_conflict; returning; value } ->
+          let module T = (val into) in
           let dialect =
-            match Caqti_driver_info.dialect_tag C.driver_info with
+            match Caqti_driver_info.dialect_tag driver_info with
             | #Caqti_driver_info.sql_dialect_tag as t -> t
             | _ -> failwith "unknown dialect"
           in
@@ -507,20 +450,62 @@ module Make (Model : Model.S) = struct
               Fmt.(
                 sp ++ const string "RETURNING" ++ sp ++ const pp_expression e)
           in
-          let* query =
-            let q =
-              Fmt.str "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
-                pp_expression value conflict_pg () returning ()
-            in
-            let+ () = Log.debug (fun m -> m "caqti: execute insertion: %s" q) in
-            Caqti_request.exec Caqti_type.unit q
-          in
-          C.exec query ()
-        in
-        let* () = Caqti_lwt.Pool.use (insert value) pool |> error in
-        Lwt_result.return Model.Query.Zero
+          Fmt.pf f "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
+            pp_expression value conflict_pg () returning ()
+        | Select { from; what; where } ->
+          let module Selectable = (val from) in
+          (box
+          @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
+             ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+             ++ const
+                  (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                  where)
+            f ()
     in
-    exec query
+    pp
+
+  let query { pool } (type res arity) (query : (res, arity) Model.Query.t) :
+      ((res, arity, _) Model.Query.result, _) Lwt_result.t =
+    let exec (module C : Caqti_lwt.CONNECTION) =
+      let collect query =
+        let f response =
+          let f stream =
+            Lwt.bind (stream ()) ~f:(function
+              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+              | Error e -> Lwt_result.fail e |> error
+              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+          and init = C.Response.to_stream response in
+          Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
+        in
+        C.call ~f query ()
+      in
+      let query_str = Fmt.str "%a" (pp_query C.driver_info) query in
+      let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+      let res : ((res, arity, _) Model.Query.result, _) Lwt_result.t =
+        match query with
+        | Delete _ ->
+          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let+ () = C.exec query () in
+          Model.Query.Zero
+        | Delete_returning { returning; _ } ->
+          let query =
+            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+              query_str
+          in
+          collect query
+        | Select { what; _ } ->
+          let query =
+            Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
+          in
+          collect query
+        | Insert _ ->
+          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let+ () = C.exec query () in
+          Model.Query.Zero
+      in
+      res
+    in
+    Caqti_lwt.Pool.use exec pool |> error
 
   let prepare
       (type a res arity)
@@ -533,16 +518,20 @@ module Make (Model : Model.S) = struct
       Lwt_result.t =
     let query = f (Expression.var ())
     and arg = type_of_type arg in
-    let query_str = Fmt.str "%a" pp_query query in
+    let query_str info = Fmt.str "%a" (pp_query info) query in
     match Model.Query.arity query with
     | Zero ->
-      let prepared = Caqti_request.exec arg query_str in
+      let prepared =
+        Caqti_request.create_p arg Caqti_type.unit Caqti_mult.zero query_str
+      in
       let f v (module C : Caqti_lwt.CONNECTION) = C.exec prepared v in
       fun { pool } v ->
         let+ () = Caqti_lwt.Pool.use (f v) pool |> error in
         Model.Query.Zero
     | Many ->
-      let prepared = Caqti_request.find arg (query_type query) query_str in
+      let prepared =
+        Caqti_request.create_p arg (query_type query) Caqti_mult.one query_str
+      in
       let f v (module C : Caqti_lwt.CONNECTION) =
         let f response =
           let f stream =
