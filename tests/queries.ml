@@ -267,7 +267,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         ~where:Sqml.Expression.(Model.T1.id = id)
         Model.T1.name
     in
-    let get = Engine.Prepare.(arg Sqml.Type.(Atomic Int) get) in
+    let get = Engine.(prepare Sqml.Type.(Atomic Int) get) in
     let* (Many res) = get db 1 in
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "one" ] res)

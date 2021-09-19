@@ -14,14 +14,12 @@ module type S = sig
       'error )
     Lwt_result.t
 
-  module Prepare : sig
-    val arg :
-      'arg Type.extended ->
-      (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
-      Model.tag t ->
-      'arg ->
-      ( ('res, 'arity, ([> error ] as 'error)) Model.Query.result,
-        'error )
-      Lwt_result.t
-  end
+  val prepare :
+    'arg Type.extended ->
+    (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
+    Model.tag t ->
+    'arg ->
+    ( ('res, 'arity, ([> error ] as 'error)) Model.Query.result,
+      'error )
+    Lwt_result.t
 end
