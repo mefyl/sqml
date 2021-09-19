@@ -6,6 +6,7 @@ module H_list = H_list
 module Expression :
   Expression.Interface
     with type ('t, 'tag) column = ('t, 'tag) Expression.column
+     and type 't type_ = 't Expression.type_
      and type ('t, 'tag) t = ('t, 'tag) Expression.t
      and type 'tag assignment = 'tag Expression.assignment
      and type ('t, 'tag) List.t = ('t, 'tag) Expression.List.t

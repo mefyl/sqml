@@ -22,12 +22,23 @@ module type Interface = sig
 
   type free
 
+  type 'a type_ =
+    | Atomic : 'a Type.t -> 'a type_
+    | Custom : {
+        repr : 'repr type_;
+        encode : 'a -> ('repr, string) Result.t;
+        decode : 'repr -> ('a, string) Result.t;
+      }
+        -> 'a type_
+    | Empty : unit H_list.t type_
+    | Pair : 'a type_ * 'b H_list.t type_ -> ('a -> 'b) H_list.t type_
+
   type ('t, 'tag) t = private
     | Column : ('t, 'tag) column -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
     | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
     | Const : {
-        type_ : 't Type.extended;
+        type_ : 't type_;
         value : 't;
       }
         -> ('t, 'tag) t
@@ -60,7 +71,7 @@ module type Interface = sig
 
   val column : ('t, 'tag) column -> ('t, 'tag) t
 
-  val const : 't Type.extended -> 't -> ('t, 'tag) t
+  val const : 't type_ -> 't -> ('t, 'tag) t
 
   val int : int -> (int, 'tag) t
 
@@ -94,6 +105,4 @@ module type Interface = sig
   end
 
   include module type of Infix
-
-  (* val to_type : ('t, 'tag) t -> 't Type.extended *)
 end

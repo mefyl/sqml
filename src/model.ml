@@ -85,14 +85,16 @@ struct
 
       let type_ =
         let rec type_of_columns :
-            type a. (a, _) Expression.Column_list.t -> a H_list.t Type.extended
-            = function
+            type a.
+            (a, _) Expression.Column_list.t -> a H_list.t Expression.type_ =
+          function
           | hd :: tl -> Pair (Atomic hd.type_, type_of_columns tl)
           | [] -> Empty
         in
         let decode columns = Meta.map columns |> Result.return
         and encode v = Meta.unmap v |> Result.return in
-        Type.Custom { decode; encode; repr = type_of_columns Column.columns }
+        Expression.Custom
+          { decode; encode; repr = type_of_columns Column.columns }
 
       let const v = Expression.const type_ v
 

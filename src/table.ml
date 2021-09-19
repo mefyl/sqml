@@ -27,6 +27,8 @@ module type S' = sig
 
   val const : Meta.mapped -> (Meta.mapped, _) Expression.t
 
+  val type_ : Meta.mapped Expression.type_
+
   module Expression : sig
     type 't t = ('t, tag) Expression.t
 
@@ -36,8 +38,6 @@ module type S' = sig
   end
 
   val all : Meta.mapped Expression.t
-
-  val type_ : Meta.mapped Type.extended
 end
 
 type ('t, 'target) reference = {

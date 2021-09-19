@@ -13,12 +13,23 @@ end)
 
 type free = unit
 
+type 'a type_ =
+  | Atomic : 'a Type.t -> 'a type_
+  | Custom : {
+      repr : 'repr type_;
+      encode : 'a -> ('repr, string) Result.t;
+      decode : 'repr -> ('a, string) Result.t;
+    }
+      -> 'a type_
+  | Empty : unit H_list.t type_
+  | Pair : 'a type_ * 'b H_list.t type_ -> ('a -> 'b) H_list.t type_
+
 type ('t, 'tag) t =
   | Column : ('t, 'tag) column -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
   | Const : {
-      type_ : 't Type.extended;
+      type_ : 't type_;
       value : 't;
     }
       -> ('t, 'tag) t

@@ -39,10 +39,10 @@ module Make (Model : Model.S) = struct
         char fmt '\''
     | Varchar _ -> pp_literal_string
 
-  let rec pp_from_type : type t. t Sqml.Type.extended -> t Fmt.t =
+  let rec pp_from_type : type t. t Sqml.Expression.type_ -> t Fmt.t =
     let open Fmt in
     let rec pp_values :
-        type l. l H_list.t Sqml.Type.extended -> l H_list.t Fmt.t = function
+        type l. l H_list.t Sqml.Expression.type_ -> l H_list.t Fmt.t = function
       | Empty -> nop
       | Pair (hd, Empty) -> fun f [ hd_v ] -> pp_from_type hd f hd_v
       | Pair (hd, tl) ->
@@ -324,7 +324,7 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Varchar _ -> Caqti_type.string
 
-  let rec type_of_type : type t. t Sqml.Type.extended -> t Caqti_type.t =
+  let rec type_of_type : type t. t Sqml.Expression.type_ -> t Caqti_type.t =
     function
     | Atomic t -> type_of_atomic_type t
     | Custom { encode; decode; repr } ->
@@ -524,7 +524,7 @@ module Make (Model : Model.S) = struct
 
   let prepare
       (type a res arity)
-      (arg : a Type.extended)
+      (arg : a Expression.type_)
       (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
       Model.tag t ->
       a ->
