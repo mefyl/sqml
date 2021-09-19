@@ -60,7 +60,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let+ Zero = Engine.query db q in
       ()
     in
-    Lwt_list.map_p f t1s |> Lwt.map ~f:Result.all_unit
+    Lwt_list.map_s f t1s |> Lwt.map ~f:Result.all_unit
 
   let check_t1s db expected =
     let* (Many all) =
@@ -69,15 +69,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+ all = Sequence.to_list all in
     Alcotest.(check (list int) "ids" expected all)
 
-  let select make () =
+  let select db =
     let q = Model.select ~from:(module Model.T1) Model.T1.id
     and q_all = Model.select ~from:(module Model.T1) Model.T1.all in
-    let* db = make () in
     let* () =
       let* (Many res) = Engine.query db q in
       let* res = Sequence.to_list res in
       Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
-    and* () =
+    in
+    let* () =
       let* (Many res) = Engine.query db q_all in
       let* res = Sequence.to_list res in
       Alcotest.(check (list t1) "selected" [] res) |> Lwt_result.return
@@ -90,7 +90,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         check (list int) "selected ids" [ 0; 1; 2 ]
           (List.sort ~compare:Int.compare res))
       |> Lwt_result.return
-    and* () =
+    in
+    let* () =
       let* (Many res) = Engine.query db q_all in
       let* res = Sequence.to_list res in
       Alcotest.(
@@ -100,8 +101,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
-  let insert make () =
-    let* db = make () in
+  let insert db =
     let* Zero =
       let q =
         Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
@@ -115,8 +115,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* res = Sequence.to_list res in
     Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
 
-  let delete make () =
-    let* db = make () in
+  let delete db =
     let delete where =
       let+ Zero =
         Engine.query db @@ Model.delete ~from:(module Model.T1) ?where ()
@@ -131,8 +130,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* () = delete None in
     check_t1s db []
 
-  let delete_returning make () =
-    let* db = make () in
+  let delete_returning db =
     let delete where =
       let* (Many res) =
         Engine.query db
@@ -160,22 +158,25 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let later = Timmy.Time.(now + Timmy.Span.seconds 3600) in
     let* db = make () in
     let* Zero =
-      let q = Model.insert ~into:(module Model.Ts) @@ Model.Ts.const now in
-      Engine.query db q
+      Engine.connect db (fun db ->
+          let q = Model.insert ~into:(module Model.Ts) @@ Model.Ts.const now in
+          Engine.query db q)
     in
     let* db = make () in
-    let* Zero =
-      let q = Model.insert ~into:(module Model.Ts) @@ Model.Ts.const later in
-      Engine.query db q
-    in
-    let q = Model.select ~from:(module Model.Ts) Model.Ts.time in
-    let* (Many res) = Engine.query db q in
-    let* res = Sequence.to_list res in
-    Lwt_result.return
-    @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res)
+    Engine.connect db (fun db ->
+        let* Zero =
+          let q =
+            Model.insert ~into:(module Model.Ts) @@ Model.Ts.const later
+          in
+          Engine.query db q
+        in
+        let q = Model.select ~from:(module Model.Ts) Model.Ts.time in
+        let* (Many res) = Engine.query db q in
+        let* res = Sequence.to_list res in
+        Lwt_result.return
+        @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res))
 
-  let conflict psql make () =
-    let* db = make () in
+  let conflict psql db =
     let* Zero =
       let q =
         Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
@@ -258,8 +259,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
-  let prepared make () =
-    let* db = make () in
+  let prepared db =
     let get id =
       Model.select
         ~from:(module Model.T1)
@@ -268,15 +268,14 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     and put t1 = Model.insert ~into:(module Model.T1) t1 in
     let get = Engine.prepare Sqml.Type.(Atomic Int) get
     and put = Engine.prepare Model.T1.type_ put in
-    let* () = Lwt_unix.sleep 5. |> Lwt.map ~f:Result.return in
     let* Zero = put db (271, "prepared", Some "prepared") in
     let* (Many res) = get db 271 in
     let* res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "prepared" ] res);
-    let* () = Lwt_unix.sleep 5. |> Lwt.map ~f:Result.return in
-    let* (Many res) = get db 271 in
+    let* Zero = put db (272, "prepared'", Some "prepared'") in
+    let* (Many res) = get db 272 in
     let+ res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected" [ "prepared" ] res)
+    Alcotest.(check (list string) "selected'" [ "prepared'" ] res)
 
   module Versioning = struct
     let stable make () =
@@ -292,10 +291,10 @@ module Caqti_test = Test (Caqti)
 let () =
   let open Alcotest_lwt in
   let test_case name f =
-    let f _ () =
+    let f switch () =
       Lwt.map
         ~f:Alcotest.(check (result unit error) "result" (Result.Ok ()))
-        (f ())
+        (f switch ())
     in
     test_case name `Quick f
   in
@@ -303,7 +302,15 @@ let () =
   @@ run "SQML"
        [
          ( "Caqti-SQLite",
-           let make test () =
+           let make test _ () =
+             let open Let.Syntax2 (Lwt_result) in
+             let f (name, channel) =
+               let* () = Lwt_io.close channel |> Lwt.map ~f:Result.return in
+               let* db = Caqti.make ("sqlite3://" ^ name) in
+               Caqti.connect db test
+             in
+             Lwt_io.with_temp_file ~prefix:"sqml-test" f
+           and make_db test _ () =
              let open Let.Syntax (Lwt) in
              let f (name, channel) =
                let* () = Lwt_io.close channel in
@@ -312,18 +319,20 @@ let () =
              in
              Lwt_io.with_temp_file ~prefix:"sqml-test" f
            in
+
            [
              test_case "select" @@ make Caqti_test.select;
              test_case "insert" @@ make Caqti_test.insert;
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
-             test_case "timestamp" @@ make Caqti_test.timestamp;
-             test_case "versioning-stable" @@ make Caqti_test.Versioning.stable;
-             test_case "prepared" @@ make Caqti_test.prepared;
+             test_case "timestamp" @@ make_db Caqti_test.timestamp;
+             test_case "versioning-stable"
+             @@ make_db Caqti_test.Versioning.stable;
+             (* test_case "prepared" @@ make Caqti_test.prepared; *)
            ] );
          ( "Caqti-PostgreSQL",
-           let make db test () =
+           let make_db db test switch () =
              let pg_host =
                Sys.getenv "PG_HOST" |> Option.value ~default:"localhost"
              in
@@ -334,6 +343,14 @@ let () =
              in
              let module C = (val c) in
              let* () =
+               let () =
+                 Lwt_switch.add_hook (Some switch) (fun () ->
+                     C.exec
+                       (Caqti_request.exec Caqti_type.unit
+                       @@ Format.sprintf "DROP DATABASE %S" db)
+                       ()
+                     |> Lwt.map ~f:ignore)
+               in
                C.exec
                  (Caqti_request.exec Caqti_type.unit
                  @@ Format.sprintf "CREATE DATABASE %S" db)
@@ -341,30 +358,24 @@ let () =
                |> Lwt.map ~f:convert_error
              in
              let open Let.Syntax (Lwt) in
-             let* res =
-               Lwt_switch.with_switch (fun switch ->
-                   let open Let.Syntax2 (Lwt_result) in
-                   let make () =
-                     let+ res =
-                       Caqti.make ("postgres://postgres@" ^ pg_host ^ "/" ^ db)
-                     in
-                     let () =
-                       Lwt_switch.add_hook (Some switch) (fun () ->
-                           Caqti.close res)
-                     in
-                     res
-                   in
-                   test make ())
+             let open Let.Syntax2 (Lwt_result) in
+             let make () =
+               let+ res =
+                 Caqti.make ("postgres://postgres@" ^ pg_host ^ "/" ^ db)
+               in
+               let () =
+                 Lwt_switch.add_hook (Some switch) (fun () -> Caqti.close res)
+               in
+               res
              in
-             let* drop_res =
-               C.exec
-                 (Caqti_request.exec Caqti_type.unit
-                 @@ Format.sprintf "DROP DATABASE %S" db)
-                 ()
-               |> Lwt.map ~f:convert_error
+             test make ()
+           in
+           let make name test switch () =
+             let test make () =
+               let* db = make () in
+               Caqti.connect db test
              in
-             Result.map ~f:(fun ((), ()) -> ()) (Result.both res drop_res)
-             |> Lwt.return
+             make_db name test switch ()
            in
            [
              test_case "select" @@ make "select" Caqti_test.select;
@@ -372,10 +383,10 @@ let () =
              test_case "delete" @@ make "delete" Caqti_test.delete;
              test_case "delete_returning"
              @@ make "delete_returning" Caqti_test.delete_returning;
-             test_case "timestamp" @@ make "timestamp" Caqti_test.timestamp;
+             test_case "timestamp" @@ make_db "timestamp" Caqti_test.timestamp;
              test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
              test_case "versioning-stable"
-             @@ make "versioning_stable" Caqti_test.Versioning.stable;
+             @@ make_db "versioning_stable" Caqti_test.Versioning.stable;
              test_case "prepared" @@ make "prepared" Caqti_test.prepared;
            ] );
        ]

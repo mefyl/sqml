@@ -6,9 +6,9 @@ module Array = Array.Monadic2 (Lwt_result)
 open Let.Syntax2 (Lwt_result)
 
 module Make (Model : Model.S) = struct
-  type 'model t = {
-    pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t;
-  }
+  type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
+
+  type transaction = (module Caqti_lwt.CONNECTION)
 
   let quote_pattern = String.Search_pattern.create "'"
 
@@ -428,7 +428,7 @@ module Make (Model : Model.S) = struct
           let dialect =
             match Caqti_driver_info.dialect_tag driver_info with
             | #Caqti_driver_info.sql_dialect_tag as t -> t
-            | _ -> failwith "unknown dialect"
+            | _ -> failwith "unsupported dialect"
           in
           let conflict_sqlite, conflict_pg =
             let open Fmt in
@@ -480,87 +480,101 @@ module Make (Model : Model.S) = struct
     in
     pp
 
-  let query { pool } (type res arity) (query : (res, arity) Model.Query.t) :
+  let query
+      (module C : Caqti_lwt.CONNECTION)
+      (type res arity)
+      (query : (res, arity) Model.Query.t) :
       ((res, arity, _) Model.Query.result, _) Lwt_result.t =
-    let exec (module C : Caqti_lwt.CONNECTION) =
-      let collect query =
-        let f response =
-          let f stream =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
-        in
-        C.call ~f query ()
+    let collect query =
+      let f response =
+        let f stream =
+          Lwt.bind (stream ()) ~f:(function
+            | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+            | Error e -> Lwt_result.fail e |> error
+            | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+        and init = C.Response.to_stream response in
+        Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
       in
-      let query_str = Fmt.str "%a" (pp_query C.driver_info) query in
-      let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
-      let res : ((res, arity, _) Model.Query.result, _) Lwt_result.t =
-        match query with
-        | Delete _ ->
-          let query = Caqti_request.exec Caqti_type.unit query_str in
-          let+ () = C.exec query () in
-          Model.Query.Zero
-        | Delete_returning { returning; _ } ->
-          let query =
-            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-              query_str
-          in
-          collect query
-        | Select { what; _ } ->
-          let query =
-            Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
-          in
-          collect query
-        | Insert _ ->
-          let query = Caqti_request.exec Caqti_type.unit query_str in
-          let+ () = C.exec query () in
-          Model.Query.Zero
-      in
-      res
+      C.call ~f query ()
     in
-    Caqti_lwt.Pool.use exec pool |> error
+    let query_str = Fmt.str "%a" (pp_query C.driver_info) query in
+    let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+    let res : ((res, arity, _) Model.Query.result, _) Lwt_result.t =
+      match query with
+      | Delete _ ->
+        let query = Caqti_request.exec Caqti_type.unit query_str in
+        let+ () = C.exec query () in
+        Model.Query.Zero
+      | Delete_returning { returning; _ } ->
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+            query_str
+        in
+        collect query
+      | Select { what; _ } ->
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
+        in
+        collect query
+      | Insert _ ->
+        let query = Caqti_request.exec Caqti_type.unit query_str in
+        let+ () = C.exec query () in
+        Model.Query.Zero
+    in
+    res |> error
 
   let prepare
       (type a res arity)
       (arg : a Expression.type_)
       (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
-      Model.tag t ->
+      transaction ->
       a ->
       ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
         'error )
       Lwt_result.t =
     let query = f (Expression.var arg)
     and arg = type_of_type arg in
-    let query_str info = Fmt.str "%a" (pp_query info) query in
+    let query_str info =
+      let q = Fmt.str "%a" (pp_query info) query in
+      let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q) in
+      q
+    in
     match Model.Query.arity query with
     | Zero ->
       let prepared =
         Caqti_request.create_p arg Caqti_type.unit Caqti_mult.zero query_str
       in
-      let f v (module C : Caqti_lwt.CONNECTION) = C.exec prepared v in
-      fun { pool } v ->
-        let+ () = Caqti_lwt.Pool.use (f v) pool |> error in
+      fun (module C : Caqti_lwt.CONNECTION) v ->
+        let+ () = C.exec prepared v |> error in
         Model.Query.Zero
     | Many ->
       let prepared =
         Caqti_request.create_p arg (query_type query) Caqti_mult.one query_str
       in
-      let f v (module C : Caqti_lwt.CONNECTION) =
-        let f response =
-          let f stream =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Sequence.unfold_step ~init ~f
+      fun (module C : Caqti_lwt.CONNECTION) v ->
+        let+ res =
+          let f response =
+            let f stream =
+              Lwt.bind (stream ()) ~f:(function
+                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                | Error e -> Lwt_result.fail e |> error
+                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+            and init = C.Response.to_stream response in
+            Lwt_result.return @@ Sequence.unfold_step ~init ~f
+          in
+          C.call ~f prepared v |> error
         in
-        C.call ~f prepared v
-      in
-      fun { pool } v ->
-        let+ res = Caqti_lwt.Pool.use (f v) pool |> error in
         Model.Query.Many res
+
+  let connect { pool } f =
+    let f c = f c |> Lwt_result.map_err (fun e -> `Shitty_api e)
+    and unmap = function
+      | `Shitty_api e -> e
+      | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+    in
+    Caqti_lwt.Pool.use f
+      (pool
+        : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t
+        :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
+    |> Lwt_result.map_err unmap
 end
