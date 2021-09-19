@@ -208,11 +208,12 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let rec type_of_type : type t. t Sqml.Type.t -> t Caqti_type.t = function
-    | Sqml.Type.Bool -> Caqti_type.bool
-    | Sqml.Type.Custom { encode; decode; repr } ->
-      Caqti_type.custom ~decode ~encode @@ type_of_type repr
-    | Sqml.Type.Date ->
+  let rec type_of_atomic_type : type t. t Sqml.Type.t -> t Caqti_type.t =
+    function
+    | Bool -> Caqti_type.bool
+    | Custom { encode; decode; repr } ->
+      Caqti_type.custom ~decode ~encode @@ type_of_atomic_type repr
+    | Date ->
       let encode d =
         Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
         |> Timmy.Time.to_ptime |> Result.return
@@ -222,40 +223,31 @@ module Make (Model : Model.S) = struct
         |> Result.return
       in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
-    | Sqml.Type.Int -> Caqti_type.int
-    | Sqml.Type.Nullable t -> Caqti_type.option (type_of_type t)
-    | Sqml.Type.Text -> Caqti_type.string
-    | Sqml.Type.Time ->
+    | Int -> Caqti_type.int
+    | Nullable t -> Caqti_type.option (type_of_atomic_type t)
+    | Text -> Caqti_type.string
+    | Time ->
       let encode t = Result.return @@ Timmy.Time.to_ptime t
       and decode t = Result.return @@ Timmy.Time.of_ptime t in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
-    | Sqml.Type.Varchar _ -> Caqti_type.string
+    | Varchar _ -> Caqti_type.string
 
-  let rec type_of_expr : type t. (t, _) Expression.t -> t Caqti_type.t =
+  let rec type_of_type : type t. t Sqml.Type.extended -> t Caqti_type.t =
     function
-    | Expression.Column { type_; _ } -> type_of_type type_
-    | Expression.Comparison _ -> Caqti_type.bool
-    | Expression.Concat _ -> Caqti_type.string
-    | Expression.Int _ -> Caqti_type.int
-    | Expression.Logic _ -> Caqti_type.bool
-    | Expression.Map { mapped; encode; decode } ->
-      Caqti_type.custom
-        ~decode:(fun x -> Result.Ok (decode x))
-        ~encode:(fun x -> Result.Ok (encode x))
-      @@ type_of_expr mapped
-    | Expression.String _ -> Caqti_type.string
-    | Expression.Unit -> Caqti_type.unit
-    | Expression.Var -> failwith "prepared query of variable type not supported"
-    | a :: b ->
-      Caqti_type.custom
-        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
-        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
-      @@ Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
-    | [] ->
-      Caqti_type.custom
-        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
-        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
-      @@ Caqti_type.unit
+    | Atomic t -> type_of_atomic_type t
+    | Custom { encode; decode; repr } ->
+      Caqti_type.custom ~decode ~encode @@ type_of_type repr
+    | Empty ->
+      let encode Sqml.H_list.[] = Result.return ()
+      and decode () = Result.return Sqml.H_list.[] in
+      Caqti_type.custom ~decode ~encode @@ Caqti_type.unit
+    | Pair (l, r) ->
+      let encode Sqml.H_list.(hd :: tl) = Result.return @@ (hd, tl)
+      and decode (hd, tl) = Result.return @@ Sqml.H_list.(hd :: tl) in
+      Caqti_type.custom ~decode ~encode
+      @@ Caqti_type.tup2 (type_of_type l) (type_of_type r)
+
+  let type_of_expr e = Sqml.Expression.to_type e |> type_of_type
 
   let rec type_of_expressions :
       type t tag. (t, tag) Expression.List.t -> t H_list.t Caqti_type.t =
@@ -275,7 +267,10 @@ module Make (Model : Model.S) = struct
     function
     | Model.Query.Delete _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
-    | Insert { returning; _ } -> type_of_expr returning
+    | Insert { returning; _ } -> (
+      match returning with
+      | Some e -> type_of_expr e
+      | None -> Caqti_type.unit)
     | Select { what; _ } -> type_of_expr what
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
@@ -361,8 +356,8 @@ module Make (Model : Model.S) = struct
               failwith "dialect not handled"
           and returning =
             match returning with
-            | Expression.Unit -> Fmt.nop
-            | e ->
+            | None -> Fmt.nop
+            | Some e ->
               Fmt.(
                 sp ++ const string "RETURNING" ++ sp ++ const Expression.pp e)
           in
@@ -402,7 +397,7 @@ module Make (Model : Model.S) = struct
 
     let arg
         (type a res arity)
-        (arg : a Type.t)
+        (arg : a Type.extended)
         (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
         Model.tag t ->
         a ->

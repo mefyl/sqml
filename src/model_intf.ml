@@ -65,7 +65,7 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          returning : ('t, 'tag) Expression.t;
+          returning : ('t, 'tag) Expression.option;
           value : 'mapped;
         }
           -> ('t, zero) t

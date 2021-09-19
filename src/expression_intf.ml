@@ -32,13 +32,17 @@ module type Interface = sig
         mapped : ('mapped, 'tag) t;
       }
         -> ('t, 'tag) t
+    | Null : (_ option, 'tag) t
     | String : string -> (string, 'tag) t
-    | Unit : (unit, 'tag) t
     | Var : (_, 'tag) t
     | ( :: ) :
         ('a, 'tag) t * ('b H_list.t, 'tag) t
         -> (('a -> 'b) H_list.t, 'tag) t
     | [] : (unit H_list.t, 'tag) t
+
+  type ('t, 'tag) option =
+    | None : (unit, 'tag) option
+    | Some : ('t, 'tag) t -> ('t, 'tag) option
 
   type 'tag assignment = private
     | Set : {
@@ -63,7 +67,7 @@ module type Interface = sig
 
   val string : string -> (string, 'tag) t
 
-  val null : (unit, 'tag) t
+  val null : (_ Option.t, 'tag) t
 
   val var : unit -> ('t, 'tag) t (* FIXME *)
 
@@ -85,4 +89,6 @@ module type Interface = sig
   end
 
   include module type of Infix
+
+  val to_type : ('t, 'tag) t -> 't Type.extended
 end

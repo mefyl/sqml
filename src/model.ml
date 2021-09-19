@@ -73,15 +73,25 @@ struct
         let columns = bind_expressions Column.columns
       end
 
+      let rec pairs_of_list :
+          type l. (l, tag) Expression.List.t -> l H_list.t Expression.t =
+        function
+        | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
+        | Expression.List.[] -> Expression.empty_list
+
       let all =
-        let rec pairs_of_list :
-            type l. (l, tag) Expression.List.t -> l H_list.t Expression.t =
-          function
-          | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
-          | Expression.List.[] -> Expression.empty_list
-        in
         Expression.map ~encode:Meta.unmap ~decode:Meta.map
           (pairs_of_list Expression.columns)
+
+      let type_ =
+        let decode columns = Meta.map columns |> Result.return
+        and encode v = Meta.unmap v |> Result.return in
+        Type.Custom
+          {
+            decode;
+            encode;
+            repr = Expression.to_type (pairs_of_list Expression.columns);
+          }
 
       let pp_ ~prefix:p =
         if p = "" then
@@ -168,7 +178,7 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          returning : ('t, 'tag) Expression.t;
+          returning : ('t, 'tag) Expression.option;
           value : 'mapped;
         }
           -> ('t, zero) t
@@ -225,7 +235,7 @@ struct
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
-        returning = Expression.null;
+        returning = Expression.None;
         value;
       }
 
@@ -235,7 +245,7 @@ struct
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
-        returning;
+        returning = Some returning;
         value;
       }
 

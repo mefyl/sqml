@@ -33,6 +33,8 @@ module type S' = sig
     val columns : (Meta.columns, tag) Expression.List.t
   end
 
+  val type_ : Meta.mapped Type.extended
+
   val all : Meta.mapped Expression.t
 end
 

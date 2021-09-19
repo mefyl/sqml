@@ -23,19 +23,23 @@ type ('t, 'tag) t =
       mapped : ('mapped, 'tag) t;
     }
       -> ('t, 'tag) t
+  | Null : ('t option, 'tag) t
   | String : string -> (string, 'tag) t
-  | Unit : (unit, 'tag) t
   | Var : (_, 'tag) t
   | ( :: ) :
       ('a, 'tag) t * ('b H_list.t, 'tag) t
       -> (('a -> 'b) H_list.t, 'tag) t
   | [] : (unit H_list.t, 'tag) t
 
+type ('t, 'tag) option =
+  | None : (unit, 'tag) option
+  | Some : ('t, 'tag) t -> ('t, 'tag) option
+
 module List = S_list.Make2 (struct
   type nonrec ('t, 'tag) t = ('t, 'tag) t
 end)
 
-let null = Unit
+let null = Null
 
 let var () = Var
 
@@ -62,14 +66,14 @@ let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
     let fmt = const pp l ++ sp ++ pp_logic op ++ sp ++ const pp r in
     fmt f ()
   | Map { mapped; _ } -> pp f mapped
-  | [ a ] -> pp f a
+  | Null -> Fmt.string f "NULL"
   | String s ->
     let fmt = const char '\'' ++ string ++ const char '\'' in
     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
-  | Unit -> Fmt.string f "NULL"
   | Var -> Fmt.string f "?"
-  | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
   | [] -> ()
+  | [ a ] -> pp f a
+  | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
 
 and pp_operator =
   let open Fmt in
@@ -105,7 +109,7 @@ let rec map_name :
   | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)
   | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
   | String _ as e -> e
-  | Unit as e -> e
+  | Null as e -> e
   | Var as e -> e
   | a :: b -> map_name f a :: map_name f b
   | [] as e -> e
@@ -132,3 +136,22 @@ module Infix = struct
 end
 
 include Infix
+
+let rec to_type : type a. (a, _) t -> a Type.extended = function
+  | Column { type_; _ } -> Atomic type_
+  | Comparison _ -> Atomic Bool
+  | Concat _ -> Atomic Text
+  | Int _ -> Atomic Int
+  | Logic _ -> Atomic Bool
+  | Map { mapped; encode; decode } ->
+    Custom
+      {
+        decode = (fun x -> Result.Ok (decode x));
+        encode = (fun x -> Result.Ok (encode x));
+        repr = to_type mapped;
+      }
+  | String _ -> Atomic Text
+  | hd :: tl -> Pair (to_type hd, to_type tl)
+  | [] -> Empty
+  | Null -> failwith "can't deduce type of NULL"
+  | Var -> failwith "prepared query of variable type not supported"

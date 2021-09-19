@@ -16,7 +16,7 @@ module type S = sig
 
   module Prepare : sig
     val arg :
-      'arg Type.t ->
+      'arg Type.extended ->
       (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
       Model.tag t ->
       'arg ->
