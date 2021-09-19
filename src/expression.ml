@@ -41,7 +41,7 @@ type ('t, 'tag) t =
     }
       -> ('t, 'tag) t
   | Null : ('t option, 'tag) t
-  | Var : (_, 'tag) t
+  | Var : 't type_ -> ('t, 'tag) t
   | ( :: ) :
       ('a, 'tag) t * ('b H_list.t, 'tag) t
       -> (('a -> 'b) H_list.t, 'tag) t
@@ -59,7 +59,7 @@ let const type_ value = Const { type_; value }
 
 let null = Null
 
-let var () = Var
+let var t = Var t
 
 let make_column ~selectable ~name type_ = { selectable; name; type_ }
 
@@ -128,7 +128,7 @@ let rec map_name :
   | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)
   | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
   | Null as e -> e
-  | Var as e -> e
+  | Var _ as e -> e
   | a :: b -> map_name f a :: map_name f b
   | [] as e -> e
 

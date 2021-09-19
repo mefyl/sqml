@@ -268,10 +268,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     and put t1 = Model.insert ~into:(module Model.T1) t1 in
     let get = Engine.prepare Sqml.Type.(Atomic Int) get
     and put = Engine.prepare Model.T1.type_ put in
+    let* () = Lwt_unix.sleep 5. |> Lwt.map ~f:Result.return in
     let* Zero = put db (271, "prepared", Some "prepared") in
-    let* (Many res) = get db 1 in
+    let* (Many res) = get db 271 in
+    let* res = Sequence.to_list res in
+    Alcotest.(check (list string) "selected" [ "prepared" ] res);
+    let* () = Lwt_unix.sleep 5. |> Lwt.map ~f:Result.return in
+    let* (Many res) = get db 271 in
     let+ res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected" [ "one" ] res)
+    Alcotest.(check (list string) "selected" [ "prepared" ] res)
 
   module Versioning = struct
     let stable make () =

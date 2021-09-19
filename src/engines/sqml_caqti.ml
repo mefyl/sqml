@@ -64,6 +64,22 @@ module Make (Model : Model.S) = struct
 
   and pp_expression =
     let open Fmt in
+    let rec pp_var : type t. t Expression.type_ -> unit Fmt.t =
+      let rec pp_values : type l. l H_list.t Sqml.Expression.type_ Fmt.t =
+       fun f -> function
+        | Empty -> ()
+        | Pair (_, Empty) -> const char '?' f ()
+        | Pair (_, tl) -> (const char '?' ++ comma ++ const pp_values tl) f ()
+        | _ -> failwith "FIXME"
+      in
+      function
+      | Atomic _ -> const string "?"
+      | Custom { repr; _ } -> pp_var repr
+      | Empty -> const string "VALUES ()"
+      | Pair (_, Empty) -> const string "VALUES (?)"
+      | Pair _ as t ->
+        const string "VALUES (" ++ const pp_values t ++ const char ')'
+    in
     let rec pp : type a. (a, 'tag) Expression.t Fmt.t =
      fun f -> function
       | Column { selectable; name; _ } ->
@@ -80,7 +96,7 @@ module Make (Model : Model.S) = struct
         fmt f ()
       | Map { mapped; _ } -> pp f mapped
       | Null -> Fmt.string f "NULL"
-      | Var -> Fmt.string f "?"
+      | Var t -> pp_var t f ()
       | [] -> ()
       | [ a ] -> pp f a
       | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
@@ -362,7 +378,7 @@ module Make (Model : Model.S) = struct
         ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
       @@ Caqti_type.unit
     | Null -> failwith "can't deduce type of NULL"
-    | Var -> failwith "prepared query of variable type not supported"
+    | Var t -> type_of_type t
 
   let rec type_of_expressions :
       type t tag. (t, tag) Expression.List.t -> t H_list.t Caqti_type.t =
@@ -516,7 +532,7 @@ module Make (Model : Model.S) = struct
       ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
         'error )
       Lwt_result.t =
-    let query = f (Expression.var ())
+    let query = f (Expression.var arg)
     and arg = type_of_type arg in
     let query_str info = Fmt.str "%a" (pp_query info) query in
     match Model.Query.arity query with

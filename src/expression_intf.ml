@@ -50,7 +50,7 @@ module type Interface = sig
       }
         -> ('t, 'tag) t
     | Null : (_ option, 'tag) t
-    | Var : (_, 'tag) t
+    | Var : 't type_ -> ('t, 'tag) t
     | ( :: ) :
         ('a, 'tag) t * ('b H_list.t, 'tag) t
         -> (('a -> 'b) H_list.t, 'tag) t
@@ -85,7 +85,7 @@ module type Interface = sig
 
   val string : string -> (string, 'tag) t
 
-  val var : unit -> ('t, 'tag) t (* FIXME *)
+  val var : 't type_ -> ('t, 'tag) t (* FIXME *)
 
   val empty_list : (unit H_list.t, 'tag) t
 
