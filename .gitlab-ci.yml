@@ -3,8 +3,9 @@ variables:
   PG_HOST: "postgres"
   POSTGRES_HOST_AUTH_METHOD: "trust"
 
-services:
-  - postgres:12.2-alpine
-
 include:
   - local: '/.logistic/ci/.gitlab-ci.yml'
+
+check:
+  services:
+    - postgres:12.2-alpine
