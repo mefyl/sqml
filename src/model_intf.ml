@@ -24,14 +24,18 @@ module type S = sig
   module Query : sig
     type many = Many
 
+    type one = One
+
     type zero = Zero
 
     type _ arity =
       | Many : many arity
+      | One : one arity
       | Zero : zero arity
 
     type ('t, 'arity, 'error) result =
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+      | One : 't -> ('t, one, 'error) result
       | Zero : ('t, zero, 'error) result
 
     type 'tag excluded = {
@@ -65,10 +69,21 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          returning : ('t, 'tag) Expression.option;
           value : ('mapped, Expression.free) Expression.t;
         }
-          -> ('t, zero) t
+          -> (unit, zero) t
+      | Insert_returning : {
+          excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
+          into :
+            (module Table.S
+               with type model = tag
+                and type Meta.mapped = 'mapped
+                and type tag = 'tag);
+          on_conflict : 'tag on_conflict option;
+          returning : ('t, 'tag) Expression.t;
+          value : ('mapped, Expression.free) Expression.t;
+        }
+          -> ('t, one) t
       | Select : {
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
@@ -105,7 +120,7 @@ module type S = sig
     returning:('t, 'tag) Expression.t ->
     ?on_conflict:'tag Query.on_conflict ->
     ('mapped, Expression.free) Expression.t ->
-    ('t, Query.zero) Query.t
+    ('t, Query.one) Query.t
 
   val delete :
     from:(module Table.S with type model = tag) ->

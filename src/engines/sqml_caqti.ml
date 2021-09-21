@@ -396,12 +396,10 @@ module Make (Model : Model.S) = struct
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function
-    | Model.Query.Delete _ -> Caqti_type.unit
+    | Delete _ -> Caqti_type.unit
+    | Insert _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
-    | Insert { returning; _ } -> (
-      match returning with
-      | Some e -> type_of_expr e
-      | None -> Caqti_type.unit)
+    | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
@@ -410,73 +408,87 @@ module Make (Model : Model.S) = struct
 
   let pp_query driver_info =
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
+     fun f ->
       let open Fmt in
+      let pp_insert
+          (type mapped res tag)
+          (module T : Table.S
+            with type model = Model.tag
+             and type tag = tag
+             and type Meta.mapped = mapped)
+          ({ excluded } : tag Model.Query.excluded)
+          (on_conflict : tag Model.Query.on_conflict option)
+          (returning : (res, tag) Expression.option)
+          value =
+        let dialect =
+          match Caqti_driver_info.dialect_tag driver_info with
+          | #Caqti_driver_info.sql_dialect_tag as t -> t
+          | _ -> failwith "unsupported dialect"
+        in
+        let conflict_sqlite, conflict_pg =
+          let open Fmt in
+          match (dialect, on_conflict) with
+          | _, None -> (nop, nop)
+          | `Pgsql, Some Ignore -> (nop, const string " ON CONFLICT DO NOTHING")
+          | `Pgsql, Some (Set assignments) ->
+            ( nop,
+              const string " ON CONFLICT ("
+              ++ const (list ~sep:comma string) (primary T.Meta.columns)
+              ++ const string ") DO UPDATE SET "
+              ++ const
+                   (list ~sep:comma pp_assignment)
+                   (assignments { excluded }) )
+          | `Pgsql, Some Update ->
+            let f { Column.name; _ } =
+              Option.return @@ Fmt.str "%s = excluded.%s" name name
+            in
+            ( nop,
+              const string " ON CONFLICT ("
+              ++ const (list ~sep:comma string) (primary T.Meta.columns)
+              ++ const string ") DO UPDATE SET "
+              ++ const (list ~sep:comma string)
+                   (column_map { f } T.Meta.columns) )
+          | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
+          | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
+          | `Sqlite, Some (Set _)
+          | `Mysql, _ ->
+            failwith "dialect not handled"
+        and returning =
+          match returning with
+          | None -> Fmt.nop
+          | Some e ->
+            Fmt.(sp ++ const string "RETURNING" ++ sp ++ const pp_expression e)
+        in
+        Fmt.pf f "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
+          pp_expression value conflict_pg () returning ()
+      in
       let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
-      fun f -> function
-        | Delete { from; where } ->
-          let module Table = (val from) in
-          Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
-            (option (pp_clause "WHERE"))
-            where
-        | Delete_returning { from; returning; where } ->
-          let module Table = (val from) in
-          Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
-            (option (pp_clause "WHERE"))
-            where (pp_clause "RETURNING") returning
-        | Insert { excluded; into; on_conflict; returning; value } ->
-          let module T = (val into) in
-          let dialect =
-            match Caqti_driver_info.dialect_tag driver_info with
-            | #Caqti_driver_info.sql_dialect_tag as t -> t
-            | _ -> failwith "unsupported dialect"
-          in
-          let conflict_sqlite, conflict_pg =
-            let open Fmt in
-            match (dialect, on_conflict) with
-            | _, None -> (nop, nop)
-            | `Pgsql, Some Ignore ->
-              (nop, const string " ON CONFLICT DO NOTHING")
-            | `Pgsql, Some (Set assignments) ->
-              ( nop,
-                const string " ON CONFLICT ("
-                ++ const (list ~sep:comma string) (primary T.Meta.columns)
-                ++ const string ") DO UPDATE SET "
-                ++ const
-                     (list ~sep:comma pp_assignment)
-                     (assignments { excluded }) )
-            | `Pgsql, Some Update ->
-              let f { Column.name; _ } =
-                Option.return @@ Fmt.str "%s = excluded.%s" name name
-              in
-              ( nop,
-                const string " ON CONFLICT ("
-                ++ const (list ~sep:comma string) (primary T.Meta.columns)
-                ++ const string ") DO UPDATE SET "
-                ++ const (list ~sep:comma string)
-                     (column_map { f } T.Meta.columns) )
-            | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
-            | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
-            | `Sqlite, Some (Set _)
-            | `Mysql, _ ->
-              failwith "dialect not handled"
-          and returning =
-            match returning with
-            | None -> Fmt.nop
-            | Some e ->
-              Fmt.(
-                sp ++ const string "RETURNING" ++ sp ++ const pp_expression e)
-          in
-          Fmt.pf f "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
-            pp_expression value conflict_pg () returning ()
-        | Select { from; what; where } ->
-          let module Selectable = (val from) in
-          (box
-          @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
-             ++ const string "FROM" ++ sp ++ const Selectable.pp ()
-             ++ const
-                  (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                  where)
-            f ()
+      function
+      | Delete { from; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
+          (option (pp_clause "WHERE"))
+          where
+      | Delete_returning { from; returning; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
+          (option (pp_clause "WHERE"))
+          where (pp_clause "RETURNING") returning
+      | Insert { excluded; into; on_conflict; value } ->
+        pp_insert into { excluded } on_conflict Expression.None value
+      | Insert_returning { excluded; into; on_conflict; returning; value } ->
+        pp_insert into { excluded } on_conflict
+          Expression.(Some returning)
+          value
+      | Select { from; what; where } ->
+        let module Selectable = (val from) in
+        (box
+        @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
+           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                where)
+          f ()
     in
     pp
 
@@ -520,6 +532,12 @@ module Make (Model : Model.S) = struct
         let query = Caqti_request.exec Caqti_type.unit query_str in
         let+ () = C.exec query () in
         Model.Query.Zero
+      | Insert_returning { returning; _ } ->
+        let query =
+          Caqti_request.find Caqti_type.unit (type_of_expr returning) query_str
+        in
+        let+ res = C.find query () in
+        Model.Query.One res
     in
     res |> error
 
@@ -547,9 +565,17 @@ module Make (Model : Model.S) = struct
       fun (module C : Caqti_lwt.CONNECTION) v ->
         let+ () = C.exec prepared v |> error in
         Model.Query.Zero
-    | Many ->
+    | One ->
       let prepared =
         Caqti_request.create_p arg (query_type query) Caqti_mult.one query_str
+      in
+      fun (module C : Caqti_lwt.CONNECTION) v ->
+        let+ res = C.find prepared v |> error in
+        Model.Query.One res
+    | Many ->
+      let prepared =
+        Caqti_request.create_p arg (query_type query) Caqti_mult.zero_or_more
+          query_str
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
         let+ res =

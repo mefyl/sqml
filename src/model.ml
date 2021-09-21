@@ -142,14 +142,18 @@ struct
   module Query = struct
     type many = Many
 
+    type one = One
+
     type zero = Zero
 
     type _ arity =
       | Many : many arity
+      | One : one arity
       | Zero : zero arity
 
     type ('t, 'arity, 'error) result =
       | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+      | One : 't -> ('t, one, 'error) result
       | Zero : ('t, zero, 'error) result
 
     type 'tag excluded = {
@@ -183,10 +187,21 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          returning : ('t, 'tag) Expression.option;
           value : ('mapped, Expression.free) Expression.t;
         }
-          -> ('t, zero) t
+          -> (unit, zero) t
+      | Insert_returning : {
+          excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
+          into :
+            (module Table.S
+               with type model = tag
+                and type Meta.mapped = 'mapped
+                and type tag = 'tag);
+          on_conflict : 'tag on_conflict option;
+          returning : ('t, 'tag) Expression.t;
+          value : ('mapped, Expression.free) Expression.t;
+        }
+          -> ('t, one) t
       | Select : {
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
@@ -199,6 +214,7 @@ struct
       | Delete _ -> Zero
       | Delete_returning _ -> Many
       | Insert _ -> Zero
+      | Insert_returning _ -> One
       | Select _ -> Many
   end
 
@@ -210,17 +226,16 @@ struct
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
-        returning = Expression.None;
         value;
       }
 
   let insert_returning ~into ~returning ?on_conflict value =
-    Query.Insert
+    Query.Insert_returning
       {
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
-        returning = Some returning;
+        returning;
         value;
       }
 
