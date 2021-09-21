@@ -101,7 +101,15 @@ module type Interface = sig
 
     val ( := ) : ('t, 'tag) column -> ('t, 'tag) t -> 'tag assignment
 
+    val ( < ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
+    val ( <= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
     val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
+    val ( > ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+
+    val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 
     val ( @ ) :
       ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t

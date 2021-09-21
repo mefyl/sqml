@@ -413,6 +413,7 @@ module Make (Model : Model.S) = struct
     | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
     | Update _ -> Caqti_type.unit
+    | Update_returning { returning; _ } -> type_of_expr returning
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
    fun fmt (Sqml.Expression.Set { column; value }) ->
@@ -422,6 +423,12 @@ module Make (Model : Model.S) = struct
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
+      let pp_returning : type t tag. (t, tag) Expression.option Fmt.t =
+       fun f -> function
+        | Expression.None -> ()
+        | Some e ->
+          Fmt.(sp ++ const string "RETURNING" ++ sp ++ pp_expression) f e
+      in
       let pp_insert
           (type mapped res tag)
           (module T : Table.S
@@ -465,15 +472,26 @@ module Make (Model : Model.S) = struct
           | `Sqlite, Some (Set _)
           | `Mysql, _ ->
             failwith "dialect not handled"
-        and returning =
-          match returning with
-          | None -> Fmt.nop
-          | Some e ->
-            Fmt.(sp ++ const string "RETURNING" ++ sp ++ const pp_expression e)
         in
         Fmt.pf f "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
-          pp_expression value conflict_pg () returning ()
+          pp_expression value conflict_pg () pp_returning returning
+      and pp_update
+          (type res tag)
+          (module T : Table.S with type model = Model.tag and type tag = tag)
+          (what : tag Expression.assignment list)
+          (where : (bool, tag) Expression.t option)
+          (returning : (res, tag) Expression.option) =
+        (box
+        @@ const string "UPDATE" ++ sp ++ const T.pp () ++ sp
+           ++ const string "SET" ++ sp
+           ++ const (list ~sep:comma pp_assignment) what
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                where
+           ++ const pp_returning returning)
+          f ()
       in
+
       let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
       function
       | Delete { from; where } ->
@@ -502,15 +520,9 @@ module Make (Model : Model.S) = struct
                 where)
           f ()
       | Update { into; what; where } ->
-        let module Selectable = (val into) in
-        (box
-        @@ const string "UPDATE" ++ sp ++ const Selectable.pp () ++ sp
-           ++ const string "SET" ++ sp
-           ++ const (list ~sep:comma pp_assignment) what
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                where)
-          f ()
+        pp_update into what where Expression.None
+      | Update_returning { into; what; where; returning } ->
+        pp_update into what where Expression.(Some returning)
     in
 
     pp
@@ -565,6 +577,12 @@ module Make (Model : Model.S) = struct
         let query = Caqti_request.exec Caqti_type.unit query_str in
         let+ () = C.exec query () in
         Model.Query.Zero
+      | Update_returning { returning; _ } ->
+        let query =
+          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+            query_str
+        in
+        collect query
     in
     res |> error
 

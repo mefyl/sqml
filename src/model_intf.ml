@@ -92,12 +92,18 @@ module type S = sig
         }
           -> ('t, many) t
       | Update : {
-          into :
-            (module Selectable.S with type model = tag and type tag = 'tag);
+          into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
+      | Update_returning : {
+          into : (module Table.S with type model = tag and type tag = 'tag);
+          what : 'tag Expression.assignment list;
+          where : (bool, 'tag) Expression.t option;
+          returning : ('t, 'tag) Expression.t;
+        }
+          -> ('t, many) t
 
     val arity : (_, 'arity) t -> 'arity arity
   end
@@ -142,10 +148,17 @@ module type S = sig
     ('t, Query.many) Query.t
 
   val update :
-    (module Selectable.S with type model = tag and type tag = 'tag) ->
+    (module Table.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     'tag Expression.assignment list ->
     (unit, Query.zero) Query.t
+
+  val update_returning :
+    (module Table.S with type model = tag and type tag = 'tag) ->
+    ?where:(bool, 'tag) Expression.t ->
+    returning:('t, 'tag) Expression.t ->
+    'tag Expression.assignment list ->
+    ('t, Query.many) Query.t
 end
 
 type t = (module S)

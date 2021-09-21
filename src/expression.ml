@@ -151,7 +151,15 @@ module Infix = struct
 
   let ( := ) column value = Set { column; value }
 
+  let ( < ) l r = Comparison (Lt, l, r)
+
+  let ( <= ) l r = Comparison (Lte, l, r)
+
   let ( = ) l r = Comparison (Eq, l, r)
+
+  let ( > ) l r = Comparison (Gt, l, r)
+
+  let ( >= ) l r = Comparison (Gte, l, r)
 
   let ( @ ) a b = a :: b
 

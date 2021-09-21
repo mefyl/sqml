@@ -167,6 +167,12 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         Engine.query db @@ Model.update (module Model.T1) ?where what
       in
       ()
+    and update_returning ?where ~returning what =
+      let* (Many results) =
+        Engine.query db
+        @@ Model.update_returning (module Model.T1) ?where ~returning what
+      in
+      Sequence.to_list results
     in
     let* () = populate db in
     let* () =
@@ -176,14 +182,16 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       check_t1s db
         [ (0, "four", None); (1, "four", Some "1"); (2, "four", Some "2") ]
     in
-    let* () =
-      update
-        ~where:Sqml.Expression.(Model.T1.id = const int 0)
+    let* ids =
+      update_returning
+        ~where:Sqml.Expression.(Model.T1.id <= const int 1)
+        ~returning:Model.T1.name
         Sqml.Expression.
           [ Model.T1.Column.description := const (some string) @@ Some "0" ]
     in
+    Alcotest.(check (list string) "updated names" [ "four"; "four" ] ids);
     check_t1s db
-      [ (0, "four", Some "0"); (1, "four", Some "1"); (2, "four", Some "2") ]
+      [ (0, "four", Some "0"); (1, "four", Some "0"); (2, "four", Some "2") ]
 
   let timestamp make () =
     let now =

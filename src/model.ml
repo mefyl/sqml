@@ -221,12 +221,18 @@ struct
         }
           -> ('t, many) t
       | Update : {
-          into :
-            (module Selectable.S with type model = tag and type tag = 'tag);
+          into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
+      | Update_returning : {
+          into : (module Table.S with type model = tag and type tag = 'tag);
+          what : 'tag Expression.assignment list;
+          where : (bool, 'tag) Expression.t option;
+          returning : ('t, 'tag) Expression.t;
+        }
+          -> ('t, many) t
 
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
@@ -235,6 +241,7 @@ struct
       | Insert_returning _ -> One
       | Select _ -> Many
       | Update _ -> Zero
+      | Update_returning _ -> Many
   end
 
   let select ~from ?where what = Query.Select { from; what; where }
@@ -264,6 +271,9 @@ struct
     Query.Delete_returning { from; returning; where }
 
   let update into ?where what = Query.Update { into; where; what }
+
+  let update_returning into ?where ~returning what =
+    Query.Update_returning { into; where; what; returning }
 
   (* Metadata *)
 
