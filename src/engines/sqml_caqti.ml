@@ -18,27 +18,6 @@ module Make (Model : Model.S) = struct
     fmt f
       (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
 
-  let rec pp_from_atomic_type : type t. t Sqml.Type.t -> t Fmt.t =
-    let open Fmt in
-    function
-    | Bool -> Fmt.bool
-    | Custom { encode; repr; _ } -> (
-      fun f value ->
-        match encode value with
-        | Result.Ok value -> pp_from_atomic_type repr f value
-        | Result.Error e -> (* FIXME *) failwith "pp_from_atomic_type: %s" e)
-    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
-    | Int -> Fmt.int
-    | Nullable t ->
-      Fmt.(option ~none:(const string "NULL") @@ pp_from_atomic_type t)
-    | Text -> pp_literal_string
-    | Time ->
-      fun fmt t ->
-        char fmt '\'';
-        string fmt (Timmy.Time.to_rfc3339 t);
-        char fmt '\''
-    | Varchar _ -> pp_literal_string
-
   let rec pp_from_type : type t. t Sqml.Expression.type_ -> t Fmt.t =
     let open Fmt in
     let rec pp_values :
@@ -53,7 +32,16 @@ module Make (Model : Model.S) = struct
       | _ -> failwith "FIXME"
     in
     function
-    | Atomic t -> pp_from_atomic_type t
+    | Bool -> Fmt.bool
+    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
+    | Int -> Fmt.int
+    | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
+    | String -> pp_literal_string
+    | Time ->
+      fun fmt t ->
+        char fmt '\'';
+        string fmt (Timmy.Time.to_rfc3339 t);
+        char fmt '\''
     | Custom { encode; repr; _ } -> (
       fun f value ->
         match encode value with
@@ -73,12 +61,18 @@ module Make (Model : Model.S) = struct
         | _ -> failwith "FIXME"
       in
       function
-      | Atomic _ -> const string "?"
       | Custom { repr; _ } -> pp_var repr
       | Empty -> const string "VALUES ()"
       | Pair (_, Empty) -> const string "VALUES (?)"
       | Pair _ as t ->
         const string "VALUES (" ++ const pp_values t ++ const char ')'
+      | Bool
+      | Date
+      | Int
+      | Nullable _
+      | String
+      | Time ->
+        const string "?"
     in
     let rec pp : type a. (a, 'tag) Expression.t Fmt.t =
      fun f -> function
@@ -316,11 +310,11 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let rec type_of_atomic_type : type t. t Sqml.Type.t -> t Caqti_type.t =
+  let rec type_of_column_type : type t. t Sqml.Type.t -> t Caqti_type.t =
     function
     | Bool -> Caqti_type.bool
     | Custom { encode; decode; repr } ->
-      Caqti_type.custom ~decode ~encode @@ type_of_atomic_type repr
+      Caqti_type.custom ~decode ~encode @@ type_of_column_type repr
     | Date ->
       let encode d =
         Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
@@ -332,7 +326,7 @@ module Make (Model : Model.S) = struct
       in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
     | Int -> Caqti_type.int
-    | Nullable t -> Caqti_type.option (type_of_atomic_type t)
+    | Nullable t -> Caqti_type.option (type_of_column_type t)
     | Text -> Caqti_type.string
     | Time ->
       let encode t = Result.return @@ Timmy.Time.to_ptime t
@@ -342,7 +336,24 @@ module Make (Model : Model.S) = struct
 
   let rec type_of_type : type t. t Sqml.Expression.type_ -> t Caqti_type.t =
     function
-    | Atomic t -> type_of_atomic_type t
+    | Bool -> Caqti_type.bool
+    | Date ->
+      let encode d =
+        Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
+        |> Timmy.Time.to_ptime |> Result.return
+      and decode t =
+        Timmy.Time.of_ptime t
+        |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
+        |> Result.return
+      in
+      Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
+    | Int -> Caqti_type.int
+    | Nullable t -> Caqti_type.option (type_of_type t)
+    | String -> Caqti_type.string
+    | Time ->
+      let encode t = Result.return @@ Timmy.Time.to_ptime t
+      and decode t = Result.return @@ Timmy.Time.of_ptime t in
+      Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
     | Empty ->
@@ -357,7 +368,7 @@ module Make (Model : Model.S) = struct
 
   let rec type_of_expr : type a. (a, _) Expression.t -> a Caqti_type.t =
     function
-    | Column { type_; _ } -> type_of_atomic_type type_
+    | Column { type_; _ } -> type_of_column_type type_
     | Comparison _ -> Caqti_type.bool
     | Concat _ -> Caqti_type.string
     | Const { type_; _ } -> type_of_type type_
@@ -397,10 +408,11 @@ module Make (Model : Model.S) = struct
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function
     | Delete _ -> Caqti_type.unit
-    | Insert _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
+    | Insert _ -> Caqti_type.unit
     | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
+    | Update _ -> Caqti_type.unit
 
   let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
    fun fmt (Sqml.Expression.Set { column; value }) ->
@@ -489,7 +501,18 @@ module Make (Model : Model.S) = struct
                 (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
                 where)
           f ()
+      | Update { into; what; where } ->
+        let module Selectable = (val into) in
+        (box
+        @@ const string "UPDATE" ++ sp ++ const Selectable.pp () ++ sp
+           ++ const string "SET" ++ sp
+           ++ const (list ~sep:comma pp_assignment) what
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                where)
+          f ()
     in
+
     pp
 
   let query
@@ -538,6 +561,10 @@ module Make (Model : Model.S) = struct
         in
         let+ res = C.find query () in
         Model.Query.One res
+      | Update _ ->
+        let query = Caqti_request.exec Caqti_type.unit query_str in
+        let+ () = C.exec query () in
+        Model.Query.Zero
     in
     res |> error
 

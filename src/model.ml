@@ -3,6 +3,17 @@ open Poly
 open Utils
 include Model_intf
 
+let rec type_of_column_type : type t. t Type.t -> t Expression.type_ = function
+  | Bool -> Expression.Bool
+  | Custom { decode; encode; repr } ->
+    Expression.Custom { decode; encode; repr = type_of_column_type repr }
+  | Date -> Expression.Date
+  | Int -> Expression.Int
+  | Nullable t -> Expression.Nullable (type_of_column_type t)
+  | Text -> Expression.String
+  | Time -> Expression.Time
+  | Varchar _ -> Expression.String
+
 module Make (Meta : sig
   val version : Semver.t
 end) =
@@ -55,6 +66,21 @@ struct
         let columns, constraints = bind_columns Meta.columns
       end
 
+      let type_ =
+        let rec type_of_columns :
+            type a.
+            (a, _) Expression.Column_list.t -> a H_list.t Expression.type_ =
+          function
+          | hd :: tl -> Pair (type_of_column_type hd.type_, type_of_columns tl)
+          | [] -> Empty
+        in
+        let decode columns = Meta.map columns |> Result.return
+        and encode v = Meta.unmap v |> Result.return in
+        Expression.Custom
+          { decode; encode; repr = type_of_columns Column.columns }
+
+      let const value = Expression.const type_ value
+
       module Expression = struct
         include Expression
 
@@ -82,21 +108,6 @@ struct
       let all =
         Expression.map ~encode:Meta.unmap ~decode:Meta.map
           (pairs_of_list Expression.columns)
-
-      let type_ =
-        let rec type_of_columns :
-            type a.
-            (a, _) Expression.Column_list.t -> a H_list.t Expression.type_ =
-          function
-          | hd :: tl -> Pair (Atomic hd.type_, type_of_columns tl)
-          | [] -> Empty
-        in
-        let decode columns = Meta.map columns |> Result.return
-        and encode v = Meta.unmap v |> Result.return in
-        Expression.Custom
-          { decode; encode; repr = type_of_columns Column.columns }
-
-      let const v = Expression.const type_ v
 
       let pp_ ~prefix:p =
         if p = "" then
@@ -209,6 +220,13 @@ struct
           where : (bool, 'tag) Expression.t option;
         }
           -> ('t, many) t
+      | Update : {
+          into :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          what : 'tag Expression.assignment list;
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> (unit, zero) t
 
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
@@ -216,6 +234,7 @@ struct
       | Insert _ -> Zero
       | Insert_returning _ -> One
       | Select _ -> Many
+      | Update _ -> Zero
   end
 
   let select ~from ?where what = Query.Select { from; what; where }
@@ -243,6 +262,8 @@ struct
 
   let delete_returning ~from ?where returning =
     Query.Delete_returning { from; returning; where }
+
+  let update into ?where what = Query.Update { into; where; what }
 
   (* Metadata *)
 

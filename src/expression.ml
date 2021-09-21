@@ -14,7 +14,12 @@ end)
 type free = unit
 
 type 'a type_ =
-  | Atomic : 'a Type.t -> 'a type_
+  | Bool : bool type_
+  | Date : Timmy.Date.t type_
+  | Int : int type_
+  | Nullable : 't type_ -> 't option type_
+  | String : string type_
+  | Time : Timmy.Time.t type_
   | Custom : {
       repr : 'repr type_;
       encode : 'a -> ('repr, string) Result.t;
@@ -111,11 +116,13 @@ let empty_list = []
 
 let column c = Column c
 
-let int value = Const { type_ = Atomic Type.Int; value }
+let int = Int
 
 let map ~decode ~encode mapped = Map { decode; encode; mapped }
 
-let string value = Const { type_ = Atomic Type.Text; value }
+let string = String
+
+let some t = Nullable t
 
 let rec map_name :
     type a tag tag'. (string -> string) -> (a, tag) t -> (a, tag') t =
@@ -154,22 +161,3 @@ module Infix = struct
 end
 
 include Infix
-
-(* let rec to_type : type a. (a, _) t -> a Type.extended = function
- *   | Column { type_; _ } -> Atomic type_
- *   | Comparison _ -> Atomic Bool
- *   | Concat _ -> Atomic Text
- *   | Int _ -> Atomic Int
- *   | Logic _ -> Atomic Bool
- *   | Map { mapped; encode; decode } ->
- *     Custom
- *       {
- *         decode = (fun x -> Result.Ok (decode x));
- *         encode = (fun x -> Result.Ok (encode x));
- *         repr = to_type mapped;
- *       }
- *   | String _ -> Atomic Text
- *   | hd :: tl -> Pair (to_type hd, to_type tl)
- *   | [] -> Empty
- *   | Null -> failwith "can't deduce type of NULL"
- *   | Var -> failwith "prepared query of variable type not supported" *)

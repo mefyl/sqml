@@ -91,15 +91,28 @@ module type S = sig
           where : (bool, 'tag) Expression.t option;
         }
           -> ('t, many) t
+      | Update : {
+          into :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          what : 'tag Expression.assignment list;
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> (unit, zero) t
 
     val arity : (_, 'arity) t -> 'arity arity
   end
 
-  val select :
-    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
+  val delete :
+    from:(module Table.S with type model = tag) ->
     ?where:(bool, 'tag) Expression.t ->
-    ('t, 'tag) Expression.t ->
-    ('t, Query.many) Query.t
+    unit ->
+    (unit, Query.zero) Query.t
+
+  val delete_returning :
+    from:(module Table.S with type model = tag) ->
+    ?where:(bool, 'tag) Expression.t ->
+    ('res, 'tag) Expression.t ->
+    ('res, Query.many) Query.t
 
   val insert :
     into:
@@ -122,17 +135,17 @@ module type S = sig
     ('mapped, Expression.free) Expression.t ->
     ('t, Query.one) Query.t
 
-  val delete :
-    from:(module Table.S with type model = tag) ->
+  val select :
+    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
-    unit ->
-    (unit, Query.zero) Query.t
+    ('t, 'tag) Expression.t ->
+    ('t, Query.many) Query.t
 
-  val delete_returning :
-    from:(module Table.S with type model = tag) ->
+  val update :
+    (module Selectable.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
-    ('res, 'tag) Expression.t ->
-    ('res, Query.many) Query.t
+    'tag Expression.assignment list ->
+    (unit, Query.zero) Query.t
 end
 
 type t = (module S)

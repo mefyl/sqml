@@ -64,6 +64,16 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
 
   let check_t1s db expected =
     let* (Many all) =
+      Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.all
+    in
+    let+ all = Sequence.to_list all in
+
+    Alcotest.(
+      check (list t1) "ids" expected
+      @@ List.sort ~compare:(fun (l, _, _) (r, _, _) -> Int.compare l r) all)
+
+  let check_t1s_ids db expected =
+    let* (Many all) =
       Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.id
     in
     let+ all = Sequence.to_list all in
@@ -123,12 +133,12 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       ()
     in
     let* () = populate db in
-    let* () = delete (Some Sqml.Expression.(Model.T1.id = int 1)) in
-    let* () = check_t1s db [ 0; 2 ] in
-    let* () = delete (Some Sqml.Expression.(Model.T1.id = int 3)) in
-    let* () = check_t1s db [ 0; 2 ] in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = const int 1)) in
+    let* () = check_t1s_ids db [ 0; 2 ] in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = const int 3)) in
+    let* () = check_t1s_ids db [ 0; 2 ] in
     let* () = delete None in
-    check_t1s db []
+    check_t1s_ids db []
 
   let delete_returning db =
     let delete where =
@@ -139,17 +149,41 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Sequence.to_list res
     in
     let* () = populate db in
-    let* res = delete (Some Sqml.Expression.(Model.T1.id = int 1)) in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = const int 1)) in
     let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
-    let* () = check_t1s db [ 0; 2 ] in
-    let* res = delete (Some Sqml.Expression.(Model.T1.id = int 3)) in
+    let* () = check_t1s_ids db [ 0; 2 ] in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = const int 3)) in
     let () = Alcotest.(check (list string) "deleted rows" [] res) in
-    let* () = check_t1s db [ 0; 2 ] in
+    let* () = check_t1s_ids db [ 0; 2 ] in
     let* res = delete None in
     let () =
       Alcotest.(check (list string) "deleted rows" [ "zero"; "two" ] res)
     in
-    check_t1s db []
+    check_t1s_ids db []
+
+  let update db =
+    let update ?where what =
+      let+ Zero =
+        Engine.query db @@ Model.update (module Model.T1) ?where what
+      in
+      ()
+    in
+    let* () = populate db in
+    let* () =
+      update Sqml.Expression.[ Model.T1.Column.name := const string "four" ]
+    in
+    let* () =
+      check_t1s db
+        [ (0, "four", None); (1, "four", Some "1"); (2, "four", Some "2") ]
+    in
+    let* () =
+      update
+        ~where:Sqml.Expression.(Model.T1.id = const int 0)
+        Sqml.Expression.
+          [ Model.T1.Column.description := const (some string) @@ Some "0" ]
+    in
+    check_t1s db
+      [ (0, "four", Some "0"); (1, "four", Some "1"); (2, "four", Some "2") ]
 
   let timestamp make () =
     let now =
@@ -231,7 +265,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
                 (Set
                    (fun { excluded } ->
                      [
-                       Model.T1.Column.name := Model.T1.name ^ string "'";
+                       Model.T1.Column.name := Model.T1.name ^ const string "'";
                        Model.T1.Column.description :=
                          excluded Model.T1.description;
                      ]))
@@ -266,7 +300,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         ~where:Sqml.Expression.(Model.T1.id = id)
         Model.T1.name
     and put t1 = Model.insert ~into:(module Model.T1) t1 in
-    let get = Engine.prepare Sqml.Type.(Atomic Int) get
+    let get = Engine.prepare Sqml.Expression.int get
     and put = Engine.prepare Model.T1.type_ put in
     let* Zero = put db (271, "prepared", Some "prepared") in
     let* (Many res) = get db 271 in
@@ -325,6 +359,7 @@ let () =
              test_case "insert" @@ make Caqti_test.insert;
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
+             test_case "update" @@ make Caqti_test.update;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
              test_case "versioning-stable"
@@ -383,6 +418,7 @@ let () =
              test_case "delete" @@ make "delete" Caqti_test.delete;
              test_case "delete_returning"
              @@ make "delete_returning" Caqti_test.delete_returning;
+             test_case "update" @@ make "update" Caqti_test.update;
              test_case "timestamp" @@ make_db "timestamp" Caqti_test.timestamp;
              test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
              test_case "versioning-stable"

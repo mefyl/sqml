@@ -23,7 +23,12 @@ module type Interface = sig
   type free
 
   type 'a type_ =
-    | Atomic : 'a Type.t -> 'a type_
+    | Bool : bool type_
+    | Date : Timmy.Date.t type_
+    | Int : int type_
+    | Nullable : 't type_ -> 't option type_
+    | String : string type_
+    | Time : Timmy.Time.t type_
     | Custom : {
         repr : 'repr type_;
         encode : 'a -> ('repr, string) Result.t;
@@ -73,7 +78,7 @@ module type Interface = sig
 
   val const : 't type_ -> 't -> ('t, 'tag) t
 
-  val int : int -> (int, 'tag) t
+  val int : int type_
 
   val map :
     decode:('mapped -> 't) ->
@@ -83,7 +88,9 @@ module type Interface = sig
 
   val null : (_ Option.t, 'tag) t
 
-  val string : string -> (string, 'tag) t
+  val string : string type_
+
+  val some : 't type_ -> 't Option.t type_
 
   val var : 't type_ -> ('t, 'tag) t (* FIXME *)
 
