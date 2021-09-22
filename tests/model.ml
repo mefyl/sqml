@@ -10,11 +10,11 @@ module T1_meta = struct
 
   let name = "table1"
 
-  let id = Column.make ~primary:true "id" Type.Int
+  let id = Column.(make ~primary:true "id" Type.Int)
 
-  let name_ = Column.make "name" Type.Text
+  let name_ = Column.(make "name" Type.Text)
 
-  let description = Column.make_nullable "description" Type.Text
+  let description = Column.(make_nullable "description" Type.Text)
 
   type columns = int -> string -> string option -> unit
 
@@ -26,7 +26,7 @@ module T1_meta = struct
 
   let unmap (id, name, desc) = Hlist.[ id; name; desc ]
 
-  let constraints Expression.Column_list.[ _id; _name; _description ] = []
+  let constraints Expression.Column.List.[ _id; _name; _description ] = []
 end
 
 module T1 = struct
@@ -35,7 +35,7 @@ module T1 = struct
   module Column = struct
     include Column
 
-    let Sqml.Expression.Column_list.[ id; name; description ] = columns
+    let Sqml.Expression.Column.List.[ id; name; description ] = columns
   end
 
   let Sqml.Expression.List.[ id; name; description ] = Expression.columns
@@ -45,12 +45,14 @@ module T2_meta = Table.Meta (struct
   let name = "table2"
 
   let id =
-    Column.make "id"
-      ~foreign_keys:
-        [
-          Table.Column.Reference { table = (module T1); column = T1.Column.id };
-        ]
-      Type.Int
+    Column.(
+      make "id"
+        ~foreign_keys:
+          [
+            Table.Column.Reference
+              { table = (module T1); column = T1.Column.id };
+          ]
+        Type.Int)
 
   type columns = int -> unit
 
@@ -68,7 +70,7 @@ module Ts = struct
     include Table.Meta (struct
       let name = "ts"
 
-      let time = Column.make "time" Type.Time
+      let time = Column.(make "time" Type.Time)
 
       type columns = Timmy.Time.t -> unit
 

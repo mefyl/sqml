@@ -20,9 +20,9 @@ module type S' = sig
   module Meta : META'
 
   module Column : sig
-    type 't t = ('t, tag) Expression.column
+    type 't t = ('t, tag) Expression.Column.t
 
-    val columns : (Meta.columns, tag) Expression.Column_list.t
+    val columns : (Meta.columns, tag) Expression.Column.List.t
   end
 
   val const : Meta.mapped -> (Meta.mapped, _) Expression.t
@@ -32,7 +32,7 @@ module type S' = sig
   module Expression : sig
     type 't t = ('t, tag) Expression.t
 
-    type 't column = ('t, tag) Expression.column
+    type 't column = ('t, tag) Expression.Column.t
 
     val columns : (Meta.columns, tag) Expression.List.t
   end
@@ -42,13 +42,13 @@ end
 
 type ('t, 'target) reference = {
   table : (module S' with type tag = 'target);
-  column : ('t, 'target) Expression.column;
+  column : ('t, 'target) Expression.Column.t;
 }
 
 type ('tag, 'target) foreign_reference =
   | Foreign_reference : {
       target : ('t, 'target) reference;
-      column : ('t, 'tag) Expression.column;
+      column : ('t, 'tag) Expression.Column.t;
     }
       -> ('tag, 'target) foreign_reference
 
@@ -76,11 +76,13 @@ type 'tag constraint_ =
       -> 'tag constraint_
 
 module Column = struct
+  module Type = Expression.Column.Type
+
   type 't foreign_key = Reference : ('t, _) reference -> 't foreign_key
 
   type 't t = {
     name : string;
-    type_ : 't Type.t;
+    type_ : 't Expression.Column.Type.t;
     primary : bool;
     foreign_keys : 't foreign_key list;
   }
@@ -111,7 +113,7 @@ module type META = sig
   val columns : columns Column.List.t
 
   val constraints :
-    (columns, 'tag) Expression.Column_list.t -> 'tag constraint_ list
+    (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
 end
 
 module Meta (Minimal : sig

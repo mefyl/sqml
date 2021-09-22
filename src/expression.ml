@@ -1,15 +1,34 @@
 open Acid
 include Expression_intf
 
-type ('t, 'tag) column = {
-  selectable : string;
-  name : string;
-  type_ : 't Type.t;
-}
+module Column = struct
+  module Type = struct
+    type 'a t =
+      | Bool : bool t
+      | Custom : {
+          repr : 'repr t;
+          encode : 'a -> ('repr, string) Result.t;
+          decode : 'repr -> ('a, string) Result.t;
+        }
+          -> 'a t
+      | Date : Timmy.Date.t t
+      | Int : int t
+      | Nullable : 't t -> 't option t
+      | Text : string t
+      | Time : Timmy.Time.t t
+      | Varchar : int -> string t
+  end
 
-module Column_list = Hlist.Make2 (struct
-  type ('t, 'tag) t = ('t, 'tag) column
-end)
+  type ('t, 'tag) t = {
+    selectable : string;
+    name : string;
+    type_ : 't Type.t;
+  }
+
+  module List = Hlist.Make2 (struct
+    type nonrec ('t, 'tag) t = ('t, 'tag) t
+  end)
+end
 
 type free = unit
 
@@ -30,7 +49,7 @@ type 'a type_ =
   | Pair : 'a type_ * 'b Hlist.t type_ -> ('a -> 'b) Hlist.t type_
 
 type ('t, 'tag) t =
-  | Column : ('t, 'tag) column -> ('t, 'tag) t
+  | Column : ('t, 'tag) Column.t -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
   | Const : {
@@ -64,53 +83,9 @@ let null = Null
 
 let var t = Var t
 
-let make_column ~selectable ~name type_ = { selectable; name; type_ }
+let make_column ~selectable ~name type_ = Column.{ selectable; name; type_ }
 
 let empty_list = []
-
-(* let quote_pattern = String.Search_pattern.create "'"
- *
- * let rec pp : type a. Format.formatter -> (a, 'tag) t -> unit =
- *  fun f ->
- *   let open Fmt in
- *   function
- *   | Column { selectable; name; _ } ->
- *     (const string selectable ++ const string "." ++ const string name) f ()
- *   | Concat (l, r) ->
- *     let fmt = const pp l ++ sp ++ const string "||" ++ sp ++ const pp r in
- *     fmt f ()
- *   | Comparison (op, l, r) ->
- *     let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
- *     fmt f ()
- *   | Const _ -> Fmt.string f "<CONST>"
- *   | Int i -> Fmt.int f i
- *   | Logic (op, l, r) ->
- *     let fmt = const pp l ++ sp ++ pp_logic op ++ sp ++ const pp r in
- *     fmt f ()
- *   | Map { mapped; _ } -> pp f mapped
- *   | Null -> Fmt.string f "NULL"
- *   | String s ->
- *     let fmt = const char '\'' ++ string ++ const char '\'' in
- *     fmt f (String.Search_pattern.replace_all quote_pattern ~in_:s ~with_:"''")
- *   | Var -> Fmt.string f "?"
- *   | [] -> ()
- *   | [ a ] -> pp f a
- *   | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
- *
- * and pp_operator =
- *   let open Fmt in
- *   function
- *   | Eq -> const char '='
- *   | Gt -> const char '>'
- *   | Gte -> const string ">="
- *   | Lt -> const char '<'
- *   | Lte -> const string "<="
- *
- * and pp_logic =
- *   let open Fmt in
- *   function
- *   | And -> const string "AND"
- *   | Or -> const string "OR" *)
 
 let column c = Column c
 
@@ -139,7 +114,7 @@ let rec map_name :
 
 type 'tag assignment =
   | Set : {
-      column : ('t, 'tag) column;
+      column : ('t, 'tag) Column.t;
       value : ('t, 'tag) t;
     }
       -> 'tag assignment

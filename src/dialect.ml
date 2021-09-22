@@ -7,15 +7,15 @@ module Postgresql : S = struct
     | Some schema -> Fmt.str "%S.%S" schema name
 
   let string_of_type t =
-    let rec f : type t. t Type.t -> string = function
-      | Type.Bool -> "BOOLEAN"
-      | Type.Custom { repr; _ } -> f repr
-      | Type.Date -> "DATE"
-      | Type.Int -> "INTEGER"
-      | Type.Nullable t -> f t
-      | Type.Text -> "TEXT"
-      | Type.Time -> "TIMESTAMP"
-      | Type.Varchar len -> Fmt.str "VARCHAR(%i)" len
+    let rec f : type t. t Expression.Column.Type.t -> string = function
+      | Bool -> "BOOLEAN"
+      | Custom { repr; _ } -> f repr
+      | Date -> "DATE"
+      | Int -> "INTEGER"
+      | Nullable t -> f t
+      | Text -> "TEXT"
+      | Time -> "TIMESTAMP"
+      | Varchar len -> Fmt.str "VARCHAR(%i)" len
     in
     f t
 end
@@ -29,10 +29,10 @@ module Sqlite : S = struct
     | Some schema -> Fmt.str "%S_%S" schema name
 
   let string_of_type t =
-    let rec f : type t. t Type.t -> string = function
-      | Type.Custom { repr; _ } -> f repr
-      | Type.Date
-      | Type.Time ->
+    let rec f : type t. t Expression.Column.Type.t -> string = function
+      | Custom { repr; _ } -> f repr
+      | Date
+      | Time ->
         "TEXT"
       | t -> Postgresql.string_of_type t
     in

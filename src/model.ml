@@ -3,7 +3,8 @@ open Poly
 open Utils
 include Model_intf
 
-let rec type_of_column_type : type t. t Type.t -> t Expression.type_ = function
+let rec type_of_column_type :
+    type t. t Expression.Column.Type.t -> t Expression.type_ = function
   | Bool -> Expression.Bool
   | Custom { decode; encode; repr } ->
     Expression.Custom { decode; encode; repr = type_of_column_type repr }
@@ -39,12 +40,12 @@ struct
       let name = Meta.name
 
       module Column = struct
-        type nonrec 't t = ('t, tag) Expression.column
+        type nonrec 't t = ('t, tag) Expression.Column.t
 
         let rec bind_columns :
             type l.
             l Table.Column.List.t ->
-            (l, tag) Expression.Column_list.t * tag Table.constraint_ list =
+            (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
           function
           | Table.Column.List.({ name; type_; foreign_keys; _ } :: tl) ->
             let column =
@@ -59,9 +60,9 @@ struct
               in
               List.map ~f foreign_keys
             and rest, rest_constraints = bind_columns tl in
-            ( Expression.Column_list.(column :: rest),
+            ( Expression.Column.List.(column :: rest),
               constraints @ rest_constraints )
-          | [] -> (Expression.Column_list.[], [])
+          | [] -> (Expression.Column.List.[], [])
 
         let columns, constraints = bind_columns Meta.columns
       end
@@ -69,7 +70,7 @@ struct
       let type_ =
         let rec type_of_columns :
             type a.
-            (a, _) Expression.Column_list.t -> a Hlist.t Expression.type_ =
+            (a, _) Expression.Column.List.t -> a Hlist.t Expression.type_ =
           function
           | hd :: tl -> Pair (type_of_column_type hd.type_, type_of_columns tl)
           | [] -> Empty
@@ -82,21 +83,21 @@ struct
       let const value = Expression.const type_ value
 
       module Expression = struct
+        let rec bind_expressions :
+            type l tag.
+            (l, tag) Expression.Column.List.t -> (l, tag) Expression.List.t =
+          function
+          | Expression.Column.List.(head :: tail) ->
+            Expression.column head :: bind_expressions tail
+          | Expression.Column.List.[] -> []
+
+        let columns = bind_expressions Column.columns
+
         include Expression
 
         type nonrec 't t = ('t, tag) t
 
-        type nonrec 't column = ('t, tag) column
-
-        let rec bind_expressions :
-            type l tag.
-            (l, tag) Expression.Column_list.t -> (l, tag) Expression.List.t =
-          function
-          | Expression.Column_list.(hd :: tl) ->
-            List.(column hd :: bind_expressions tl)
-          | Expression.Column_list.[] -> List.[]
-
-        let columns = bind_expressions Column.columns
+        type nonrec 't column = ('t, tag) Column.t
       end
 
       let rec pairs_of_list :
@@ -292,13 +293,13 @@ struct
 
       let name = "metadata"
 
-      let major = Table.Column.make "major" Type.Int
+      let major = Table.Column.(make "major" Type.Int)
 
-      let minor = Table.Column.make "minor" Type.Int
+      let minor = Table.Column.(make "minor" Type.Int)
 
-      let subminor = Table.Column.make "subminor" Type.Int
+      let subminor = Table.Column.(make "subminor" Type.Int)
 
-      let migrated = Table.Column.make "migrated" Type.Time
+      let migrated = Table.Column.(make "migrated" Type.Time)
 
       type columns = int -> int -> int -> Timmy.Time.t -> unit
 

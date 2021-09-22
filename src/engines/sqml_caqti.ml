@@ -122,8 +122,8 @@ module Make (Model : Model.S) = struct
       | `Pgsql -> Format.sprintf "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
-  let nullable : type t. t Type.t -> bool = function
-    | Type.Nullable _ -> true
+  let nullable : type t. t Expression.Column.Type.t -> bool = function
+    | Nullable _ -> true
     | _ -> false
 
   let string_of_type info t =
@@ -310,8 +310,8 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let rec type_of_column_type : type t. t Sqml.Type.t -> t Caqti_type.t =
-    function
+  let rec type_of_column_type :
+      type t. t Expression.Column.Type.t -> t Caqti_type.t = function
     | Bool -> Caqti_type.bool
     | Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_column_type repr

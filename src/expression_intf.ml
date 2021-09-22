@@ -12,13 +12,32 @@ type logic =
   | Or
 
 module type Interface = sig
-  type ('t, 'tag) column = private {
-    selectable : string;
-    name : string;
-    type_ : 't Type.t;
-  }
+  module Column : sig
+    module Type : sig
+      type 'a t =
+        | Bool : bool t
+        | Custom : {
+            repr : 'repr t;
+            encode : 'a -> ('repr, string) Result.t;
+            decode : 'repr -> ('a, string) Result.t;
+          }
+            -> 'a t
+        | Date : Timmy.Date.t t
+        | Int : int t
+        | Nullable : 't t -> 't option t
+        | Text : string t
+        | Time : Timmy.Time.t t
+        | Varchar : int -> string t
+    end
 
-  module Column_list : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) column
+    type ('t, 'tag) t = private {
+      selectable : string;
+      name : string;
+      type_ : 't Type.t;
+    }
+
+    module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
+  end
 
   type free
 
@@ -39,7 +58,7 @@ module type Interface = sig
     | Pair : 'a type_ * 'b Hlist.t type_ -> ('a -> 'b) Hlist.t type_
 
   type ('t, 'tag) t = private
-    | Column : ('t, 'tag) column -> ('t, 'tag) t
+    | Column : ('t, 'tag) Column.t -> ('t, 'tag) t
     | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
     | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
     | Const : {
@@ -67,14 +86,14 @@ module type Interface = sig
 
   type 'tag assignment = private
     | Set : {
-        column : ('t, 'tag) column;
+        column : ('t, 'tag) Column.t;
         value : ('t, 'tag) t;
       }
         -> 'tag assignment
 
   module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
-  val column : ('t, 'tag) column -> ('t, 'tag) t
+  val column : ('t, 'tag) Column.t -> ('t, 'tag) t
 
   val const : 't type_ -> 't -> ('t, 'tag) t
 
@@ -99,7 +118,7 @@ module type Interface = sig
   module Infix : sig
     val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
 
-    val ( := ) : ('t, 'tag) column -> ('t, 'tag) t -> 'tag assignment
+    val ( := ) : ('t, 'tag) Column.t -> ('t, 'tag) t -> 'tag assignment
 
     val ( < ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 
