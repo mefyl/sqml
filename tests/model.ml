@@ -22,9 +22,9 @@ module T1_meta = struct
 
   type mapped = int * string * string option
 
-  let map Sqml.H_list.[ id; name; desc ] = (id, name, desc)
+  let map Hlist.[ id; name; desc ] = (id, name, desc)
 
-  let unmap (id, name, desc) = Sqml.H_list.[ id; name; desc ]
+  let unmap (id, name, desc) = Hlist.[ id; name; desc ]
 
   let constraints Expression.Column_list.[ _id; _name; _description ] = []
 end
@@ -77,9 +77,9 @@ module Ts = struct
 
     type mapped = Timmy.Time.t
 
-    let map H_list.[ time ] = time
+    let map Hlist.[ time ] = time
 
-    let unmap time = H_list.[ time ]
+    let unmap time = Hlist.[ time ]
   end
 
   include BindTable (Meta_)

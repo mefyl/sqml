@@ -9,9 +9,9 @@ module type META' = sig
 
   type mapped
 
-  val map : columns H_list.t -> mapped
+  val map : columns Hlist.t -> mapped
 
-  val unmap : mapped -> columns H_list.t
+  val unmap : mapped -> columns Hlist.t
 end
 
 module type S' = sig
@@ -96,7 +96,7 @@ module Column = struct
       foreign_keys;
     }
 
-  module List = S_list.Make (struct
+  module List = Hlist.Make (struct
     type nonrec 'a t = 'a t
   end)
 end
@@ -130,7 +130,7 @@ struct
 
   let columns = Minimal.columns
 
-  type mapped = columns H_list.t
+  type mapped = columns Hlist.t
 
   let map v = v
 

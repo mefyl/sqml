@@ -18,7 +18,7 @@ module type Interface = sig
     type_ : 't Type.t;
   }
 
-  module Column_list : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) column
+  module Column_list : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) column
 
   type free
 
@@ -35,8 +35,8 @@ module type Interface = sig
         decode : 'repr -> ('a, string) Result.t;
       }
         -> 'a type_
-    | Empty : unit H_list.t type_
-    | Pair : 'a type_ * 'b H_list.t type_ -> ('a -> 'b) H_list.t type_
+    | Empty : unit Hlist.t type_
+    | Pair : 'a type_ * 'b Hlist.t type_ -> ('a -> 'b) Hlist.t type_
 
   type ('t, 'tag) t = private
     | Column : ('t, 'tag) column -> ('t, 'tag) t
@@ -57,9 +57,9 @@ module type Interface = sig
     | Null : (_ option, 'tag) t
     | Var : 't type_ -> ('t, 'tag) t
     | ( :: ) :
-        ('a, 'tag) t * ('b H_list.t, 'tag) t
-        -> (('a -> 'b) H_list.t, 'tag) t
-    | [] : (unit H_list.t, 'tag) t
+        ('a, 'tag) t * ('b Hlist.t, 'tag) t
+        -> (('a -> 'b) Hlist.t, 'tag) t
+    | [] : (unit Hlist.t, 'tag) t
 
   type ('t, 'tag) option =
     | None : (unit, 'tag) option
@@ -72,7 +72,7 @@ module type Interface = sig
       }
         -> 'tag assignment
 
-  module List : S_list.S2 with type ('t, 'tag) value = ('t, 'tag) t
+  module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
   val column : ('t, 'tag) column -> ('t, 'tag) t
 
@@ -94,7 +94,7 @@ module type Interface = sig
 
   val var : 't type_ -> ('t, 'tag) t (* FIXME *)
 
-  val empty_list : (unit H_list.t, 'tag) t
+  val empty_list : (unit Hlist.t, 'tag) t
 
   module Infix : sig
     val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
@@ -112,7 +112,7 @@ module type Interface = sig
     val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 
     val ( @ ) :
-      ('a, 'tag) t -> ('b H_list.t, 'tag) t -> (('a -> 'b) H_list.t, 'tag) t
+      ('a, 'tag) t -> ('b Hlist.t, 'tag) t -> (('a -> 'b) Hlist.t, 'tag) t
 
     val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
 

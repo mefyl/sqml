@@ -7,7 +7,7 @@ type ('t, 'tag) column = {
   type_ : 't Type.t;
 }
 
-module Column_list = S_list.Make2 (struct
+module Column_list = Hlist.Make2 (struct
   type ('t, 'tag) t = ('t, 'tag) column
 end)
 
@@ -26,8 +26,8 @@ type 'a type_ =
       decode : 'repr -> ('a, string) Result.t;
     }
       -> 'a type_
-  | Empty : unit H_list.t type_
-  | Pair : 'a type_ * 'b H_list.t type_ -> ('a -> 'b) H_list.t type_
+  | Empty : unit Hlist.t type_
+  | Pair : 'a type_ * 'b Hlist.t type_ -> ('a -> 'b) Hlist.t type_
 
 type ('t, 'tag) t =
   | Column : ('t, 'tag) column -> ('t, 'tag) t
@@ -47,16 +47,14 @@ type ('t, 'tag) t =
       -> ('t, 'tag) t
   | Null : ('t option, 'tag) t
   | Var : 't type_ -> ('t, 'tag) t
-  | ( :: ) :
-      ('a, 'tag) t * ('b H_list.t, 'tag) t
-      -> (('a -> 'b) H_list.t, 'tag) t
-  | [] : (unit H_list.t, 'tag) t
+  | ( :: ) : ('a, 'tag) t * ('b Hlist.t, 'tag) t -> (('a -> 'b) Hlist.t, 'tag) t
+  | [] : (unit Hlist.t, 'tag) t
 
 type ('t, 'tag) option =
   | None : (unit, 'tag) option
   | Some : ('t, 'tag) t -> ('t, 'tag) option
 
-module List = S_list.Make2 (struct
+module List = Hlist.Make2 (struct
   type nonrec ('t, 'tag) t = ('t, 'tag) t
 end)
 

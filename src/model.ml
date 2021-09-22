@@ -1,4 +1,4 @@
-open Base
+open Acid
 open Poly
 open Utils
 include Model_intf
@@ -69,7 +69,7 @@ struct
       let type_ =
         let rec type_of_columns :
             type a.
-            (a, _) Expression.Column_list.t -> a H_list.t Expression.type_ =
+            (a, _) Expression.Column_list.t -> a Hlist.t Expression.type_ =
           function
           | hd :: tl -> Pair (type_of_column_type hd.type_, type_of_columns tl)
           | [] -> Empty
@@ -100,7 +100,7 @@ struct
       end
 
       let rec pairs_of_list :
-          type l. (l, tag) Expression.List.t -> l H_list.t Expression.t =
+          type l. (l, tag) Expression.List.t -> l Hlist.t Expression.t =
         function
         | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
         | Expression.List.[] -> Expression.empty_list
@@ -304,11 +304,11 @@ struct
 
       let columns = Table.Column.List.[ major; minor; subminor; migrated ]
 
-      let map H_list.[ major; minor; subminor; migrated ] =
+      let map Hlist.[ major; minor; subminor; migrated ] =
         { major; minor; subminor; migrated }
 
       let unmap { major; minor; subminor; migrated } =
-        H_list.[ major; minor; subminor; migrated ]
+        Hlist.[ major; minor; subminor; migrated ]
 
       let constraints _ = []
     end

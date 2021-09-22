@@ -290,7 +290,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           Engine.query db q
         in
         Sequence.to_list res >>| function
-        | [ Sqml.H_list.[ name; description ] ] ->
+        | [ Hlist.[ name; description ] ] ->
           Alcotest.(check string "updated row name" "two'" name);
           Alcotest.(
             check (option string) "updated row description" (Some "3")

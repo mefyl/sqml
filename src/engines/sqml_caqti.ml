@@ -21,7 +21,7 @@ module Make (Model : Model.S) = struct
   let rec pp_from_type : type t. t Sqml.Expression.type_ -> t Fmt.t =
     let open Fmt in
     let rec pp_values :
-        type l. l H_list.t Sqml.Expression.type_ -> l H_list.t Fmt.t = function
+        type l. l Hlist.t Sqml.Expression.type_ -> l Hlist.t Fmt.t = function
       | Empty -> nop
       | Pair (hd, Empty) -> fun f [ hd_v ] -> pp_from_type hd f hd_v
       | Pair (hd, tl) ->
@@ -53,7 +53,7 @@ module Make (Model : Model.S) = struct
   and pp_expression =
     let open Fmt in
     let rec pp_var : type t. t Expression.type_ -> unit Fmt.t =
-      let rec pp_values : type l. l H_list.t Sqml.Expression.type_ Fmt.t =
+      let rec pp_values : type l. l Hlist.t Sqml.Expression.type_ Fmt.t =
        fun f -> function
         | Empty -> ()
         | Pair (_, Empty) -> const char '?' f ()
@@ -357,12 +357,12 @@ module Make (Model : Model.S) = struct
     | Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
     | Empty ->
-      let encode Sqml.H_list.[] = Result.return ()
-      and decode () = Result.return Sqml.H_list.[] in
+      let encode Hlist.[] = Result.return ()
+      and decode () = Result.return Hlist.[] in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.unit
     | Pair (l, r) ->
-      let encode Sqml.H_list.(hd :: tl) = Result.return @@ (hd, tl)
-      and decode (hd, tl) = Result.return @@ Sqml.H_list.(hd :: tl) in
+      let encode Hlist.(hd :: tl) = Result.return @@ (hd, tl)
+      and decode (hd, tl) = Result.return @@ Hlist.(hd :: tl) in
       Caqti_type.custom ~decode ~encode
       @@ Caqti_type.tup2 (type_of_type l) (type_of_type r)
 
@@ -380,29 +380,29 @@ module Make (Model : Model.S) = struct
       @@ type_of_expr mapped
     | a :: b ->
       Caqti_type.custom
-        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
-        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
+        ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
+        ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
       @@ Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
     | [] ->
       Caqti_type.custom
-        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
-        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
+        ~decode:(fun () -> Result.Ok Hlist.[])
+        ~encode:(fun Hlist.[] -> Result.Ok ())
       @@ Caqti_type.unit
     | Null -> failwith "can't deduce type of NULL"
     | Var t -> type_of_type t
 
   let rec type_of_expressions :
-      type t tag. (t, tag) Expression.List.t -> t H_list.t Caqti_type.t =
+      type t tag. (t, tag) Expression.List.t -> t Hlist.t Caqti_type.t =
     function
     | Expression.List.[] ->
       Caqti_type.custom
-        ~decode:(fun () -> Result.Ok Sqml.H_list.[])
-        ~encode:(fun Sqml.H_list.[] -> Result.Ok ())
+        ~decode:(fun () -> Result.Ok Hlist.[])
+        ~encode:(fun Hlist.[] -> Result.Ok ())
       @@ Caqti_type.unit
     | c :: tl ->
       Caqti_type.custom
-        ~decode:(fun (hd, tl) -> Result.Ok Sqml.H_list.(hd :: tl))
-        ~encode:(fun Sqml.H_list.(hd :: tl) -> Result.Ok (hd, tl))
+        ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
+        ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
       @@ Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
