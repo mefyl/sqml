@@ -133,9 +133,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       ()
     in
     let* () = populate db in
-    let* () = delete (Some Sqml.Expression.(Model.T1.id = const int 1)) in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = const Int 1)) in
     let* () = check_t1s_ids db [ 0; 2 ] in
-    let* () = delete (Some Sqml.Expression.(Model.T1.id = const int 3)) in
+    let* () = delete (Some Sqml.Expression.(Model.T1.id = const Int 3)) in
     let* () = check_t1s_ids db [ 0; 2 ] in
     let* () = delete None in
     check_t1s_ids db []
@@ -149,10 +149,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Sequence.to_list res
     in
     let* () = populate db in
-    let* res = delete (Some Sqml.Expression.(Model.T1.id = const int 1)) in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = const Int 1)) in
     let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
     let* () = check_t1s_ids db [ 0; 2 ] in
-    let* res = delete (Some Sqml.Expression.(Model.T1.id = const int 3)) in
+    let* res = delete (Some Sqml.Expression.(Model.T1.id = const Int 3)) in
     let () = Alcotest.(check (list string) "deleted rows" [] res) in
     let* () = check_t1s_ids db [ 0; 2 ] in
     let* res = delete None in
@@ -176,7 +176,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* () = populate db in
     let* () =
-      update Sqml.Expression.[ Model.T1.Column.name := const string "four" ]
+      update Sqml.Expression.[ Model.T1.Column.name := const String "four" ]
     in
     let* () =
       check_t1s db
@@ -184,10 +184,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* ids =
       update_returning
-        ~where:Sqml.Expression.(Model.T1.id <= const int 1)
+        ~where:Sqml.Expression.(Model.T1.id <= const Int 1)
         ~returning:Model.T1.name
         Sqml.Expression.
-          [ Model.T1.Column.description := const (some string) @@ Some "0" ]
+          [ Model.T1.Column.description := const (Nullable String) @@ Some "0" ]
     in
     Alcotest.(check (list string) "updated names" [ "four"; "four" ] ids);
     check_t1s db
@@ -273,7 +273,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
                 (Set
                    (fun { excluded } ->
                      [
-                       Model.T1.Column.name := Model.T1.name ^ const string "'";
+                       Model.T1.Column.name := Model.T1.name ^ const String "'";
                        Model.T1.Column.description :=
                          excluded Model.T1.description;
                      ]))
@@ -308,7 +308,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         ~where:Sqml.Expression.(Model.T1.id = id)
         Model.T1.name
     and put t1 = Model.insert ~into:(module Model.T1) t1 in
-    let get = Engine.prepare Sqml.Expression.int get
+    let get = Engine.prepare Int get
     and put = Engine.prepare Model.T1.type_ put in
     let* Zero = put db (271, "prepared", Some "prepared") in
     let* (Many res) = get db 271 in

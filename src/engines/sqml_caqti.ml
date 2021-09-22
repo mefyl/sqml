@@ -18,13 +18,13 @@ module Make (Model : Model.S) = struct
     fmt f
       (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
 
-  let rec pp_from_type : type t. t Sqml.Expression.type_ -> t Fmt.t =
+  let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
     let open Fmt in
     let rec pp_values :
-        type l. l Hlist.t Sqml.Expression.type_ -> l Hlist.t Fmt.t = function
-      | Empty -> nop
-      | Pair (hd, Empty) -> fun f [ hd_v ] -> pp_from_type hd f hd_v
-      | Pair (hd, tl) ->
+        type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
+      | [] -> nop
+      | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
+      | hd :: tl ->
         fun f (hd_v :: tl_v) ->
           pp_from_type hd f hd_v;
           comma f ();
@@ -47,24 +47,24 @@ module Make (Model : Model.S) = struct
         match encode value with
         | Result.Ok value -> pp_from_type repr f value
         | Result.Error e -> (* FIXME *) failwith "pp_from_type: " e)
-    | Empty -> const string "VALUES ()"
-    | Pair _ as l -> const string "VALUES (" ++ pp_values l ++ const char ')'
+    | [] -> const string "VALUES ()"
+    | _ :: _ as l -> const string "VALUES (" ++ pp_values l ++ const char ')'
 
   and pp_expression =
     let open Fmt in
-    let rec pp_var : type t. t Expression.type_ -> unit Fmt.t =
-      let rec pp_values : type l. l Hlist.t Sqml.Expression.type_ Fmt.t =
+    let rec pp_var : type t. t Expression.Type.t -> unit Fmt.t =
+      let rec pp_values : type l. l Hlist.t Sqml.Expression.Type.t Fmt.t =
        fun f -> function
-        | Empty -> ()
-        | Pair (_, Empty) -> const char '?' f ()
-        | Pair (_, tl) -> (const char '?' ++ comma ++ const pp_values tl) f ()
+        | [] -> ()
+        | [ _ ] -> const char '?' f ()
+        | _ :: tl -> (const char '?' ++ comma ++ const pp_values tl) f ()
         | _ -> failwith "FIXME"
       in
       function
       | Custom { repr; _ } -> pp_var repr
-      | Empty -> const string "VALUES ()"
-      | Pair (_, Empty) -> const string "VALUES (?)"
-      | Pair _ as t ->
+      | [] -> const string "VALUES ()"
+      | [ _ ] -> const string "VALUES (?)"
+      | _ :: _ as t ->
         const string "VALUES (" ++ const pp_values t ++ const char ')'
       | Bool
       | Date
@@ -334,7 +334,7 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Varchar _ -> Caqti_type.string
 
-  let rec type_of_type : type t. t Sqml.Expression.type_ -> t Caqti_type.t =
+  let rec type_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     function
     | Bool -> Caqti_type.bool
     | Date ->
@@ -356,11 +356,11 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Custom { encode; decode; repr } ->
       Caqti_type.custom ~decode ~encode @@ type_of_type repr
-    | Empty ->
+    | [] ->
       let encode Hlist.[] = Result.return ()
       and decode () = Result.return Hlist.[] in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.unit
-    | Pair (l, r) ->
+    | l :: r ->
       let encode Hlist.(hd :: tl) = Result.return @@ (hd, tl)
       and decode (hd, tl) = Result.return @@ Hlist.(hd :: tl) in
       Caqti_type.custom ~decode ~encode
@@ -588,7 +588,7 @@ module Make (Model : Model.S) = struct
 
   let prepare
       (type a res arity)
-      (arg : a Expression.type_)
+      (arg : a Expression.Type.t)
       (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
       transaction ->
       a ->

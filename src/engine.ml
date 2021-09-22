@@ -17,7 +17,7 @@ module type S = sig
     Lwt_result.t
 
   val prepare :
-    'arg Expression.type_ ->
+    'arg Expression.Type.t ->
     (('arg, 'tag) Expression.t -> ('res, 'arity) Model.Query.t) ->
     transaction ->
     'arg ->

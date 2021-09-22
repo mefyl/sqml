@@ -7,7 +7,7 @@ module Expression :
     with type 't Column.Type.t = 't Expression.Column.Type.t
      and type ('t, 'tag) Column.t = ('t, 'tag) Expression.Column.t
      and type ('t, 'tag) Column.List.t = ('t, 'tag) Expression.Column.List.t
-     and type 't type_ = 't Expression.type_
+     and type 't Type.t = 't Expression.Type.t
      and type ('t, 'tag) t = ('t, 'tag) Expression.t
      and type 'tag assignment = 'tag Expression.assignment
      and type ('t, 'tag) List.t = ('t, 'tag) Expression.List.t =

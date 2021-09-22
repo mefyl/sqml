@@ -32,28 +32,30 @@ end
 
 type free = unit
 
-type 'a type_ =
-  | Bool : bool type_
-  | Date : Timmy.Date.t type_
-  | Int : int type_
-  | Nullable : 't type_ -> 't option type_
-  | String : string type_
-  | Time : Timmy.Time.t type_
-  | Custom : {
-      repr : 'repr type_;
-      encode : 'a -> ('repr, string) Result.t;
-      decode : 'repr -> ('a, string) Result.t;
-    }
-      -> 'a type_
-  | Empty : unit Hlist.t type_
-  | Pair : 'a type_ * 'b Hlist.t type_ -> ('a -> 'b) Hlist.t type_
+module Type = struct
+  type 'a t =
+    | Bool : bool t
+    | Date : Timmy.Date.t t
+    | Int : int t
+    | Nullable : 't t -> 't option t
+    | String : string t
+    | Time : Timmy.Time.t t
+    | Custom : {
+        repr : 'repr t;
+        encode : 'a -> ('repr, string) Result.t;
+        decode : 'repr -> ('a, string) Result.t;
+      }
+        -> 'a t
+    | [] : unit Hlist.t t
+    | ( :: ) : 'a t * 'b Hlist.t t -> ('a -> 'b) Hlist.t t
+end
 
 type ('t, 'tag) t =
   | Column : ('t, 'tag) Column.t -> ('t, 'tag) t
   | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
   | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
   | Const : {
-      type_ : 't type_;
+      type_ : 't Type.t;
       value : 't;
     }
       -> ('t, 'tag) t
@@ -65,7 +67,7 @@ type ('t, 'tag) t =
     }
       -> ('t, 'tag) t
   | Null : ('t option, 'tag) t
-  | Var : 't type_ -> ('t, 'tag) t
+  | Var : 't Type.t -> ('t, 'tag) t
   | ( :: ) : ('a, 'tag) t * ('b Hlist.t, 'tag) t -> (('a -> 'b) Hlist.t, 'tag) t
   | [] : (unit Hlist.t, 'tag) t
 
@@ -89,13 +91,7 @@ let empty_list = []
 
 let column c = Column c
 
-let int = Int
-
 let map ~decode ~encode mapped = Map { decode; encode; mapped }
-
-let string = String
-
-let some t = Nullable t
 
 let rec map_name :
     type a tag tag'. (string -> string) -> (a, tag) t -> (a, tag') t =

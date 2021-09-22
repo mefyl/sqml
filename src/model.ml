@@ -4,16 +4,16 @@ open Utils
 include Model_intf
 
 let rec type_of_column_type :
-    type t. t Expression.Column.Type.t -> t Expression.type_ = function
-  | Bool -> Expression.Bool
+    type t. t Expression.Column.Type.t -> t Expression.Type.t = function
+  | Bool -> Bool
   | Custom { decode; encode; repr } ->
-    Expression.Custom { decode; encode; repr = type_of_column_type repr }
-  | Date -> Expression.Date
-  | Int -> Expression.Int
-  | Nullable t -> Expression.Nullable (type_of_column_type t)
-  | Text -> Expression.String
-  | Time -> Expression.Time
-  | Varchar _ -> Expression.String
+    Custom { decode; encode; repr = type_of_column_type repr }
+  | Date -> Date
+  | Int -> Int
+  | Nullable t -> Nullable (type_of_column_type t)
+  | Text -> String
+  | Time -> Time
+  | Varchar _ -> String
 
 module Make (Meta : sig
   val version : Semver.t
@@ -70,14 +70,14 @@ struct
       let type_ =
         let rec type_of_columns :
             type a.
-            (a, _) Expression.Column.List.t -> a Hlist.t Expression.type_ =
+            (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
           function
-          | hd :: tl -> Pair (type_of_column_type hd.type_, type_of_columns tl)
-          | [] -> Empty
+          | hd :: tl -> type_of_column_type hd.type_ :: type_of_columns tl
+          | [] -> []
         in
         let decode columns = Meta.map columns |> Result.return
         and encode v = Meta.unmap v |> Result.return in
-        Expression.Custom
+        Expression.Type.Custom
           { decode; encode; repr = type_of_columns Column.columns }
 
       let const value = Expression.const type_ value
