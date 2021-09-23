@@ -52,6 +52,17 @@ module Type = struct
   module List = Hlist.Make (struct
     type nonrec 't t = 't t
   end)
+
+  let rec of_column_type : type a. a Column.Type.t -> a t = function
+    | Bool -> Bool
+    | Custom { encode; decode; repr } ->
+      Custom { encode; decode; repr = of_column_type repr }
+    | Date -> Date
+    | Int -> Int
+    | Nullable t -> Nullable (of_column_type t)
+    | Text -> String
+    | Time -> Time
+    | Varchar _ -> String
 end
 
 type ('t, 'tag) t =
@@ -76,6 +87,21 @@ type ('t, 'tag) t =
       ('a, 'tag) t * ('b Hlist.t, 'tag) t
       -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
   | [] : (unit Hlist.t, 'tag) t
+
+let rec to_type : type a. (a, _) t -> a Type.t = function
+  | Column { type_; _ } -> Type.of_column_type type_
+  | Comparison _ -> Bool
+  | Concat _ -> String
+  | Const { type_; _ } -> type_
+  | Logic _ -> Bool
+  | Map { decode; encode; mapped } ->
+    let decode x = Result.Ok (decode x)
+    and encode x = Result.Ok (encode x) in
+    Custom { decode; encode; repr = to_type mapped }
+  | a :: b -> to_type a :: to_type b
+  | [] -> []
+  | Null -> failwith "can't deduce type of NULL"
+  | Var t -> t
 
 type ('t, 'tag) option =
   | None : (unit, 'tag) option

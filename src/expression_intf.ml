@@ -59,6 +59,8 @@ module type Interface = sig
       | ( :: ) : 'a t * 'b Hlist.t t -> ('a, 'b) Hlist.desc Hlist.t t
 
     module List : Hlist.S with type 't value = 't t
+
+    val of_column_type : 't Column.Type.t -> 't t
   end
 
   type ('t, 'tag) t = private
@@ -83,6 +85,8 @@ module type Interface = sig
         ('a, 'tag) t * ('b Hlist.t, 'tag) t
         -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
     | [] : (unit Hlist.t, 'tag) t
+
+  val to_type : ('t, 'tag) t -> 't Type.t
 
   type ('t, 'tag) option =
     | None : (unit, 'tag) option

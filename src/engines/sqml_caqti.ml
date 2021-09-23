@@ -315,30 +315,6 @@ module Make (Model : Model.S) = struct
 
   module Model = Model
 
-  let rec type_of_column_type :
-      type t. t Expression.Column.Type.t -> t Caqti_type.t = function
-    | Bool -> Caqti_type.bool
-    | Custom { encode; decode; repr } ->
-      Caqti_type.custom ~decode ~encode @@ type_of_column_type repr
-    | Date ->
-      let encode d =
-        Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
-        |> Timmy.Time.to_ptime |> Result.return
-      and decode t =
-        Timmy.Time.of_ptime t
-        |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
-        |> Result.return
-      in
-      Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
-    | Int -> Caqti_type.int
-    | Nullable t -> Caqti_type.option (type_of_column_type t)
-    | Text -> Caqti_type.string
-    | Time ->
-      let encode t = Result.return @@ Timmy.Time.to_ptime t
-      and decode t = Result.return @@ Timmy.Time.of_ptime t in
-      Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
-    | Varchar _ -> Caqti_type.string
-
   let rec type_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     function
     | Bool -> Caqti_type.bool
@@ -376,30 +352,7 @@ module Make (Model : Model.S) = struct
     | hd :: tl -> Caqti_type.tup2 (type_of_type hd) (type_of_types tl)
     | [] -> Caqti_type.unit
 
-  let rec type_of_expr : type a. (a, _) Expression.t -> a Caqti_type.t =
-    function
-    | Column { type_; _ } -> type_of_column_type type_
-    | Comparison _ -> Caqti_type.bool
-    | Concat _ -> Caqti_type.string
-    | Const { type_; _ } -> type_of_type type_
-    | Logic _ -> Caqti_type.bool
-    | Map { decode; encode; mapped } ->
-      Caqti_type.custom
-        ~decode:(fun x -> Result.Ok (decode x))
-        ~encode:(fun x -> Result.Ok (encode x))
-      @@ type_of_expr mapped
-    | a :: b ->
-      Caqti_type.custom
-        ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
-        ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
-      @@ Caqti_type.tup2 (type_of_expr a) (type_of_expr b)
-    | [] ->
-      Caqti_type.custom
-        ~decode:(fun () -> Result.Ok Hlist.[])
-        ~encode:(fun Hlist.[] -> Result.Ok ())
-      @@ Caqti_type.unit
-    | Null -> failwith "can't deduce type of NULL"
-    | Var t -> type_of_type t
+  let type_of_expr e = Sqml.Expression.to_type e |> type_of_type
 
   let rec type_of_expressions :
       type t tag. (t, tag) Expression.List.t -> t Hlist.t Caqti_type.t =
