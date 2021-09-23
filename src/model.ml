@@ -67,6 +67,15 @@ struct
         let columns, constraints = bind_columns Meta.columns
       end
 
+      let column_types =
+        let rec type_of_columns :
+            type a. (a, _) Expression.Column.List.t -> a Expression.Type.List.t
+            = function
+          | hd :: tl -> type_of_column_type hd.type_ :: type_of_columns tl
+          | [] -> []
+        in
+        type_of_columns Column.columns
+
       let type_ =
         let rec type_of_columns :
             type a.

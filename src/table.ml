@@ -27,6 +27,8 @@ module type S' = sig
 
   val const : Meta.mapped -> (Meta.mapped, _) Expression.t
 
+  val column_types : Meta.columns Expression.Type.List.t
+
   val type_ : Meta.mapped Expression.Type.t
 
   module Expression : sig
