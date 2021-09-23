@@ -47,7 +47,11 @@ module Type = struct
       }
         -> 'a t
     | [] : unit Hlist.t t
-    | ( :: ) : 'a t * 'b Hlist.t t -> ('a -> 'b) Hlist.t t
+    | ( :: ) : 'a t * 'b Hlist.t t -> ('a, 'b) Hlist.desc Hlist.t t
+
+  module List = Hlist.Make (struct
+    type nonrec 't t = 't t
+  end)
 end
 
 type ('t, 'tag) t =
@@ -68,7 +72,9 @@ type ('t, 'tag) t =
       -> ('t, 'tag) t
   | Null : ('t option, 'tag) t
   | Var : 't Type.t -> ('t, 'tag) t
-  | ( :: ) : ('a, 'tag) t * ('b Hlist.t, 'tag) t -> (('a -> 'b) Hlist.t, 'tag) t
+  | ( :: ) :
+      ('a, 'tag) t * ('b Hlist.t, 'tag) t
+      -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
   | [] : (unit Hlist.t, 'tag) t
 
 type ('t, 'tag) option =

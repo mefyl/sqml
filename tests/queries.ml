@@ -302,20 +302,22 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Lwt_result.return ()
 
   let prepared db =
-    let get id =
+    let get Sqml.Expression.List.[ id ] =
       Model.select
         ~from:(module Model.T1)
         ~where:Sqml.Expression.(Model.T1.id = id)
         Model.T1.name
-    and put t1 = Model.insert ~into:(module Model.T1) t1 in
-    let get = Engine.prepare Int get
-    and put = Engine.prepare Model.T1.type_ put in
-    let* Zero = put db (271, "prepared", Some "prepared") in
-    let* (Many res) = get db 271 in
+    and put Sqml.Expression.List.[ t1 ] =
+      Model.insert ~into:(module Model.T1) t1
+    in
+    let get = Engine.prepare [ Int ] get
+    and put = Engine.prepare [ Model.T1.type_ ] put in
+    let* Zero = put db Hlist.[ (271, "prepared", Some "prepared") ] in
+    let* (Many res) = get db Hlist.[ 271 ] in
     let* res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "prepared" ] res);
-    let* Zero = put db (272, "prepared'", Some "prepared'") in
-    let* (Many res) = get db 272 in
+    let* Zero = put db Hlist.[ (272, "prepared'", Some "prepared'") ] in
+    let* (Many res) = get db Hlist.[ 272 ] in
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected'" [ "prepared'" ] res)
 

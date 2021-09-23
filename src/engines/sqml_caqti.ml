@@ -5,6 +5,11 @@ module Array = Array.Monadic2 (Lwt_result)
 
 open Let.Syntax2 (Lwt_result)
 
+module Transduce_exprs =
+  Hlist.Transduce_2 (Sqml.Expression.Type.List) (Sqml.Expression.List)
+module Transduce_types =
+  Hlist.Transduce (Sqml.Expression.Type.List) (Sqml.Expression.Type.List)
+
 module Make (Model : Model.S) = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
 
@@ -366,6 +371,11 @@ module Make (Model : Model.S) = struct
       Caqti_type.custom ~decode ~encode
       @@ Caqti_type.tup2 (type_of_type l) (type_of_type r)
 
+  let rec type_of_types :
+      type l. l Sqml.Expression.Type.List.t -> l Caqti_type.t = function
+    | hd :: tl -> Caqti_type.tup2 (type_of_type hd) (type_of_types tl)
+    | [] -> Caqti_type.unit
+
   let rec type_of_expr : type a. (a, _) Expression.t -> a Caqti_type.t =
     function
     | Column { type_; _ } -> type_of_column_type type_
@@ -587,16 +597,16 @@ module Make (Model : Model.S) = struct
     res |> error
 
   let prepare
-      (type a res arity)
-      (arg : a Expression.Type.t)
-      (f : (a, 'tag) Expression.t -> (res, arity) Model.Query.t) :
+      (type args res arity)
+      (args : args Expression.Type.List.t)
+      (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       transaction ->
-      a ->
+      args Hlist.t ->
       ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
         'error )
       Lwt_result.t =
-    let query = f (Expression.var arg)
-    and arg = type_of_type arg in
+    let query = query @@ Transduce_exprs.map ~f:{ f = Expression.var } args
+    and args = type_of_types args in
     let query_str info =
       let q = Fmt.str "%a" (pp_query info) query in
       let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q) in
@@ -605,21 +615,21 @@ module Make (Model : Model.S) = struct
     match Model.Query.arity query with
     | Zero ->
       let prepared =
-        Caqti_request.create_p arg Caqti_type.unit Caqti_mult.zero query_str
+        Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero query_str
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
-        let+ () = C.exec prepared v |> error in
+        let+ () = C.exec prepared (Hlist.to_pairs v) |> error in
         Model.Query.Zero
     | One ->
       let prepared =
-        Caqti_request.create_p arg (query_type query) Caqti_mult.one query_str
+        Caqti_request.create_p args (query_type query) Caqti_mult.one query_str
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
-        let+ res = C.find prepared v |> error in
+        let+ res = C.find prepared (Hlist.to_pairs v) |> error in
         Model.Query.One res
     | Many ->
       let prepared =
-        Caqti_request.create_p arg (query_type query) Caqti_mult.zero_or_more
+        Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
           query_str
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
@@ -633,7 +643,7 @@ module Make (Model : Model.S) = struct
             and init = C.Response.to_stream response in
             Lwt_result.return @@ Sequence.unfold_step ~init ~f
           in
-          C.call ~f prepared v |> error
+          C.call ~f prepared (Hlist.to_pairs v) |> error
         in
         Model.Query.Many res
 

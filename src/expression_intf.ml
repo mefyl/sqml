@@ -56,7 +56,9 @@ module type Interface = sig
         }
           -> 'a t
       | [] : unit Hlist.t t
-      | ( :: ) : 'a t * 'b Hlist.t t -> ('a -> 'b) Hlist.t t
+      | ( :: ) : 'a t * 'b Hlist.t t -> ('a, 'b) Hlist.desc Hlist.t t
+
+    module List : Hlist.S with type 't value = 't t
   end
 
   type ('t, 'tag) t = private
@@ -79,7 +81,7 @@ module type Interface = sig
     | Var : 't Type.t -> ('t, 'tag) t
     | ( :: ) :
         ('a, 'tag) t * ('b Hlist.t, 'tag) t
-        -> (('a -> 'b) Hlist.t, 'tag) t
+        -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
     | [] : (unit Hlist.t, 'tag) t
 
   type ('t, 'tag) option =
@@ -127,7 +129,9 @@ module type Interface = sig
     val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 
     val ( @ ) :
-      ('a, 'tag) t -> ('b Hlist.t, 'tag) t -> (('a -> 'b) Hlist.t, 'tag) t
+      ('a, 'tag) t ->
+      ('b Hlist.t, 'tag) t ->
+      (('a, 'b) Hlist.desc Hlist.t, 'tag) t
 
     val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
 

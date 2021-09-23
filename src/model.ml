@@ -301,7 +301,7 @@ struct
 
       let migrated = Table.Column.(make "migrated" Type.Time)
 
-      type columns = int -> int -> int -> Timmy.Time.t -> unit
+      type columns = int * (int * (int * (Timmy.Time.t * unit)))
 
       let columns = Table.Column.List.[ major; minor; subminor; migrated ]
 
@@ -327,7 +327,7 @@ type column_creation = {
 let schema (module Dialect : Dialect.S) (module Model : S) =
   let create_table (module T : Table.S) =
     let columns =
-      Table.Column.List.map
+      Table.Column.List.filter_map
         ~f:
           {
             f =
