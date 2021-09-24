@@ -40,6 +40,7 @@ module Make (Model : Model.S) = struct
     | Bool -> Fmt.bool
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
     | Int -> Fmt.int
+    | Null -> Fmt.(const string "NULL")
     | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
     | String -> pp_literal_string
     | Time ->
@@ -74,48 +75,29 @@ module Make (Model : Model.S) = struct
       | Bool
       | Date
       | Int
+      | Null
       | Nullable _
       | String
       | Time ->
         const string "?"
     in
-    let rec pp : type a. (a, 'tag) Expression.t Fmt.t =
+    let rec pp : Expression.ast Fmt.t =
      fun f -> function
       | Column { selectable; name; _ } ->
         (const string selectable ++ const string "." ++ const string name) f ()
-      | Concat (l, r) ->
-        let fmt = const pp l ++ sp ++ const string "||" ++ sp ++ const pp r in
-        fmt f ()
-      | Comparison (op, l, r) ->
-        let fmt = const pp l ++ sp ++ pp_operator op ++ sp ++ const pp r in
-        fmt f ()
       | Const { type_; value } -> pp_from_type type_ f value
-      | Logic (op, l, r) ->
-        let fmt = const pp l ++ sp ++ pp_logic op ++ sp ++ const pp r in
+      | Infix { op; lhs; rhs } ->
+        let fmt = const pp lhs ++ sp ++ const string op ++ sp ++ const pp rhs in
         fmt f ()
-      | Map { mapped; _ } -> pp f mapped
+      | Funcall { name; args; _ } ->
+        (const string name ++ sp ++ const char '(' ++ list ~sep:comma pp
+       ++ const char ')')
+          f args
+      | List l -> list ~sep:comma pp f l
       | Null -> Fmt.string f "NULL"
       | Var t -> pp_var t f ()
-      | [] -> ()
-      | [ a ] -> pp f a
-      | a :: b -> (const pp a ++ const string ", " ++ const pp b) f ()
     in
     pp
-
-  and pp_operator =
-    let open Fmt in
-    function
-    | Eq -> const char '='
-    | Gt -> const char '>'
-    | Gte -> const string ">="
-    | Lt -> const char '<'
-    | Lte -> const string "<="
-
-  and pp_logic =
-    let open Fmt in
-    function
-    | And -> const string "AND"
-    | Or -> const string "OR"
 
   let table_name info schema name =
     match schema with
@@ -329,6 +311,7 @@ module Make (Model : Model.S) = struct
       in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
     | Int -> Caqti_type.int
+    | Null -> failwith "FIXME"
     | Nullable t -> Caqti_type.option (type_of_type t)
     | String -> Caqti_type.string
     | Time ->
@@ -378,19 +361,20 @@ module Make (Model : Model.S) = struct
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
 
-  let pp_assignment : type tag. tag Sqml.Expression.assignment Fmt.t =
-   fun fmt (Sqml.Expression.Set { column; value }) ->
-    Fmt.pf fmt "%s = %a" column.name pp_expression value
-
   let pp_query driver_info =
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
-      let pp_returning : type t tag. (t, tag) Expression.option Fmt.t =
+      let pp_assignment f assignment =
+        let name, ast = Expression.assignment_to_ast assignment in
+        Fmt.(const string name ++ sp ++ const char '=' ++ sp ++ pp_expression)
+          f ast
+      and pp_returning : type t tag. (t, tag) Expression.option Fmt.t =
        fun f -> function
         | Expression.None -> ()
         | Some e ->
-          Fmt.(sp ++ const string "RETURNING" ++ sp ++ pp_expression) f e
+          Fmt.(sp ++ const string "RETURNING" ++ sp ++ pp_expression)
+            f (Expression.to_ast e)
       in
       let pp_insert
           (type mapped res tag)
@@ -450,44 +434,46 @@ module Make (Model : Model.S) = struct
            ++ const (list ~sep:comma pp_assignment) what
            ++ const
                 (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                where
+                Expression.(Option.map ~f:to_ast where)
            ++ const pp_returning returning)
           f ()
       in
-
       let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
       function
       | Delete { from; where } ->
         let module Table = (val from) in
         Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
           (option (pp_clause "WHERE"))
-          where
+          Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
         let module Table = (val from) in
         Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
           (option (pp_clause "WHERE"))
-          where (pp_clause "RETURNING") returning
+          Expression.(Option.map ~f:to_ast where)
+          (pp_clause "RETURNING")
+          Expression.(to_ast returning)
       | Insert { excluded; into; on_conflict; value } ->
-        pp_insert into { excluded } on_conflict Expression.None value
+        pp_insert into { excluded } on_conflict Expression.None
+          Expression.(to_ast value)
       | Insert_returning { excluded; into; on_conflict; returning; value } ->
         pp_insert into { excluded } on_conflict
           Expression.(Some returning)
-          value
+          Expression.(to_ast value)
       | Select { from; what; where } ->
         let module Selectable = (val from) in
         (box
-        @@ const string "SELECT" ++ sp ++ const pp_expression what ++ sp
-           ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+        @@ const string "SELECT" ++ sp
+           ++ const pp_expression Expression.(to_ast what)
+           ++ sp ++ const string "FROM" ++ sp ++ const Selectable.pp ()
            ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                where)
+                (option (pp_clause "WHERE"))
+                Expression.(Option.map ~f:to_ast where))
           f ()
       | Update { into; what; where } ->
         pp_update into what where Expression.None
       | Update_returning { into; what; where; returning } ->
         pp_update into what where Expression.(Some returning)
     in
-
     pp
 
   let query

@@ -109,15 +109,12 @@ struct
         type nonrec 't column = ('t, tag) Column.t
       end
 
-      let rec pairs_of_list :
-          type l. (l, tag) Expression.List.t -> l Hlist.t Expression.t =
-        function
-        | Expression.List.(hd :: tl) -> Expression.(hd @ pairs_of_list tl)
-        | Expression.List.[] -> Expression.empty_list
-
       let all =
-        Expression.map ~encode:Meta.unmap ~decode:Meta.map
-          (pairs_of_list Expression.columns)
+        let columns = Expression.(of_list columns) in
+        Expression.map
+          ~decode:(fun v -> Result.return (Meta.map v))
+          ~encode:(fun v -> Result.return (Meta.unmap v))
+          columns
 
       let pp_ ~prefix:p =
         if p = "" then

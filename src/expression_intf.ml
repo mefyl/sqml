@@ -1,16 +1,5 @@
 open Acid
 
-type comparison =
-  | Eq
-  | Gt
-  | Gte
-  | Lt
-  | Lte
-
-type logic =
-  | And
-  | Or
-
 module type Interface = sig
   module Column : sig
     module Type : sig
@@ -39,13 +28,12 @@ module type Interface = sig
     module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
   end
 
-  type free
-
   module Type : sig
     type 'a t =
       | Bool : bool t
       | Date : Timmy.Date.t t
       | Int : int t
+      | Null : _ option t
       | Nullable : 't t -> 't option t
       | String : string t
       | Time : Timmy.Time.t t
@@ -63,28 +51,37 @@ module type Interface = sig
     val of_column_type : 't Column.Type.t -> 't t
   end
 
-  type ('t, 'tag) t = private
-    | Column : ('t, 'tag) Column.t -> ('t, 'tag) t
-    | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
-    | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
+  type free
+
+  type ast =
+    | Column : {
+        selectable : string;
+        name : string;
+      }
+        -> ast
     | Const : {
         type_ : 't Type.t;
         value : 't;
       }
-        -> ('t, 'tag) t
-    | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
-    | Map : {
-        decode : 'mapped -> 't;
-        encode : 't -> 'mapped;
-        mapped : ('mapped, 'tag) t;
+        -> ast
+    | Infix : {
+        op : string;
+        lhs : ast;
+        rhs : ast;
       }
-        -> ('t, 'tag) t
-    | Null : (_ option, 'tag) t
-    | Var : 't Type.t -> ('t, 'tag) t
-    | ( :: ) :
-        ('a, 'tag) t * ('b Hlist.t, 'tag) t
-        -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
-    | [] : (unit Hlist.t, 'tag) t
+        -> ast
+    | Funcall : {
+        name : string;
+        args : ast list;
+      }
+        -> ast
+    | List : ast list -> ast
+    | Null : ast
+    | Var : 't Type.t -> ast
+
+  type ('t, 'tag) t
+
+  val to_ast : ('t, 'tag) t -> ast
 
   val to_type : ('t, 'tag) t -> 't Type.t
 
@@ -92,30 +89,32 @@ module type Interface = sig
     | None : (unit, 'tag) option
     | Some : ('t, 'tag) t -> ('t, 'tag) option
 
-  type 'tag assignment = private
-    | Set : {
-        column : ('t, 'tag) Column.t;
-        value : ('t, 'tag) t;
-      }
-        -> 'tag assignment
+  type 'tag assignment
+
+  val assignment_to_ast : 'tag assignment -> string * ast
 
   module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
+
+  val of_list : ('l, 'tag) List.t -> ('l Hlist.t, 'tag) t
+
+  val coalesce : ('t Option.t, 'tag) t list -> ('t Option.t, 'tag) t
+
+  val coalesce_default :
+    ('t Option.t, 'tag) t list -> ('t, 'tag) t -> ('t, 'tag) t
 
   val column : ('t, 'tag) Column.t -> ('t, 'tag) t
 
   val const : 't Type.t -> 't -> ('t, 'tag) t
 
   val map :
-    decode:('mapped -> 't) ->
-    encode:('t -> 'mapped) ->
+    decode:('mapped -> ('t, string) Result.t) ->
+    encode:('t -> ('mapped, string) Result.t) ->
     ('mapped, 'tag) t ->
     ('t, 'tag) t
 
   val null : (_ Option.t, 'tag) t
 
   val var : 't Type.t -> ('t, 'tag) t (* FIXME *)
-
-  val empty_list : (unit Hlist.t, 'tag) t
 
   module Infix : sig
     val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
@@ -131,11 +130,6 @@ module type Interface = sig
     val ( > ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
 
     val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
-    val ( @ ) :
-      ('a, 'tag) t ->
-      ('b Hlist.t, 'tag) t ->
-      (('a, 'b) Hlist.desc Hlist.t, 'tag) t
 
     val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
 

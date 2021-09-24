@@ -285,7 +285,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           let q =
             Model.select
               ~from:(module Model.T1)
-              Model.T1.(name @ description @ empty_list)
+              (Sqml.Expression.of_list Model.T1.[ name; description ])
           in
           Engine.query db q
         in

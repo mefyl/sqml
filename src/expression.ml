@@ -37,6 +37,7 @@ module Type = struct
     | Bool : bool t
     | Date : Timmy.Date.t t
     | Int : int t
+    | Null : _ option t
     | Nullable : 't t -> 't option t
     | String : string t
     | Time : Timmy.Time.t t
@@ -65,43 +66,37 @@ module Type = struct
     | Varchar _ -> String
 end
 
-type ('t, 'tag) t =
-  | Column : ('t, 'tag) Column.t -> ('t, 'tag) t
-  | Comparison : (comparison * ('t, 'tag) t * ('t, 'tag) t) -> (bool, 'tag) t
-  | Concat : (string, 'tag) t * (string, 'tag) t -> (string, 'tag) t
+type ast =
+  | Column : {
+      selectable : string;
+      name : string;
+    }
+      -> ast
   | Const : {
       type_ : 't Type.t;
       value : 't;
     }
-      -> ('t, 'tag) t
-  | Logic : (logic * (bool, 'tag) t * (bool, 'tag) t) -> (bool, 'tag) t
-  | Map : {
-      decode : 'mapped -> 't;
-      encode : 't -> 'mapped;
-      mapped : ('mapped, 'tag) t;
+      -> ast
+  | Infix : {
+      op : string;
+      lhs : ast;
+      rhs : ast;
     }
-      -> ('t, 'tag) t
-  | Null : ('t option, 'tag) t
-  | Var : 't Type.t -> ('t, 'tag) t
-  | ( :: ) :
-      ('a, 'tag) t * ('b Hlist.t, 'tag) t
-      -> (('a, 'b) Hlist.desc Hlist.t, 'tag) t
-  | [] : (unit Hlist.t, 'tag) t
+      -> ast
+  | Funcall : {
+      name : string;
+      args : ast list;
+    }
+      -> ast
+  | List : ast list -> ast
+  | Null : ast
+  | Var : 't Type.t -> ast
 
-let rec to_type : type a. (a, _) t -> a Type.t = function
-  | Column { type_; _ } -> Type.of_column_type type_
-  | Comparison _ -> Bool
-  | Concat _ -> String
-  | Const { type_; _ } -> type_
-  | Logic _ -> Bool
-  | Map { decode; encode; mapped } ->
-    let decode x = Result.Ok (decode x)
-    and encode x = Result.Ok (encode x) in
-    Custom { decode; encode; repr = to_type mapped }
-  | a :: b -> to_type a :: to_type b
-  | [] -> []
-  | Null -> failwith "can't deduce type of NULL"
-  | Var t -> t
+let to_ast (_, ast) = ast
+
+let to_type (t, _) = t
+
+type ('t, 'tag) t = 't Type.t * ast
 
 type ('t, 'tag) option =
   | None : (unit, 'tag) option
@@ -111,34 +106,62 @@ module List = Hlist.Make2 (struct
   type nonrec ('t, 'tag) t = ('t, 'tag) t
 end)
 
-let const type_ value = Const { type_; value }
+let of_list l =
+  let type_ =
+    let rec of_exps : type l tag. (l, tag) List.t -> l Hlist.t Type.t = function
+      | List.[] -> Type.[]
+      | List.(hd :: tl) -> Type.(to_type hd :: of_exps tl)
+    in
+    of_exps l
+  and v =
+    let rec of_exps : type l tag. (l, tag) List.t -> ast list = function
+      | List.[] -> []
+      | List.(hd :: tl) -> to_ast hd :: of_exps tl
+    in
+    of_exps l
+  in
+  (type_, List v)
 
-let null = Null
+let const type_ value = (type_, Const { type_; value })
 
-let var t = Var t
+let null = (Type.Null, Null)
+
+let var t = (t, Var t)
 
 let make_column ~selectable ~name type_ = Column.{ selectable; name; type_ }
 
-let empty_list = []
+let coalesce = function
+  | [] -> null
+  | hd :: _ as args ->
+    let args = Base.List.map ~f:snd args in
+    (to_type hd, Funcall { args; name = "COALESCE" })
 
-let column c = Column c
+let coalesce_default args default =
+  let args = Base.List.map ~f:snd args in
+  (to_type default, Funcall { args = args @ [ snd default ]; name = "COALESCE" })
 
-let map ~decode ~encode mapped = Map { decode; encode; mapped }
+let column Column.{ name; selectable; type_ } =
+  (Type.of_column_type type_, Column { name; selectable })
 
-let rec map_name :
-    type a tag tag'. (string -> string) -> (a, tag) t -> (a, tag') t =
- fun f -> function
-  | Column ({ selectable; _ } as pl) ->
-    Column { pl with selectable = f selectable }
-  | Comparison (op, l, r) -> Comparison (op, map_name f l, map_name f r)
-  | Concat (l, r) -> Concat (map_name f l, map_name f r)
-  | Const _ as e -> e
-  | Logic (op, l, r) -> Logic (op, map_name f l, map_name f r)
-  | Map ({ mapped; _ } as pl) -> Map { pl with mapped = map_name f mapped }
-  | Null as e -> e
-  | Var _ as e -> e
-  | a :: b -> map_name f a :: map_name f b
-  | [] as e -> e
+let map ~decode ~encode (type_, v) =
+  let type_ = Type.Custom { decode; encode; repr = type_ } in
+
+  (type_, v)
+
+let map_name f (t, v) =
+  let rec map_name = function
+    | Column ({ selectable; _ } as pl) ->
+      Column { pl with selectable = f selectable }
+    | Infix ({ lhs; rhs; _ } as pl) ->
+      Infix { pl with lhs = map_name lhs; rhs = map_name rhs }
+    | Const _ as e -> e
+    | Funcall ({ args; _ } as pl) ->
+      Funcall { pl with args = Base.List.map ~f:map_name args }
+    | List l -> List (Base.List.map ~f:map_name l)
+    | Null as e -> e
+    | Var _ as e -> e
+  in
+  (t, map_name v)
 
 type 'tag assignment =
   | Set : {
@@ -147,26 +170,28 @@ type 'tag assignment =
     }
       -> 'tag assignment
 
+let assignment_to_ast (Set { column; value = _, ast }) = (column.name, ast)
+
 module Infix = struct
-  let ( && ) l r = Logic (And, l, r)
+  let logic op (_, lhs) (_, rhs) = (Type.Bool, Infix { op; lhs; rhs })
+
+  let ( && ) lhs rhs = logic "AND" lhs rhs
 
   let ( := ) column value = Set { column; value }
 
-  let ( < ) l r = Comparison (Lt, l, r)
+  let ( < ) lhs rhs = logic "<" lhs rhs
 
-  let ( <= ) l r = Comparison (Lte, l, r)
+  let ( <= ) lhs rhs = logic "<=" lhs rhs
 
-  let ( = ) l r = Comparison (Eq, l, r)
+  let ( = ) lhs rhs = logic "=" lhs rhs
 
-  let ( > ) l r = Comparison (Gt, l, r)
+  let ( > ) lhs rhs = logic ">" lhs rhs
 
-  let ( >= ) l r = Comparison (Gte, l, r)
+  let ( >= ) lhs rhs = logic ">=" lhs rhs
 
-  let ( @ ) a b = a :: b
+  let ( ^ ) (_, lhs) (_, rhs) = (Type.String, Infix { op = "||"; lhs; rhs })
 
-  let ( ^ ) a b = Concat (a, b)
-
-  let ( || ) l r = Logic (And, l, r)
+  let ( || ) = logic "OR"
 end
 
 include Infix
