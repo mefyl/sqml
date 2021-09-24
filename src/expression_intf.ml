@@ -64,22 +64,33 @@ module type Interface = sig
         value : 't;
       }
         -> ast
+    | Funcall : {
+        name : string;
+        args : ast list;
+      }
+        -> ast
     | Infix : {
         op : string;
         lhs : ast;
         rhs : ast;
       }
         -> ast
-    | Funcall : {
-        name : string;
-        args : ast list;
-      }
-        -> ast
     | List : ast list -> ast
     | Null : ast
+    | Switch : {
+        cases : (ast * ast) list;
+        default : ast Option.t;
+      }
+        -> ast
     | Var : 't Type.t -> ast
 
   type ('t, 'tag) t
+
+  val case :
+    ((bool, 'tag) t * ('t Option.t, 'tag) t) list -> ('t Option.t, 'tag) t
+
+  val case_else :
+    ((bool, 'tag) t * ('t, 'tag) t) list -> ('t, 'tag) t -> ('t, 'tag) t
 
   val to_ast : ('t, 'tag) t -> ast
 

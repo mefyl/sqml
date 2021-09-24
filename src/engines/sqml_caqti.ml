@@ -86,15 +86,26 @@ module Make (Model : Model.S) = struct
       | Column { selectable; name; _ } ->
         (const string selectable ++ const string "." ++ const string name) f ()
       | Const { type_; value } -> pp_from_type type_ f value
-      | Infix { op; lhs; rhs } ->
-        let fmt = const pp lhs ++ sp ++ const string op ++ sp ++ const pp rhs in
-        fmt f ()
       | Funcall { name; args; _ } ->
         (const string name ++ sp ++ const char '(' ++ list ~sep:comma pp
        ++ const char ')')
           f args
+      | Infix { op; lhs; rhs } ->
+        let fmt = const pp lhs ++ sp ++ const string op ++ sp ++ const pp rhs in
+        fmt f ()
       | List l -> list ~sep:comma pp f l
       | Null -> Fmt.string f "NULL"
+      | Switch { cases; default } ->
+        let pp_case f (cond, value) =
+          (const string "WHEN" ++ sp ++ const pp cond ++ sp
+         ++ const string "THEN" ++ const pp value)
+            f ()
+        in
+        (const string "CASE" ++ sp
+        ++ const (list pp_case) cases
+        ++ const (option (const string "ELSE" ++ sp ++ pp)) default
+        ++ const string "END")
+          f ()
       | Var t -> pp_var t f ()
     in
     pp

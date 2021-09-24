@@ -77,19 +77,24 @@ type ast =
       value : 't;
     }
       -> ast
+  | Funcall : {
+      name : string;
+      args : ast list;
+    }
+      -> ast
   | Infix : {
       op : string;
       lhs : ast;
       rhs : ast;
     }
       -> ast
-  | Funcall : {
-      name : string;
-      args : ast list;
-    }
-      -> ast
   | List : ast list -> ast
   | Null : ast
+  | Switch : {
+      cases : (ast * ast) list;
+      default : ast option;
+    }
+      -> ast
   | Var : 't Type.t -> ast
 
 let to_ast (_, ast) = ast
@@ -128,6 +133,36 @@ let null = (Type.Null, Null)
 
 let var t = (t, Var t)
 
+let case = function
+  | [] -> null
+  | (_, hd) :: _ as cases ->
+    let type_ = to_type hd
+    and ast =
+      Switch
+        {
+          cases =
+            Base.List.map
+              ~f:(fun (cond, value) -> (to_ast cond, to_ast value))
+              cases;
+          default = None;
+        }
+    in
+    (type_, ast)
+
+let case_else cases default =
+  let type_ = to_type default
+  and ast =
+    Switch
+      {
+        cases =
+          Base.List.map
+            ~f:(fun (cond, value) -> (to_ast cond, to_ast value))
+            cases;
+        default = Some (to_ast default);
+      }
+  in
+  (type_, ast)
+
 let make_column ~selectable ~name type_ = Column.{ selectable; name; type_ }
 
 let coalesce = function
@@ -158,6 +193,15 @@ let map_name f (t, v) =
     | Funcall ({ args; _ } as pl) ->
       Funcall { pl with args = Base.List.map ~f:map_name args }
     | List l -> List (Base.List.map ~f:map_name l)
+    | Switch { cases; default } ->
+      Switch
+        {
+          cases =
+            Base.List.map
+              ~f:(fun (cond, value) -> (map_name cond, map_name value))
+              cases;
+          default = Option.map ~f:map_name default;
+        }
     | Null as e -> e
     | Var _ as e -> e
   in
