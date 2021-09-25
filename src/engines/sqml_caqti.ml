@@ -555,18 +555,29 @@ module Make (Model : Model.S) = struct
 
   let prepare
       (type args res arity)
-      (args : args Expression.Type.List.t)
+      (types : args Expression.Type.List.t)
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       transaction ->
       args Hlist.t ->
       ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
         'error )
       Lwt_result.t =
-    let query = query @@ Transduce_exprs.map ~f:{ f = Expression.var } args
-    and args = type_of_types args in
+    let query = query @@ Transduce_exprs.map ~f:{ f = Expression.var } types
+    and args = type_of_types types in
     let query_str info =
       let q = Fmt.str "%a" (pp_query info) query in
-      let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q) in
+      let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q)
+      and () =
+        Expression.Type.List.iter
+          ~f:
+            {
+              f =
+                (fun t ->
+                  Logs.debug (fun m ->
+                      m "caqti: arguments: %a" Sqml.Expression.Type.pp t));
+            }
+          types
+      in
       q
     in
     match Model.Query.arity query with

@@ -49,6 +49,8 @@ module type Interface = sig
     module List : Hlist.S with type 't value = 't t
 
     val of_column_type : 't Column.Type.t -> 't t
+
+    val pp : 't t Fmt.t
   end
 
   type free

@@ -64,6 +64,23 @@ module Type = struct
     | Text -> String
     | Time -> Time
     | Varchar _ -> String
+
+  let rec pp : type a. a t Fmt.t =
+    let open Fmt in
+    fun f -> function
+      | Bool -> Fmt.string f "bool"
+      | Custom { repr; _ } -> pp f repr
+      | Date -> Fmt.string f "date"
+      | Int -> Fmt.string f "int"
+      | Nullable t -> (pp ++ const string "?") f t
+      | Null -> Fmt.string f "null"
+      | String -> Fmt.string f "string"
+      | Time -> Fmt.string f "time"
+      | [] -> Fmt.string f "[]"
+      | hd :: tl ->
+        pp f hd;
+        Fmt.string f " :: ";
+        pp f tl
 end
 
 type ast =
