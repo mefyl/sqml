@@ -66,7 +66,11 @@ module Make (Model : Model.S) = struct
         | [] -> ()
         | [ _ ] -> const char '?' f ()
         | _ :: tl -> (const char '?' ++ comma ++ const pp_values tl) f ()
-        | _ -> failwith "FIXME"
+        | Custom { repr; _ } -> pp_var repr f ()
+        | Time ->
+          (* Timmy.Time.t being abstract, the typer cannot prove it's not
+             unifiable with [l Hlist.t], so we must handle it. *)
+          Fmt.string f "?"
       in
       function
       | Custom { repr; _ } -> pp_var repr
