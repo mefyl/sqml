@@ -85,7 +85,7 @@ struct
           | [] -> []
         in
         let decode columns = Meta.map columns |> Result.return
-        and encode v = Meta.unmap v |> Result.return in
+        and encode = Meta.unmap in
         Expression.Type.Custom
           { decode; encode; repr = type_of_columns Column.columns }
 
@@ -113,8 +113,7 @@ struct
         let columns = Expression.(of_list columns) in
         Expression.map
           ~decode:(fun v -> Result.return (Meta.map v))
-          ~encode:(fun v -> Result.return (Meta.unmap v))
-          columns
+          ~encode:Meta.unmap columns
 
       let pp_ ~prefix:p =
         if p = "" then

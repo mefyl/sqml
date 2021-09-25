@@ -25,6 +25,11 @@ module Make (Model : Model.S) = struct
 
   let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
     let open Fmt in
+    let pp_time fmt t =
+      char fmt '\'';
+      string fmt (Timmy.Time.to_rfc3339 t);
+      char fmt '\''
+    in
     let rec pp_values :
         type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
       | [] -> nop
@@ -34,7 +39,11 @@ module Make (Model : Model.S) = struct
           pp_from_type hd f hd_v;
           comma f ();
           pp_values tl f tl_v
-      | _ -> failwith "FIXME"
+      | Custom { repr; encode; _ } -> fun f v -> pp_from_type repr f @@ encode v
+      | Time ->
+        (* Timmy.Time.t being abstract, the typer cannot prove it's not
+           unifiable with [l Hlist.t], so we must handle it. *)
+        pp_time
     in
     function
     | Bool -> Fmt.bool
@@ -43,16 +52,9 @@ module Make (Model : Model.S) = struct
     | Null -> Fmt.(const string "NULL")
     | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
     | String -> pp_literal_string
-    | Time ->
-      fun fmt t ->
-        char fmt '\'';
-        string fmt (Timmy.Time.to_rfc3339 t);
-        char fmt '\''
-    | Custom { encode; repr; _ } -> (
-      fun f value ->
-        match encode value with
-        | Result.Ok value -> pp_from_type repr f value
-        | Result.Error e -> (* FIXME *) failwith "pp_from_type: " e)
+    | Time -> pp_time
+    | Custom { encode; repr; _ } ->
+      fun f value -> pp_from_type repr f @@ encode value
     | [] -> const string "VALUES ()"
     | _ :: _ as l -> const string "VALUES (" ++ pp_values l ++ const char ')'
 
@@ -330,7 +332,8 @@ module Make (Model : Model.S) = struct
       and decode t = Result.return @@ Timmy.Time.of_ptime t in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
     | Custom { encode; decode; repr } ->
-      Caqti_type.custom ~decode ~encode @@ type_of_type repr
+      Caqti_type.custom ~decode ~encode:(fun v -> Result.return @@ encode v)
+      @@ type_of_type repr
     | [] ->
       let encode Hlist.[] = Result.return ()
       and decode () = Result.return Hlist.[] in

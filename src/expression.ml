@@ -7,7 +7,7 @@ module Column = struct
       | Bool : bool t
       | Custom : {
           repr : 'repr t;
-          encode : 'a -> ('repr, string) Result.t;
+          encode : 'a -> 'repr;
           decode : 'repr -> ('a, string) Result.t;
         }
           -> 'a t
@@ -43,7 +43,7 @@ module Type = struct
     | Time : Timmy.Time.t t
     | Custom : {
         repr : 'repr t;
-        encode : 'a -> ('repr, string) Result.t;
+        encode : 'a -> 'repr;
         decode : 'repr -> ('a, string) Result.t;
       }
         -> 'a t

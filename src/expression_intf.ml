@@ -7,7 +7,7 @@ module type Interface = sig
         | Bool : bool t
         | Custom : {
             repr : 'repr t;
-            encode : 'a -> ('repr, string) Result.t;
+            encode : 'a -> 'repr;
             decode : 'repr -> ('a, string) Result.t;
           }
             -> 'a t
@@ -39,7 +39,7 @@ module type Interface = sig
       | Time : Timmy.Time.t t
       | Custom : {
           repr : 'repr t;
-          encode : 'a -> ('repr, string) Result.t;
+          encode : 'a -> 'repr;
           decode : 'repr -> ('a, string) Result.t;
         }
           -> 'a t
@@ -119,7 +119,7 @@ module type Interface = sig
 
   val map :
     decode:('mapped -> ('t, string) Result.t) ->
-    encode:('t -> ('mapped, string) Result.t) ->
+    encode:('t -> 'mapped) ->
     ('mapped, 'tag) t ->
     ('t, 'tag) t
 
