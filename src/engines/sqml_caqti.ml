@@ -104,12 +104,12 @@ module Make (Model : Model.S) = struct
       | Switch { cases; default } ->
         let pp_case f (cond, value) =
           (const string "WHEN" ++ sp ++ const pp cond ++ sp
-         ++ const string "THEN" ++ const pp value)
+         ++ const string "THEN" ++ sp ++ const pp value ++ sp)
             f ()
         in
         (const string "CASE" ++ sp
         ++ const (list pp_case) cases
-        ++ const (option (const string "ELSE" ++ sp ++ pp)) default
+        ++ const (option (const string "ELSE" ++ sp ++ pp ++ sp)) default
         ++ const string "END")
           f ()
       | Var t -> pp_var t f ()
