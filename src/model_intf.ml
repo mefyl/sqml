@@ -69,7 +69,7 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          value : ('mapped, Expression.free) Expression.t;
+          value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
       | Insert_returning : {
@@ -81,7 +81,7 @@ module type S = sig
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
           returning : ('t, 'tag) Expression.t;
-          value : ('mapped, Expression.free) Expression.t;
+          value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
       | Select : {
@@ -127,7 +127,7 @@ module type S = sig
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
     ?on_conflict:'tag Query.on_conflict ->
-    ('mapped, Expression.free) Expression.t ->
+    ('mapped, 'free) Expression.t ->
     (unit, Query.zero) Query.t
 
   val insert_returning :
@@ -138,7 +138,7 @@ module type S = sig
           and type tag = 'tag) ->
     returning:('t, 'tag) Expression.t ->
     ?on_conflict:'tag Query.on_conflict ->
-    ('mapped, Expression.free) Expression.t ->
+    ('mapped, 'free) Expression.t ->
     ('t, Query.one) Query.t
 
   val select :

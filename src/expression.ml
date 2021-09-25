@@ -30,8 +30,6 @@ module Column = struct
   end)
 end
 
-type free = unit
-
 module Type = struct
   type 'a t =
     | Bool : bool t
@@ -112,7 +110,11 @@ type ast =
       default : ast option;
     }
       -> ast
-  | Var : 't Type.t -> ast
+  | Var : {
+      index : int;
+      size : int;
+    }
+      -> ast
 
 let to_ast (_, ast) = ast
 
@@ -148,7 +150,27 @@ let const type_ value = (type_, Const { type_; value })
 
 let null = (Type.Null, Null)
 
-let var t = (t, Var t)
+let rec type_arity : type t. t Type.t -> int = function
+  | Custom { repr; _ } -> type_arity repr
+  | [] -> 0
+  | hd :: tl -> type_arity hd + type_arity tl
+  | Nullable t -> type_arity t
+  | Bool
+  | Date
+  | Int
+  | Null
+  | String
+  | Time ->
+    1
+
+module Transduce_exprs = Type.List.Transduce2 (List)
+
+let prepare (type args) (types : args Type.List.t) : (args, 'free) List.t =
+  let f index t =
+    let size = type_arity t in
+    (index + size, (t, Var { index; size }))
+  in
+  Transduce_exprs.folding_map ~f:{ f } 0 types
 
 let case = function
   | [] -> null

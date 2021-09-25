@@ -53,8 +53,6 @@ module type Interface = sig
     val pp : 't t Fmt.t
   end
 
-  type free
-
   type ast =
     | Column : {
         selectable : string;
@@ -84,7 +82,11 @@ module type Interface = sig
         default : ast Option.t;
       }
         -> ast
-    | Var : 't Type.t -> ast
+    | Var : {
+        index : int;
+        size : int;
+      }
+        -> ast
 
   type ('t, 'tag) t
 
@@ -127,7 +129,8 @@ module type Interface = sig
 
   val null : (_ Option.t, 'tag) t
 
-  val var : 't Type.t -> ('t, 'tag) t (* FIXME *)
+  (* FIXME: private *)
+  val prepare : 'args Type.List.t -> ('args, 'free) List.t
 
   module Infix : sig
     val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t

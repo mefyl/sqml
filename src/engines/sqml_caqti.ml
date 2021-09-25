@@ -5,11 +5,6 @@ module Array = Array.Monadic2 (Lwt_result)
 
 open Let.Syntax2 (Lwt_result)
 
-module Transduce_exprs =
-  Hlist.Transduce_2 (Sqml.Expression.Type.List) (Sqml.Expression.List)
-module Transduce_types =
-  Hlist.Transduce (Sqml.Expression.Type.List) (Sqml.Expression.Type.List)
-
 module Make (Model : Model.S) = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
 
@@ -55,38 +50,12 @@ module Make (Model : Model.S) = struct
     | Time -> pp_time
     | Custom { encode; repr; _ } ->
       fun f value -> pp_from_type repr f @@ encode value
-    | [] -> const string "VALUES ()"
-    | _ :: _ as l -> const string "VALUES (" ++ pp_values l ++ const char ')'
+    | [] -> nop
+    | _ :: _ as l -> pp_values l
 
   and pp_expression =
     let open Fmt in
-    let rec pp_var : type t. t Expression.Type.t -> unit Fmt.t =
-      let rec pp_values : type l. l Hlist.t Sqml.Expression.Type.t Fmt.t =
-       fun f -> function
-        | [] -> ()
-        | [ _ ] -> const char '?' f ()
-        | _ :: tl -> (const char '?' ++ comma ++ const pp_values tl) f ()
-        | Custom { repr; _ } -> pp_var repr f ()
-        | Time ->
-          (* Timmy.Time.t being abstract, the typer cannot prove it's not
-             unifiable with [l Hlist.t], so we must handle it. *)
-          Fmt.string f "?"
-      in
-      function
-      | Custom { repr; _ } -> pp_var repr
-      | [] -> const string "VALUES ()"
-      | [ _ ] -> const string "VALUES (?)"
-      | _ :: _ as t ->
-        const string "VALUES (" ++ const pp_values t ++ const char ')'
-      | Bool
-      | Date
-      | Int
-      | Null
-      | Nullable _
-      | String
-      | Time ->
-        const string "?"
-    in
+    let var = Fmt.(const char '$' ++ using Int.succ int) in
     let rec pp : Expression.ast Fmt.t =
      fun f -> function
       | Column { selectable; name; _ } ->
@@ -112,7 +81,8 @@ module Make (Model : Model.S) = struct
         ++ const (option (const string "ELSE" ++ sp ++ pp ++ sp)) default
         ++ const string "END")
           f ()
-      | Var t -> pp_var t f ()
+      | Var { index; size } ->
+        (list ~sep:comma var) f @@ List.range index (index + size)
     in
     pp
 
@@ -438,8 +408,8 @@ module Make (Model : Model.S) = struct
           | `Mysql, _ ->
             failwith "dialect not handled"
         in
-        Fmt.pf f "INSERT%a INTO %S %a%a%a" conflict_sqlite () T.Meta.name
-          pp_expression value conflict_pg () pp_returning returning
+        Fmt.pf f "INSERT%a INTO %S VALUES(%a)%a%a" conflict_sqlite ()
+          T.Meta.name pp_expression value conflict_pg () pp_returning returning
       and pp_update
           (type res tag)
           (module T : Table.S with type model = Model.tag and type tag = tag)
@@ -562,7 +532,7 @@ module Make (Model : Model.S) = struct
       ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
         'error )
       Lwt_result.t =
-    let query = query @@ Transduce_exprs.map ~f:{ f = Expression.var } types
+    let query = query @@ Sqml.Expression.prepare types
     and args = type_of_types types in
     let query_str info =
       let q = Fmt.str "%a" (pp_query info) query in

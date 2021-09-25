@@ -204,7 +204,7 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
-          value : ('mapped, Expression.free) Expression.t;
+          value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
       | Insert_returning : {
@@ -216,7 +216,7 @@ struct
                 and type tag = 'tag);
           on_conflict : 'tag on_conflict option;
           returning : ('t, 'tag) Expression.t;
-          value : ('mapped, Expression.free) Expression.t;
+          value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
       | Select : {

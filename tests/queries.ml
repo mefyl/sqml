@@ -309,17 +309,28 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         Model.T1.name
     and put Sqml.Expression.List.[ t1 ] =
       Model.insert ~into:(module Model.T1) t1
+    and update Sqml.Expression.List.[ id; name ] =
+      let open Sqml.Expression in
+      Model.update
+        (module Model.T1)
+        ~where:(Model.T1.id = id)
+        [ Model.T1.Column.name := name ]
     in
     let get = Engine.prepare [ Int ] get
-    and put = Engine.prepare [ Model.T1.type_ ] put in
+    and put = Engine.prepare [ Model.T1.type_ ] put
+    and update = Engine.prepare [ Int; String ] update in
     let* Zero = put db Hlist.[ (271, "prepared", Some "prepared") ] in
     let* (Many res) = get db Hlist.[ 271 ] in
     let* res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "prepared" ] res);
     let* Zero = put db Hlist.[ (272, "prepared'", Some "prepared'") ] in
     let* (Many res) = get db Hlist.[ 272 ] in
+    let* res = Sequence.to_list res in
+    Alcotest.(check (list string) "selected'" [ "prepared'" ] res);
+    let* Zero = update db Hlist.[ 272; "prepared''" ] in
+    let* (Many res) = get db Hlist.[ 272 ] in
     let+ res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected'" [ "prepared'" ] res)
+    Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
 
   module Versioning = struct
     let stable make () =
