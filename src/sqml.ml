@@ -11,7 +11,8 @@ module Expression :
      and type ('t, 'tag) t = ('t, 'tag) Expression.t
      and type 'tag assignment = 'tag Expression.assignment
      and type ('t, 'tag) List.t = ('t, 'tag) Expression.List.t
-     and type 't Type.List.t = 't Expression.Type.List.t =
+     and type 't Type.List.t = 't Expression.Type.List.t
+     and type ast = Expression.ast =
   Expression
 
 module Log = Log

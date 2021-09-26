@@ -3,10 +3,13 @@ open Sqml
 include Sqml.Model.S
 
 module T1 : sig
-  include
-    Table.S
-      with type model = tag
-       and type Meta.mapped = int * string * string option
+  type t = int * string * string option
+
+  val pp : t Fmt.t
+
+  val equal : t -> t -> bool
+
+  include Table.S with type model = tag and type Meta.mapped = t
 
   module Column : sig
     include module type of Column
@@ -26,7 +29,13 @@ module T1 : sig
 end
 
 module T2 : sig
-  include Table.S with type model = tag
+  type t = int
+
+  val pp : t Fmt.t
+
+  val equal : t -> t -> bool
+
+  include Table.S with type model = tag and type Meta.mapped = t
 
   val id : int Expression.t
 end

@@ -11,14 +11,26 @@ module type S = sig
   module BindTable (Meta : Table.META) :
     Table.S with type model = tag and module Meta = Meta
 
-  module Join
-      (L : Selectable.S with type model = tag)
-      (R : Selectable.S with type model = tag) : sig
-    include Selectable.S with type model = tag
+  module type JOIN = sig
+    include Selectable.S
+
+    module L : Selectable.S with type model = model
+
+    module R : Selectable.S with type model = model
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
 
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
+  end
+
+  module Join
+      (L : Selectable.S with type model = tag)
+      (R : Selectable.S with type model = tag) : sig
+    module type S = JOIN with type model = tag and module L = L and module R = R
+
+    include S
+
+    val on : (bool, tag) Expression.t -> (module S)
   end
 
   module Query : sig

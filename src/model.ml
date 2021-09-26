@@ -1,5 +1,4 @@
 open Acid
-open Poly
 open Utils
 include Model_intf
 
@@ -105,15 +104,7 @@ struct
           ~decode:(fun v -> Result.return (Meta.map v))
           ~encode:Meta.unmap columns
 
-      let pp_selectable_ ~prefix:p =
-        if p = "" then
-          let open Fmt in
-          const string name
-        else
-          let open Fmt in
-          const string name ++ sp ++ const string (p ^ name)
-
-      let pp_selectable = pp_selectable_ ~prefix:""
+      let to_ast () = Selectable.Selectable { alias = None; name }
 
       let constraints = Column.constraints @ Meta.constraints Column.columns
     end
@@ -123,27 +114,65 @@ struct
     include Res
   end
 
+  module type JOIN = sig
+    include Selectable.S
+
+    module L : Selectable.S with type model = model
+
+    module R : Selectable.S with type model = model
+
+    val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
+  end
+
+  let rec map_name f = function
+    | Selectable.Selectable { name; alias } ->
+      Selectable.Selectable
+        { name; alias = Some (f (Option.value ~default:name alias)) }
+    | Join ({ left; right; _ } as pl) ->
+      Join { pl with left = map_name f left; right = map_name f right }
+
   module Join
       (L : Selectable.S with type model = tag)
       (R : Selectable.S with type model = tag) =
   struct
-    type model = tag
+    module Content = struct
+      module type S =
+        JOIN with type model = tag and module L = L and module R = R
 
-    type tag = unit
+      type model = tag
 
-    let left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
-     fun e -> Expression.map_name (fun n -> "l_" ^ n) e
+      type tag = unit
 
-    let right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
-     fun e -> Expression.map_name (fun n -> "r_" ^ n) e
+      module L = L
+      module R = R
 
-    let pp_selectable_ ~prefix:p =
-      let open Fmt in
-      const (L.pp_selectable_ ~prefix:(p ^ "l_")) ()
-      ++ sp ++ const string "JOIN" ++ sp
-      ++ const (R.pp_selectable_ ~prefix:(p ^ "r_")) ()
+      let left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
+       fun e -> Expression.map_name (fun n -> "l_" ^ n) e
 
-    let pp_selectable = pp_selectable_ ~prefix:""
+      let right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
+       fun e -> Expression.map_name (fun n -> "r_" ^ n) e
+
+      let to_ast_ on =
+        Selectable.Join
+          {
+            left = map_name (fun n -> "l_" ^ n) @@ L.to_ast ();
+            right = map_name (fun n -> "r_" ^ n) @@ R.to_ast ();
+            on;
+          }
+    end
+
+    let on expr =
+      (module struct
+        include Content
+
+        let to_ast () = to_ast_ (Some (Expression.to_ast expr))
+      end : Content.S)
+
+    include Content
+
+    let to_ast () = to_ast_ None
   end
 
   module Query = struct

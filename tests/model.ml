@@ -20,7 +20,7 @@ module T1_meta = struct
 
   let columns = Column.List.[ id; name_; description ]
 
-  type mapped = int * string * string option
+  type mapped = int * string * string option [@@deriving eq, show]
 
   let map Hlist.[ id; name; desc ] = (id, name, desc)
 
@@ -32,6 +32,12 @@ end
 module T1 = struct
   include BindTable (T1_meta)
 
+  type t = Meta.mapped
+
+  let pp = T1_meta.pp_mapped
+
+  let equal = T1_meta.equal_mapped
+
   module Column = struct
     include Column
 
@@ -41,26 +47,36 @@ module T1 = struct
   let Sqml.Expression.List.[ id; name; description ] = Expression.columns
 end
 
-module T2_meta = Table.Meta (struct
-  let name = "table2"
-
-  let id =
-    Column.(
-      make "id"
-        ~foreign_keys:
-          [
-            Table.Column.Reference
-              { table = (module T1); column = T1.Column.id };
-          ]
-        Type.Int)
-
-  type columns = int * unit
-
-  let columns = Column.List.[ id ]
-end)
-
 module T2 = struct
-  include BindTable (T2_meta)
+  type t = int [@@deriving eq, show]
+
+  module Meta' = struct
+    include Table.Meta (struct
+      let name = "table2"
+
+      let id =
+        Column.(
+          make "id"
+            ~foreign_keys:
+              [
+                Table.Column.Reference
+                  { table = (module T1); column = T1.Column.id };
+              ]
+            Type.Int)
+
+      type columns = int * unit
+
+      let columns = Column.List.[ id ]
+    end)
+
+    type mapped = t
+
+    let map Hlist.[ i ] = i
+
+    let unmap i = Hlist.[ i ]
+  end
+
+  include BindTable (Meta')
 
   let Sqml.Expression.List.[ id ] = Expression.columns
 end

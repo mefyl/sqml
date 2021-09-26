@@ -357,6 +357,17 @@ module Make (Model : Model.S) = struct
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
 
+  let rec pp_selectable f =
+    let open Fmt in
+    function
+    | Selectable.Selectable { name; alias } ->
+      (const string name ++ const (option (sp ++ string)) alias) f ()
+    | Join { left; right; on } ->
+      (const pp_selectable left ++ sp ++ const string "JOIN" ++ sp
+     ++ const pp_selectable right ++ sp ++ const string "ON" ++ sp
+      ++ const (option ~none:(const string "true") pp_expression) on)
+        f ()
+
   let pp_query driver_info =
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
@@ -425,8 +436,9 @@ module Make (Model : Model.S) = struct
           (where : (bool, tag) Expression.t option)
           (returning : (res, tag) Expression.option) =
         (box
-        @@ const string "UPDATE" ++ sp ++ const T.pp_selectable () ++ sp
-           ++ const string "SET" ++ sp
+        @@ const string "UPDATE" ++ sp
+           ++ const pp_selectable (T.to_ast ())
+           ++ sp ++ const string "SET" ++ sp
            ++ const (list ~sep:comma pp_assignment) what
            ++ const
                 (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
@@ -438,12 +450,12 @@ module Make (Model : Model.S) = struct
       function
       | Delete { from; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" Table.pp_selectable ()
+        Fmt.pf f "DELETE FROM@ %a%a" pp_selectable (Table.to_ast ())
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp_selectable ()
+        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
           (pp_clause "RETURNING")
@@ -461,7 +473,7 @@ module Make (Model : Model.S) = struct
         @@ const string "SELECT" ++ sp
            ++ const pp_expression Expression.(to_ast what)
            ++ sp ++ const string "FROM" ++ sp
-           ++ const Selectable.pp_selectable ()
+           ++ const pp_selectable (Selectable.to_ast ())
            ++ const
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where))

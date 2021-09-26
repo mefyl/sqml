@@ -346,6 +346,55 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
 
+  type t1_t2 = Model.T1.t * Model.T2.t [@@deriving eq, show]
+
+  let t1_t2 = Alcotest.testable pp_t1_t2 equal_t1_t2
+
+  let join db =
+    let module J = Model.Join (Model.T1) (Model.T2) in
+    let module T1_T2 =
+    (val J.on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
+    in
+    let check expected =
+      let* (Many v) =
+        Engine.query db
+        @@ Model.select
+             ~from:(module T1_T2)
+             Sqml.Expression.(
+               of_list [ T1_T2.left Model.T1.all; T1_T2.right Model.T2.all ])
+      in
+      let+ v =
+        v
+        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> Lwt_result.return (t1, t2))
+        |> Sequence.to_list
+      in
+      Alcotest.(check (list t1_t2) "selected" expected v)
+    and insert_t2 t2 =
+      let+ Zero =
+        Engine.query db
+        @@ Model.insert
+             ~into:(module Model.T2)
+             Sqml.Expression.(const Model.T2.type_ t2)
+      in
+      ()
+    in
+
+    let* () = populate db in
+    let* () = check [] in
+    let* () = insert_t2 0 in
+    let* () = check [ ((0, "zero", None), 0) ] in
+    let* () = insert_t2 0 in
+    let* () = insert_t2 2 in
+    let* () =
+      check
+        [
+          ((0, "zero", None), 0);
+          ((0, "zero", None), 0);
+          ((2, "two", Some "2"), 2);
+        ]
+    in
+    Lwt_result.return ()
+
   module Versioning = struct
     let stable make () =
       let* _ = make () in
@@ -448,18 +497,19 @@ let () =
              in
              make_db name test switch ()
            in
+           let test_case name f = test_case name @@ make name f
+           and test_case_db name f = test_case name @@ make_db name f in
            [
-             test_case "select" @@ make "select" Caqti_test.select;
-             test_case "insert" @@ make "insert" Caqti_test.insert;
-             test_case "delete" @@ make "delete" Caqti_test.delete;
-             test_case "delete_returning"
-             @@ make "delete_returning" Caqti_test.delete_returning;
-             test_case "update" @@ make "update" Caqti_test.update;
-             test_case "timestamp" @@ make_db "timestamp" Caqti_test.timestamp;
-             test_case "json" @@ make "timestamp" Caqti_test.json;
-             test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
-             test_case "versioning-stable"
-             @@ make_db "versioning_stable" Caqti_test.Versioning.stable;
-             test_case "prepared" @@ make "prepared" Caqti_test.prepared;
+             test_case "select" Caqti_test.select;
+             test_case "insert" Caqti_test.insert;
+             test_case "delete" Caqti_test.delete;
+             test_case "delete_returning" Caqti_test.delete_returning;
+             test_case "update" Caqti_test.update;
+             test_case_db "timestamp" Caqti_test.timestamp;
+             test_case "json" Caqti_test.json;
+             test_case "conflict" @@ Caqti_test.conflict true;
+             test_case_db "versioning-stable" Caqti_test.Versioning.stable;
+             test_case "prepared" Caqti_test.prepared;
+             test_case "join" Caqti_test.join;
            ] );
        ]
