@@ -9,7 +9,14 @@ type ast =
       left : ast;
       right : ast;
       on : Expression.ast option;
+      type_ : join_type;
     }
+
+and join_type =
+  | Inner
+  | Outer
+  | Outer_left
+  | Outer_right
 
 module type S = sig
   type model

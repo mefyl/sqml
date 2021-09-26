@@ -17,20 +17,64 @@ module type S = sig
     module L : Selectable.S with type model = model
 
     module R : Selectable.S with type model = model
+  end
+
+  module type INNER_JOIN = sig
+    include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
 
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
   end
 
+  module type LEFT_OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
+  end
+
+  module type RIGHT_OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
+  end
+
+  module type OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
+  end
+
   module Join
       (L : Selectable.S with type model = tag)
       (R : Selectable.S with type model = tag) : sig
-    module type S = JOIN with type model = tag and module L = L and module R = R
+    module type INNER =
+      INNER_JOIN with type model = tag and module L = L and module R = R
 
-    include S
+    module type OUTER =
+      OUTER_JOIN with type model = tag and module L = L and module R = R
 
-    val on : (bool, tag) Expression.t -> (module S)
+    module type LEFT_OUTER =
+      LEFT_OUTER_JOIN with type model = tag and module L = L and module R = R
+
+    module type RIGHT_OUTER =
+      RIGHT_OUTER_JOIN with type model = tag and module L = L and module R = R
+
+    include INNER
+
+    val on : (bool, tag) Expression.t -> (module INNER)
+
+    val outer_on : (bool, tag) Expression.t -> (module OUTER)
+
+    val left_on : (bool, tag) Expression.t -> (module LEFT_OUTER)
+
+    val right_on : (bool, tag) Expression.t -> (module RIGHT_OUTER)
   end
 
   module Query : sig

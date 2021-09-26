@@ -35,12 +35,9 @@ let convert_error =
   let f e = `Sqml_engine (Caqti_error.show e) in
   Result.map_error ~f
 
-let t1 =
-  Alcotest.(
-    testable
-      (fun f (i, name, desc) ->
-        Fmt.(pf f "(%i, %s, %a)" i name (option string) desc))
-      Poly.equal)
+let t1 = Alcotest.(testable Model.T1.pp Model.T1.equal)
+
+let t2 = Alcotest.(testable Model.T2.pp Model.T2.equal)
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let default_t1s =
@@ -346,10 +343,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
 
-  type t1_t2 = Model.T1.t * Model.T2.t [@@deriving eq, show]
-
-  let t1_t2 = Alcotest.testable pp_t1_t2 equal_t1_t2
-
   let join db =
     let module J = Model.Join (Model.T1) (Model.T2) in
     let module T1_T2 =
@@ -368,7 +361,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> Lwt_result.return (t1, t2))
         |> Sequence.to_list
       in
-      Alcotest.(check (list t1_t2) "selected" expected v)
+      Alcotest.(check (list (pair t1 t2)) "selected" expected v)
     and insert_t2 t2 =
       let+ Zero =
         Engine.query db
@@ -378,7 +371,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       ()
     in
-
     let* () = populate db in
     let* () = check [] in
     let* () = insert_t2 0 in
@@ -393,7 +385,35 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           ((2, "two", Some "2"), 2);
         ]
     in
-    Lwt_result.return ()
+    let module T1_T2 =
+    (val J.left_on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
+    in
+    let check expected =
+      let* (Many v) =
+        Engine.query db
+        @@ Model.select
+             ~from:(module T1_T2)
+             Sqml.Expression.(
+               of_list [ T1_T2.left Model.T1.all; T1_T2.right Model.T2.all ])
+      in
+      let+ v =
+        v
+        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> Lwt_result.return (t1, t2))
+        |> Sequence.to_list
+      in
+      let v =
+        List.sort v ~compare:(fun ((l, _, _), _) ((r, _, _), _) ->
+            Int.compare l r)
+      in
+      Alcotest.(check (list (pair t1 (option t2))) "selected" expected v)
+    in
+    check
+      [
+        ((0, "zero", None), Some 0);
+        ((0, "zero", None), Some 0);
+        ((1, "one", Some "1"), None);
+        ((2, "two", Some "2"), Some 2);
+      ]
 
   module Versioning = struct
     let stable make () =

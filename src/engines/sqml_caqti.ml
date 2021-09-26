@@ -362,8 +362,15 @@ module Make (Model : Model.S) = struct
     function
     | Selectable.Selectable { name; alias } ->
       (const string name ++ const (option (sp ++ string)) alias) f ()
-    | Join { left; right; on } ->
-      (const pp_selectable left ++ sp ++ const string "JOIN" ++ sp
+    | Join { left; right; on; type_ } ->
+      let verb =
+        match type_ with
+        | Inner -> "INNER JOIN"
+        | Outer -> "OUTER JOIN"
+        | Outer_left -> "LEFT OUTER JOIN"
+        | Outer_right -> "RIGHT OUTER JOIN"
+      in
+      (const pp_selectable left ++ sp ++ const string verb ++ sp
      ++ const pp_selectable right ++ sp ++ const string "ON" ++ sp
       ++ const (option ~none:(const string "true") pp_expression) on)
         f ()

@@ -120,10 +120,38 @@ struct
     module L : Selectable.S with type model = model
 
     module R : Selectable.S with type model = model
+  end
+
+  module type INNER_JOIN = sig
+    include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
 
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
+  end
+
+  module type LEFT_OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
+  end
+
+  module type RIGHT_OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
+  end
+
+  module type OUTER_JOIN = sig
+    include JOIN
+
+    val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
+
+    val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
   let rec map_name f = function
@@ -138,8 +166,17 @@ struct
       (R : Selectable.S with type model = tag) =
   struct
     module Content = struct
-      module type S =
-        JOIN with type model = tag and module L = L and module R = R
+      module type INNER =
+        INNER_JOIN with type model = tag and module L = L and module R = R
+
+      module type OUTER =
+        OUTER_JOIN with type model = tag and module L = L and module R = R
+
+      module type LEFT_OUTER =
+        LEFT_OUTER_JOIN with type model = tag and module L = L and module R = R
+
+      module type RIGHT_OUTER =
+        RIGHT_OUTER_JOIN with type model = tag and module L = L and module R = R
 
       type model = tag
 
@@ -154,12 +191,13 @@ struct
       let right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
        fun e -> Expression.map_name (fun n -> "r_" ^ n) e
 
-      let to_ast_ on =
+      let to_ast_ type_ on =
         Selectable.Join
           {
             left = map_name (fun n -> "l_" ^ n) @@ L.to_ast ();
             right = map_name (fun n -> "r_" ^ n) @@ R.to_ast ();
             on;
+            type_;
           }
     end
 
@@ -167,12 +205,49 @@ struct
       (module struct
         include Content
 
-        let to_ast () = to_ast_ (Some (Expression.to_ast expr))
-      end : Content.S)
+        let to_ast () = to_ast_ Inner (Some (Expression.to_ast expr))
+      end : Content.INNER)
+
+    let outer_on expr =
+      (module struct
+        include Content
+
+        let left e =
+          let e = left e in
+          Expression.some e
+
+        let right e =
+          let e = right e in
+          Expression.some e
+
+        let to_ast () = to_ast_ Outer (Some (Expression.to_ast expr))
+      end : Content.OUTER)
+
+    let left_on expr =
+      (module struct
+        include Content
+
+        let right e =
+          let e = right e in
+          Expression.some e
+
+        let to_ast () = to_ast_ Outer_left (Some (Expression.to_ast expr))
+      end : Content.LEFT_OUTER)
+
+    let right_on expr =
+      (module struct
+        include Content
+
+        let left e =
+          let e = left e in
+          Expression.some e
+
+        let to_ast () = to_ast_ Outer_right (Some (Expression.to_ast expr))
+      end : Content.RIGHT_OUTER)
 
     include Content
 
-    let to_ast () = to_ast_ None
+    let to_ast () = to_ast_ Inner None
   end
 
   module Query = struct
