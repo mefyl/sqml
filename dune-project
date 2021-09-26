@@ -19,7 +19,8 @@
  (name sqml)
  (synopsis "Type safe SQL queries.")
  (depends
-  acid
+  (acid
+   (= 0.4.0))
   (alcotest-lwt
    (and
     (>= 1.1.0)
