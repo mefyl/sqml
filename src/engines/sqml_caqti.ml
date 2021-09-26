@@ -5,6 +5,8 @@ module Array = Array.Monadic2 (Lwt_result)
 
 open Let.Syntax2 (Lwt_result)
 
+open Let.Syntax' (Lwt)
+
 module Make (Model : Model.S) = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
 
@@ -586,7 +588,22 @@ module Make (Model : Model.S) = struct
         Model.Query.Many res
 
   let connect { pool } f =
-    let f c = f c |> Lwt_result.map_err (fun e -> `Shitty_api e)
+    let f c =
+      let module C = (val c : Caqti_lwt.CONNECTION) in
+      let* () = C.start () in
+      let f () =
+        f c >>=: function
+        | Result.Error e ->
+          let* () = C.rollback () in
+          Lwt_result.fail (`Shitty_api e)
+        | Result.Ok res ->
+          let+ () = C.commit () in
+          res
+      and catch exn =
+        let* () = C.rollback () in
+        raise exn
+      in
+      Lwt.catch f catch
     and unmap = function
       | `Shitty_api e -> e
       | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)

@@ -23,12 +23,6 @@ let error : [ `Sqml_engine of string ] Alcotest.testable =
     (* We don't care about the error message *)
       (fun _ _ -> true)
 
-let zero : (unit, Model.Query.zero, _) Model.Query.result Alcotest.testable =
-  Alcotest.testable
-    (fun fmt Model.Query.Zero ->
-      Format.pp_print_string fmt "empty query result")
-    Poly.( = )
-
 module ModelS :
   Sqml.Model.S
     with type tag = Model.tag
@@ -226,17 +220,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
       in
       Engine.query db q
-    in
-    let* () =
-      let q =
-        Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
-      in
-      let%lwt res = Engine.query db q in
-      Lwt_result.return
-        Alcotest.(
-          check (result zero error) "conflict result"
-            (Result.Error (`Sqml_engine ""))
-            res)
     in
     let* Zero =
       let q =
