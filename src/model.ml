@@ -3,18 +3,6 @@ open Poly
 open Utils
 include Model_intf
 
-let rec type_of_column_type :
-    type t. t Expression.Column.Type.t -> t Expression.Type.t = function
-  | Bool -> Bool
-  | Custom { decode; encode; repr } ->
-    Custom { decode; encode; repr = type_of_column_type repr }
-  | Date -> Date
-  | Int -> Int
-  | Nullable t -> Nullable (type_of_column_type t)
-  | Text -> String
-  | Time -> Time
-  | Varchar _ -> String
-
 module Make (Meta : sig
   val version : Semver.t
 end) =
@@ -71,7 +59,8 @@ struct
         let rec type_of_columns :
             type a. (a, _) Expression.Column.List.t -> a Expression.Type.List.t
             = function
-          | hd :: tl -> type_of_column_type hd.type_ :: type_of_columns tl
+          | hd :: tl ->
+            Expression.Type.of_column_type hd.type_ :: type_of_columns tl
           | [] -> []
         in
         type_of_columns Column.columns
@@ -81,7 +70,8 @@ struct
             type a.
             (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
           function
-          | hd :: tl -> type_of_column_type hd.type_ :: type_of_columns tl
+          | hd :: tl ->
+            Expression.Type.of_column_type hd.type_ :: type_of_columns tl
           | [] -> []
         in
         let decode columns = Meta.map columns |> Result.return
@@ -115,7 +105,7 @@ struct
           ~decode:(fun v -> Result.return (Meta.map v))
           ~encode:Meta.unmap columns
 
-      let pp_ ~prefix:p =
+      let pp_selectable_ ~prefix:p =
         if p = "" then
           let open Fmt in
           const string name
@@ -123,7 +113,7 @@ struct
           let open Fmt in
           const string name ++ sp ++ const string (p ^ name)
 
-      let pp = pp_ ~prefix:""
+      let pp_selectable = pp_selectable_ ~prefix:""
 
       let constraints = Column.constraints @ Meta.constraints Column.columns
     end
@@ -147,13 +137,13 @@ struct
     let right : type a. (a, R.tag) Expression.t -> (a, tag) Expression.t =
      fun e -> Expression.map_name (fun n -> "r_" ^ n) e
 
-    let pp_ ~prefix:p =
+    let pp_selectable_ ~prefix:p =
       let open Fmt in
-      const (L.pp_ ~prefix:(p ^ "l_")) ()
+      const (L.pp_selectable_ ~prefix:(p ^ "l_")) ()
       ++ sp ++ const string "JOIN" ++ sp
-      ++ const (R.pp_ ~prefix:(p ^ "r_")) ()
+      ++ const (R.pp_selectable_ ~prefix:(p ^ "r_")) ()
 
-    let pp = pp_ ~prefix:""
+    let pp_selectable = pp_selectable_ ~prefix:""
   end
 
   module Query = struct

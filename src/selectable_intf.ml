@@ -1,5 +1,3 @@
-open Base
-
 (** Any object that can be selected from *)
 
 module type S = sig
@@ -8,9 +6,9 @@ module type S = sig
   (** Type identifier of columns that can be selected from this *)
   type tag
 
-  val pp : Formatter.t -> unit -> unit
+  val pp_selectable : unit Fmt.t
 
-  val pp_ : prefix:string -> Formatter.t -> unit -> unit
+  val pp_selectable_ : prefix:string -> unit Fmt.t
 end
 
 type 'tag t = (module S with type tag = 'tag)

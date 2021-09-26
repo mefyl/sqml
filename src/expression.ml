@@ -13,6 +13,7 @@ module Column = struct
           -> 'a t
       | Date : Timmy.Date.t t
       | Int : int t
+      | Json : Schematic.Json.t t
       | Nullable : 't t -> 't option t
       | Text : string t
       | Time : Timmy.Time.t t
@@ -35,6 +36,7 @@ module Type = struct
     | Bool : bool t
     | Date : Timmy.Date.t t
     | Int : int t
+    | Json : Schematic.Json.t t
     | Null : _ option t
     | Nullable : 't t -> 't option t
     | String : string t
@@ -58,6 +60,7 @@ module Type = struct
       Custom { encode; decode; repr = of_column_type repr }
     | Date -> Date
     | Int -> Int
+    | Json -> Json
     | Nullable t -> Nullable (of_column_type t)
     | Text -> String
     | Time -> Time
@@ -70,6 +73,7 @@ module Type = struct
       | Custom { repr; _ } -> pp f repr
       | Date -> Fmt.string f "date"
       | Int -> Fmt.string f "int"
+      | Json -> Fmt.string f "JSON"
       | Nullable t -> (pp ++ const string "?") f t
       | Null -> Fmt.string f "null"
       | String -> Fmt.string f "string"
@@ -158,6 +162,7 @@ let rec type_arity : type t. t Type.t -> int = function
   | Bool
   | Date
   | Int
+  | Json
   | Null
   | String
   | Time ->

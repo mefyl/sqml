@@ -214,6 +214,35 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         Lwt_result.return
         @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res))
 
+  let config = Alcotest.(testable Model.Configs.pp Model.Configs.equal)
+
+  let json db =
+    let* () =
+      let* Zero =
+        Engine.query db
+        @@ Model.insert
+             ~into:(module Model.Configs)
+             Sqml.Expression.(const Model.Configs.type_ ("empty", `O []))
+      in
+      let+ Zero =
+        Engine.query db
+        @@ Model.insert
+             ~into:(module Model.Configs)
+             Sqml.Expression.(
+               const Model.Configs.type_ ("filled", `O [ ("one", `Float 1.) ]))
+      in
+      ()
+    in
+    let* (Many configs) =
+      Engine.query db
+      @@ Model.select ~from:(module Model.Configs) Model.Configs.all
+    in
+    let+ configs = Sequence.to_list configs in
+    Alcotest.(
+      check (list config) "configurations"
+        [ ("empty", `O []); ("filled", `O [ ("one", `Float 1.) ]) ]
+        configs)
+
   let conflict psql db =
     let* Zero =
       let q =
@@ -368,6 +397,7 @@ let () =
              test_case "update" @@ make Caqti_test.update;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
+             test_case "json" @@ make Caqti_test.json;
              test_case "versioning-stable"
              @@ make_db Caqti_test.Versioning.stable;
              (* test_case "prepared" @@ make Caqti_test.prepared; *)
@@ -426,6 +456,7 @@ let () =
              @@ make "delete_returning" Caqti_test.delete_returning;
              test_case "update" @@ make "update" Caqti_test.update;
              test_case "timestamp" @@ make_db "timestamp" Caqti_test.timestamp;
+             test_case "json" @@ make "timestamp" Caqti_test.json;
              test_case "conflict" @@ make "conflict" @@ Caqti_test.conflict true;
              test_case "versioning-stable"
              @@ make_db "versioning_stable" Caqti_test.Versioning.stable;

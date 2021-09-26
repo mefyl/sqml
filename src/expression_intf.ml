@@ -13,6 +13,7 @@ module type Interface = sig
             -> 'a t
         | Date : Timmy.Date.t t
         | Int : int t
+        | Json : Schematic.Json.t t
         | Nullable : 't t -> 't option t
         | Text : string t
         | Time : Timmy.Time.t t
@@ -33,6 +34,7 @@ module type Interface = sig
       | Bool : bool t
       | Date : Timmy.Date.t t
       | Int : int t
+      | Json : Schematic.Json.t t
       | Null : _ option t
       | Nullable : 't t -> 't option t
       | String : string t

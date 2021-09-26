@@ -46,6 +46,7 @@ module Make (Model : Model.S) = struct
     | Bool -> Fmt.bool
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
     | Int -> Fmt.int
+    | Json -> using Schematic.Json.to_string pp_literal_string
     | Null -> Fmt.(const string "NULL")
     | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
     | String -> pp_literal_string
@@ -300,6 +301,11 @@ module Make (Model : Model.S) = struct
       in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
     | Int -> Caqti_type.int
+    | Json ->
+      Caqti_type.(
+        custom
+          ~encode:(Fn.compose Result.return Schematic.Json.to_string)
+          ~decode:Schematic.Json.of_string string)
     | Null -> failwith "FIXME"
     | Nullable t -> Caqti_type.option (type_of_type t)
     | String -> Caqti_type.string
@@ -419,7 +425,7 @@ module Make (Model : Model.S) = struct
           (where : (bool, tag) Expression.t option)
           (returning : (res, tag) Expression.option) =
         (box
-        @@ const string "UPDATE" ++ sp ++ const T.pp () ++ sp
+        @@ const string "UPDATE" ++ sp ++ const T.pp_selectable () ++ sp
            ++ const string "SET" ++ sp
            ++ const (list ~sep:comma pp_assignment) what
            ++ const
@@ -432,12 +438,12 @@ module Make (Model : Model.S) = struct
       function
       | Delete { from; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" Table.pp ()
+        Fmt.pf f "DELETE FROM@ %a%a" Table.pp_selectable ()
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp ()
+        Fmt.pf f "DELETE FROM@ %a%a%a" Table.pp_selectable ()
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
           (pp_clause "RETURNING")
@@ -454,7 +460,8 @@ module Make (Model : Model.S) = struct
         (box
         @@ const string "SELECT" ++ sp
            ++ const pp_expression Expression.(to_ast what)
-           ++ sp ++ const string "FROM" ++ sp ++ const Selectable.pp ()
+           ++ sp ++ const string "FROM" ++ sp
+           ++ const Selectable.pp_selectable ()
            ++ const
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where))

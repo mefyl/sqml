@@ -88,3 +88,31 @@ module Ts = struct
 
   let Sqml.Expression.List.[ time ] = Expression.columns
 end
+
+module Configs = struct
+  type t = string * Schematic.Json.t [@@deriving eq, show]
+
+  module Meta_ = struct
+    include Table.Meta (struct
+      let name = "configuration"
+
+      let id = Column.(make "id" Type.(Varchar 64))
+
+      let config = Column.(make "config" Type.Json)
+
+      type columns = string * (Schematic.Json.t * unit)
+
+      let columns = Column.List.[ id; config ]
+    end)
+
+    type mapped = t
+
+    let map Hlist.[ id; config ] = (id, config)
+
+    let unmap (id, config) = Hlist.[ id; config ]
+  end
+
+  include BindTable (Meta_)
+
+  let Sqml.Expression.List.[ id; config ] = Expression.columns
+end

@@ -36,3 +36,17 @@ module Ts : sig
 
   val time : Timmy.Time.t Expression.t
 end
+
+module Configs : sig
+  type t = string * Schematic.Json.t
+
+  include Table.S with type model = tag and type Meta.mapped = t
+
+  val id : string Expression.t
+
+  val config : Schematic.Json.t Expression.t
+
+  val equal : t -> t -> bool
+
+  val pp : t Fmt.t
+end

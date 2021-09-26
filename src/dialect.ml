@@ -12,6 +12,7 @@ module Postgresql : S = struct
       | Custom { repr; _ } -> f repr
       | Date -> "DATE"
       | Int -> "INTEGER"
+      | Json -> "JSONB"
       | Nullable t -> f t
       | Text -> "TEXT"
       | Time -> "TIMESTAMP"
