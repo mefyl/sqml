@@ -131,6 +131,8 @@ module type Interface = sig
 
   val null : (_ Option.t, 'tag) t
 
+  val some : ('t, 'tag) t -> ('t Option.t, 'tag) t
+
   (* FIXME: private *)
   val prepare : 'args Type.List.t -> ('args, 'free) List.t
 

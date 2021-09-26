@@ -154,6 +154,8 @@ let const type_ value = (type_, Const { type_; value })
 
 let null = (Type.Null, Null)
 
+let some (t, v) = (Type.Nullable t, v)
+
 let rec type_arity : type t. t Type.t -> int = function
   | Custom { repr; _ } -> type_arity repr
   | [] -> 0
