@@ -1,5 +1,4 @@
 open Acid
-open Utils
 include Model_intf
 
 module Make (Meta : sig
@@ -251,33 +250,6 @@ struct
   end
 
   module Query = struct
-    type many = Many
-
-    type one = One
-
-    type zero = Zero
-
-    type _ arity =
-      | Many : many arity
-      | One : one arity
-      | Zero : zero arity
-
-    type ('t, 'arity, 'error) result =
-      | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
-      | One : 't -> ('t, one, 'error) result
-      | Zero : ('t, zero, 'error) result
-
-    type 'tag excluded = {
-      excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
-    }
-
-    type 'tag on_conflict =
-      | Ignore : _ on_conflict
-      | Set :
-          ('tag excluded -> 'tag Expression.assignment list)
-          -> 'tag on_conflict
-      | Update : _ on_conflict
-
     type ('t, 'arity) t =
       | Delete : {
           from : (module Table.S with type model = tag);

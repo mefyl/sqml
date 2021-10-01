@@ -12,7 +12,7 @@ module type S = sig
   val query :
     transaction ->
     ('t, 'arity) Model.Query.t ->
-    ( ('t, 'arity, ([> error ] as 'error)) Model.Query.result,
+    ( ('t, 'arity, ([> error ] as 'error)) Root.Model.result,
       'error )
     Lwt_result.t
 
@@ -21,7 +21,7 @@ module type S = sig
     (('args, 'tag) Expression.List.t -> ('res, 'arity) Model.Query.t) ->
     transaction ->
     'args Hlist.t ->
-    ( ('res, 'arity, ([> error ] as 'error)) Model.Query.result,
+    ( ('res, 'arity, ([> error ] as 'error)) Root.Model.result,
       'error )
     Lwt_result.t
 

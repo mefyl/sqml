@@ -396,8 +396,8 @@ module Make (Model : Model.S) = struct
             with type model = Model.tag
              and type tag = tag
              and type Meta.mapped = mapped)
-          ({ excluded } : tag Model.Query.excluded)
-          (on_conflict : tag Model.Query.on_conflict option)
+          ({ excluded } : tag Sqml.Model.excluded)
+          (on_conflict : tag Sqml.Model.on_conflict option)
           (returning : (res, tag) Expression.option)
           value =
         let dialect =
@@ -496,7 +496,7 @@ module Make (Model : Model.S) = struct
       (module C : Caqti_lwt.CONNECTION)
       (type res arity)
       (query : (res, arity) Model.Query.t) :
-      ((res, arity, _) Model.Query.result, _) Lwt_result.t =
+      ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
     let collect query =
       let f response =
         let f stream =
@@ -505,18 +505,18 @@ module Make (Model : Model.S) = struct
             | Error e -> Lwt_result.fail e |> error
             | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
         and init = C.Response.to_stream response in
-        Lwt_result.return @@ Model.Query.Many (Sequence.unfold_step ~init ~f)
+        Lwt_result.return @@ Sqml.Model.Many (Sequence.unfold_step ~init ~f)
       in
       C.call ~f query ()
     in
     let query_str = Fmt.str "%a" (pp_query C.driver_info) query in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
-    let res : ((res, arity, _) Model.Query.result, _) Lwt_result.t =
+    let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
       match query with
       | Delete _ ->
         let query = Caqti_request.exec Caqti_type.unit query_str in
         let+ () = C.exec query () in
-        Model.Query.Zero
+        Sqml.Model.Zero
       | Delete_returning { returning; _ } ->
         let query =
           Caqti_request.collect Caqti_type.unit (type_of_expr returning)
@@ -531,17 +531,17 @@ module Make (Model : Model.S) = struct
       | Insert _ ->
         let query = Caqti_request.exec Caqti_type.unit query_str in
         let+ () = C.exec query () in
-        Model.Query.Zero
+        Sqml.Model.Zero
       | Insert_returning { returning; _ } ->
         let query =
           Caqti_request.find Caqti_type.unit (type_of_expr returning) query_str
         in
         let+ res = C.find query () in
-        Model.Query.One res
+        Sqml.Model.One res
       | Update _ ->
         let query = Caqti_request.exec Caqti_type.unit query_str in
         let+ () = C.exec query () in
-        Model.Query.Zero
+        Sqml.Model.Zero
       | Update_returning { returning; _ } ->
         let query =
           Caqti_request.collect Caqti_type.unit (type_of_expr returning)
@@ -557,7 +557,7 @@ module Make (Model : Model.S) = struct
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       transaction ->
       args Hlist.t ->
-      ( (res, arity, ([> Engine.error ] as 'error)) Model.Query.result,
+      ( (res, arity, ([> Engine.error ] as 'error)) Sqml.Model.result,
         'error )
       Lwt_result.t =
     let query = query @@ Sqml.Expression.prepare types
@@ -585,14 +585,14 @@ module Make (Model : Model.S) = struct
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
         let+ () = C.exec prepared (Hlist.to_pairs v) |> error in
-        Model.Query.Zero
+        Sqml.Model.Zero
     | One ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.one query_str
       in
       fun (module C : Caqti_lwt.CONNECTION) v ->
         let+ res = C.find prepared (Hlist.to_pairs v) |> error in
-        Model.Query.One res
+        Sqml.Model.One res
     | Many ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
@@ -611,7 +611,7 @@ module Make (Model : Model.S) = struct
           in
           C.call ~f prepared (Hlist.to_pairs v) |> error
         in
-        Model.Query.Many res
+        Sqml.Model.Many res
 
   let connect { pool } f =
     let f c =

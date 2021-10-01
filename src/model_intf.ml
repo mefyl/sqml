@@ -1,6 +1,31 @@
 open Acid
 open Utils
 
+type many = Many
+
+type one = One
+
+type zero = Zero
+
+type _ arity =
+  | Many : many arity
+  | One : one arity
+  | Zero : zero arity
+
+type ('t, 'arity, 'error) result =
+  | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
+  | One : 't -> ('t, one, 'error) result
+  | Zero : ('t, zero, 'error) result
+
+type 'tag excluded = {
+  excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
+}
+
+type 'tag on_conflict =
+  | Ignore : _ on_conflict
+  | Set : ('tag excluded -> 'tag Expression.assignment list) -> 'tag on_conflict
+  | Update : _ on_conflict
+
 module type S = sig
   val version : Semver.t
 
@@ -78,33 +103,6 @@ module type S = sig
   end
 
   module Query : sig
-    type many = Many
-
-    type one = One
-
-    type zero = Zero
-
-    type _ arity =
-      | Many : many arity
-      | One : one arity
-      | Zero : zero arity
-
-    type ('t, 'arity, 'error) result =
-      | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
-      | One : 't -> ('t, one, 'error) result
-      | Zero : ('t, zero, 'error) result
-
-    type 'tag excluded = {
-      excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
-    }
-
-    type 'tag on_conflict =
-      | Ignore : _ on_conflict
-      | Set :
-          ('tag excluded -> 'tag Expression.assignment list)
-          -> 'tag on_conflict
-      | Update : _ on_conflict
-
     type ('t, 'arity) t = private
       | Delete : {
           from : (module Table.S with type model = tag);
@@ -168,13 +166,13 @@ module type S = sig
     from:(module Table.S with type model = tag) ->
     ?where:(bool, 'tag) Expression.t ->
     unit ->
-    (unit, Query.zero) Query.t
+    (unit, zero) Query.t
 
   val delete_returning :
     from:(module Table.S with type model = tag) ->
     ?where:(bool, 'tag) Expression.t ->
     ('res, 'tag) Expression.t ->
-    ('res, Query.many) Query.t
+    ('res, many) Query.t
 
   val insert :
     into:
@@ -182,9 +180,9 @@ module type S = sig
          with type model = tag
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
-    ?on_conflict:'tag Query.on_conflict ->
+    ?on_conflict:'tag on_conflict ->
     ('mapped, 'free) Expression.t ->
-    (unit, Query.zero) Query.t
+    (unit, zero) Query.t
 
   val insert_returning :
     into:
@@ -193,28 +191,28 @@ module type S = sig
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
     returning:('t, 'tag) Expression.t ->
-    ?on_conflict:'tag Query.on_conflict ->
+    ?on_conflict:'tag on_conflict ->
     ('mapped, 'free) Expression.t ->
-    ('t, Query.one) Query.t
+    ('t, one) Query.t
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
-    ('t, Query.many) Query.t
+    ('t, many) Query.t
 
   val update :
     (module Table.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     'tag Expression.assignment list ->
-    (unit, Query.zero) Query.t
+    (unit, zero) Query.t
 
   val update_returning :
     (module Table.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     returning:('t, 'tag) Expression.t ->
     'tag Expression.assignment list ->
-    ('t, Query.many) Query.t
+    ('t, many) Query.t
 end
 
 type t = (module S)
