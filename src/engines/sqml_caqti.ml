@@ -1,4 +1,3 @@
-open Acid
 open Sqml
 open Utils
 module Array = Array.Monadic2 (Lwt_result)

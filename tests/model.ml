@@ -1,5 +1,5 @@
-open Acid
 open Sqml
+open Utils
 
 include Sqml.Model.Make (struct
   let version = (0, 0, 0)

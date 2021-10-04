@@ -1,4 +1,4 @@
-open Acid
+open Utils
 include Model_intf
 
 module Make (Meta : sig

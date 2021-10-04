@@ -1,4 +1,4 @@
-open Acid
+open Utils
 include Expression_intf
 
 module Column = struct
