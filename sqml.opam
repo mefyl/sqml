@@ -9,7 +9,7 @@ homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
   "dune" {>= "2.8"}
-  "acid" {= "0.4.0"}
+  "acid" {>= "0.5.0" & < "0.6.0"}
   "alcotest-lwt" {>= "1.1.0" & with-test}
   "caqti-driver-postgresql" {>= "1.6.0" & with-test}
   "caqti-driver-sqlite3" {= "1.6.0" & with-test}
