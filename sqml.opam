@@ -22,7 +22,7 @@ depends: [
   "ptime" {>= "0.8.5"}
   "semver" {>= "0.1.0"}
   "sqlite3" {>= "5.0.1"}
-  "timmy" {>= "0.10.0" & < "1.0.0"}
+  "timmy" {>= "0.10.0" & < "0.11.0"}
   "odoc" {with-doc}
 ]
 build: [
