@@ -90,12 +90,11 @@ module Make (Model : Model.S) = struct
 
   let table_name info schema name =
     match schema with
-    | None -> Format.sprintf "%S" name
+    | None -> Fmt.str "%S" name
     | Some schema -> (
       match Caqti_driver_info.dialect_tag info with
-      | `Sqlite ->
-        Format.sprintf "%s_%s" (String.escaped schema) (String.escaped name)
-      | `Pgsql -> Format.sprintf "%S.%S" schema name
+      | `Sqlite -> Fmt.str "%s_%s" (String.escaped schema) (String.escaped name)
+      | `Pgsql -> Fmt.str "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
   let nullable : type t. t Expression.Column.Type.t -> bool = function
@@ -176,7 +175,7 @@ module Make (Model : Model.S) = struct
         if found then
           let query =
             Caqti_request.find Caqti_type.unit caqti_metadata_type
-              (Format.sprintf
+              (Fmt.str
                  "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
                   DESC LIMIT 1"
                  (table_name i (Some "sqml") "metadata")
@@ -207,7 +206,7 @@ module Make (Model : Model.S) = struct
                 | Some schema ->
                   let query =
                     Caqti_request.exec ~oneshot:true Caqti_type.unit
-                      (Format.sprintf "CREATE SCHEMA IF NOT EXISTS %S" schema)
+                      (Fmt.str "CREATE SCHEMA IF NOT EXISTS %S" schema)
                   in
                   C.exec query ())
               | _ -> failwith "dialect not handled"
@@ -259,7 +258,7 @@ module Make (Model : Model.S) = struct
           let* () = Array.iter ~f:create_table (Model.tables ()) in
           let query =
             Caqti_request.exec caqti_metadata_type
-              (Format.sprintf
+              (Fmt.str
                  "INSERT INTO %s (major, minor, subminor, migrated) VALUES (?, \
                   ?, ?, ?)"
                  (table_name i (Some "sqml") "metadata"))

@@ -1,3 +1,3 @@
 include Acid
 module Sequence = Sequence.Make2 (Lwt_result)
-module Timmy = Timmy.Versions.V0_10
+module Timmy = Timmy.Versions.V0_10_1

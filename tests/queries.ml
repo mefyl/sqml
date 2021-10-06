@@ -19,7 +19,7 @@ let () =
 
 let error : [ `Sqml_engine of string ] Alcotest.testable =
   Alcotest.testable
-    (fun fmt (`Sqml_engine s) -> Format.pp_print_string fmt s)
+    (fun fmt (`Sqml_engine s) -> Fmt.string fmt s)
     (* We don't care about the error message *)
       (fun _ _ -> true)
 
@@ -487,13 +487,13 @@ let () =
                  Lwt_switch.add_hook (Some switch) (fun () ->
                      C.exec
                        (Caqti_request.exec Caqti_type.unit
-                       @@ Format.sprintf "DROP DATABASE %S" db)
+                       @@ Fmt.str "DROP DATABASE %S" db)
                        ()
                      |> Lwt.map ~f:ignore)
                in
                C.exec
                  (Caqti_request.exec Caqti_type.unit
-                 @@ Format.sprintf "CREATE DATABASE %S" db)
+                 @@ Fmt.str "CREATE DATABASE %S" db)
                  ()
                |> Lwt.map ~f:convert_error
              in
