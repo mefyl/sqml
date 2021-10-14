@@ -25,6 +25,10 @@ type 'tag on_conflict =
   | Set : ('tag excluded -> 'tag Expression.assignment list) -> 'tag on_conflict
   | Update : _ on_conflict
 
+type for_ =
+  | Share
+  | Update
+
 module type S = sig
   val version : Semver.t
 
@@ -138,6 +142,7 @@ module type S = sig
         }
           -> ('t, one) t
       | Select : {
+          for_ : for_ option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
           what : ('t, 'tag) Expression.t;
@@ -197,6 +202,7 @@ module type S = sig
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
+    ?for_:for_ ->
     ('t, 'tag) Expression.t ->
     ('t, many) Query.t
 

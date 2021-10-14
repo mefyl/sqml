@@ -472,11 +472,16 @@ module Make (Model : Model.S) = struct
         pp_insert into { excluded } on_conflict
           Expression.(Some returning)
           Expression.(to_ast value)
-      | Select { from; what; where } ->
+      | Select { for_; from; what; where } ->
+        let pp_for f = function
+          | Sqml.Model.Share -> Fmt.string f "SHARE"
+          | Update -> Fmt.string f "UPDATE"
+        in
         let module Selectable = (val from) in
         (box
         @@ const string "SELECT" ++ sp
            ++ const pp_expression Expression.(to_ast what)
+           ++ const (option (const string " FOR " ++ pp_for)) for_
            ++ sp ++ const string "FROM" ++ sp
            ++ const pp_selectable (Selectable.to_ast ())
            ++ const

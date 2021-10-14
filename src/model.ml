@@ -286,6 +286,7 @@ struct
         }
           -> ('t, one) t
       | Select : {
+          for_ : for_ option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
           what : ('t, 'tag) Expression.t;
@@ -316,7 +317,7 @@ struct
       | Update_returning _ -> Many
   end
 
-  let select ~from ?where what = Query.Select { from; what; where }
+  let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
 
   let insert ~into ?on_conflict value =
     Query.Insert
