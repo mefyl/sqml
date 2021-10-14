@@ -481,9 +481,9 @@ module Make (Model : Model.S) = struct
         (box
         @@ const string "SELECT" ++ sp
            ++ const pp_expression Expression.(to_ast what)
-           ++ const (option (const string " FOR " ++ pp_for)) for_
            ++ sp ++ const string "FROM" ++ sp
            ++ const pp_selectable (Selectable.to_ast ())
+           ++ const (option (const string " FOR " ++ pp_for)) for_
            ++ const
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where))
