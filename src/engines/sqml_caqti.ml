@@ -473,9 +473,38 @@ module Make (Model : Model.S) = struct
           Expression.(Some returning)
           Expression.(to_ast value)
       | Select { for_; from; what; where } ->
-        let pp_for f = function
-          | Sqml.Model.Share -> Fmt.string f "SHARE"
-          | Update -> Fmt.string f "UPDATE"
+        let pp_for f =
+          let forable =
+            let rec forable =
+              let outer (name, _) = (name, false) in
+              function
+              | Selectable.Selectable { alias; name } ->
+                [ (Option.value ~default:name alias, true) ]
+              | Selectable.Join { left; right; type_ = Inner; _ } ->
+                forable left @ forable right
+              | Selectable.Join { left; right; type_ = Outer_left; _ } ->
+                forable left @ List.map ~f:outer @@ forable right
+              | Selectable.Join { left; right; type_ = Outer_right; _ } ->
+                (List.map ~f:outer @@ forable left) @ forable right
+              | Selectable.Join { left; right; type_ = Outer; _ } ->
+                (List.map ~f:outer @@ forable left)
+                @ List.map ~f:outer @@ forable right
+            in
+            let module From = (val from) in
+            forable (From.to_ast ())
+          and pp_forable f forable =
+            if List.for_all ~f:snd forable then
+              ()
+            else
+              Fmt.pf f " OF %a" (list ~sep:comma string)
+              @@ List.filter_map
+                   ~f:(fun (name, forable) -> Option.some_if forable name)
+                   forable
+          in
+          function
+          | Sqml.Model.Share ->
+            Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
+          | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
         in
         let module Selectable = (val from) in
         (box
@@ -483,10 +512,10 @@ module Make (Model : Model.S) = struct
            ++ const pp_expression Expression.(to_ast what)
            ++ sp ++ const string "FROM" ++ sp
            ++ const pp_selectable (Selectable.to_ast ())
-           ++ const (option (const string " FOR " ++ pp_for)) for_
            ++ const
                 (option (pp_clause "WHERE"))
-                Expression.(Option.map ~f:to_ast where))
+                Expression.(Option.map ~f:to_ast where)
+           ++ const (option (sp ++ pp_for)) for_)
           f ()
       | Update { into; what; where } ->
         pp_update into what where Expression.None
