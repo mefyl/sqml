@@ -373,7 +373,12 @@ module Make (Model : Model.S) = struct
       ++ const (option ~none:(const string "true") pp_expression) on)
         f ()
 
-  let pp_query driver_info =
+  let dialect_of_driver_info driver_info =
+    match Caqti_driver_info.dialect_tag driver_info with
+    | #Caqti_driver_info.sql_dialect_tag as t -> t
+    | _ -> failwith "unsupported dialect"
+
+  let pp_query dialect =
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
@@ -398,11 +403,6 @@ module Make (Model : Model.S) = struct
           (on_conflict : tag Sqml.Model.on_conflict option)
           (returning : (res, tag) Expression.option)
           value =
-        let dialect =
-          match Caqti_driver_info.dialect_tag driver_info with
-          | #Caqti_driver_info.sql_dialect_tag as t -> t
-          | _ -> failwith "unsupported dialect"
-        in
         let conflict_sqlite, conflict_pg =
           let open Fmt in
           match (dialect, on_conflict) with
@@ -541,7 +541,9 @@ module Make (Model : Model.S) = struct
       in
       C.call ~f query ()
     in
-    let query_str = Fmt.str "%a" (pp_query C.driver_info) query in
+    let query_str =
+      Fmt.str "%a" (pp_query @@ dialect_of_driver_info C.driver_info) query
+    in
     let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
     let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
       match query with
@@ -583,6 +585,29 @@ module Make (Model : Model.S) = struct
     in
     res |> error
 
+  module Hlist_printers = Hlist.Make (struct
+    type 'a t = 'a Fmt.t
+  end)
+
+  module Printers_of_types = Sqml.Expression.Type.List.Transduce (Hlist_printers)
+
+  let pp_values_of_types types =
+    let open Fmt in
+    let printers = Printers_of_types.map ~f:{ f = pp_from_type } types in
+    let rec print :
+        type l. l Hlist_printers.t -> Formatter.t -> l Hlist.t -> unit =
+      function
+      | [] -> fun _ [] -> ()
+      | [ printer ] -> fun fmt [ value ] -> printer fmt value
+      | printer :: printers ->
+        let tail = print printers in
+        fun fmt (value :: values) ->
+          printer fmt value;
+          Fmt.comma fmt ();
+          tail fmt values
+    in
+    const string "[" ++ sp ++ print printers ++ sp ++ const string "]"
+
   let prepare
       (type args res arity)
       (types : args Expression.Type.List.t)
@@ -594,8 +619,8 @@ module Make (Model : Model.S) = struct
       Lwt_result.t =
     let query = query @@ Sqml.Expression.prepare types
     and args = type_of_types types in
-    let query_str info =
-      let q = Fmt.str "%a" (pp_query info) query in
+    let query_str dialect =
+      let q = Fmt.str "%a" (pp_query dialect) query in
       let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q)
       and () =
         Expression.Type.List.iter
@@ -610,27 +635,42 @@ module Make (Model : Model.S) = struct
       in
       q
     in
+    let prepare_str info = query_str (dialect_of_driver_info info)
+    and pp_values = pp_values_of_types types in
     match Model.Query.arity query with
     | Zero ->
       let prepared =
-        Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero query_str
+        Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) v ->
-        let+ () = C.exec prepared (Hlist.to_pairs v) |> error in
+      fun (module C : Caqti_lwt.CONNECTION) values ->
+        let* () =
+          Log.debug (fun m ->
+              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
+        let+ () = C.exec prepared (Hlist.to_pairs values) |> error in
         Sqml.Model.Zero
     | One ->
       let prepared =
-        Caqti_request.create_p args (query_type query) Caqti_mult.one query_str
+        Caqti_request.create_p args (query_type query) Caqti_mult.one
+          prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) v ->
-        let+ res = C.find prepared (Hlist.to_pairs v) |> error in
+      fun (module C : Caqti_lwt.CONNECTION) values ->
+        let* () =
+          Log.debug (fun m ->
+              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
+        let+ res = C.find prepared (Hlist.to_pairs values) |> error in
         Sqml.Model.One res
     | Many ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
-          query_str
+          prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) v ->
+      fun (module C : Caqti_lwt.CONNECTION) values ->
+        let* () =
+          Log.debug (fun m ->
+              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
         let+ res =
           let f response =
             let f stream =
@@ -641,7 +681,7 @@ module Make (Model : Model.S) = struct
             and init = C.Response.to_stream response in
             Lwt_result.return @@ Sequence.unfold_step ~init ~f
           in
-          C.call ~f prepared (Hlist.to_pairs v) |> error
+          C.call ~f prepared (Hlist.to_pairs values) |> error
         in
         Sqml.Model.Many res
 
