@@ -30,12 +30,15 @@ module T1_meta = struct
 
   let indexes Expression.Column.List.[ id; _name; _desc ] =
     [
-      Sqml.Table.(
-        Nonempty_list.
-          [
-            Index { column = id; order = Ascending };
-            Index { column = _name; order = Descending };
-          ]);
+      Sqml.Table.
+        {
+          columns =
+            [
+              Index { column = id; order = Ascending };
+              Index { column = _name; order = Descending };
+            ];
+          name = "ids";
+        };
     ]
 end
 

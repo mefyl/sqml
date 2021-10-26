@@ -6,6 +6,8 @@ module Postgresql : S = struct
     | None -> Fmt.str "%S" name
     | Some schema -> Fmt.str "%S.%S" schema name
 
+  let index_name ?schema:_ name = name
+
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.t -> string = function
       | Bool -> "BOOLEAN"
@@ -24,10 +26,14 @@ end
 let postgresql = (module Postgresql : S)
 
 module Sqlite : S = struct
+  include Postgresql
+
   let table_name ?schema name =
     match schema with
     | None -> Fmt.str "%S" name
     | Some schema -> Fmt.str "%S" @@ Fmt.str "%s_%s" schema name
+
+  let index_name = table_name
 
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.t -> string = function
@@ -35,7 +41,7 @@ module Sqlite : S = struct
       | Date
       | Time ->
         "TEXT"
-      | t -> Postgresql.string_of_type t
+      | t -> string_of_type t
     in
     f t
 end

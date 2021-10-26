@@ -452,7 +452,7 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
     in
     definitions @ constraints
   and indexes =
-    let f columns =
+    let f Table.{ columns; name } =
       let f = function
         | Table.Index { column; order } ->
           let order =
@@ -463,7 +463,9 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
           Fmt.str "%s %s" column.name order
       in
       Fmt.(
-        str "CREATE INDEX ON %s (%a)" table_name (list ~sep:comma string)
+        str "CREATE INDEX %s ON %s (%a)"
+          (Dialect.index_name ?schema:T.Meta.schema name)
+          table_name (list ~sep:comma string)
         @@ List.map ~f
         @@ Table.Nonempty_list.to_list columns)
     in

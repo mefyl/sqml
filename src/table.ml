@@ -95,7 +95,10 @@ type 'tag index_column =
     }
       -> 'tag index_column
 
-type 'tag index = 'tag index_column Nonempty_list.t
+type 'tag index = {
+  columns : 'tag index_column Nonempty_list.t;
+  name : string;
+}
 
 module Column = struct
   module Type = Expression.Column.Type
