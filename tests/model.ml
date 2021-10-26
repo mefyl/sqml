@@ -27,6 +27,8 @@ module T1_meta = struct
   let unmap (id, name, desc) = Hlist.[ id; name; desc ]
 
   let constraints Expression.Column.List.[ _id; _name; _description ] = []
+
+  let indexes _ = []
 end
 
 module T1 = struct

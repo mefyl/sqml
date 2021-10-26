@@ -384,6 +384,8 @@ struct
         Hlist.[ major; minor; subminor; migrated ]
 
       let constraints _ = []
+
+      let indexes _ = []
     end
 
     include BindTable (Meta_)

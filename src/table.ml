@@ -77,6 +77,19 @@ type 'tag constraint_ =
       ('tag, 'target) foreign_reference Nonempty_list.t
       -> 'tag constraint_
 
+type ordering =
+  | Ascending
+  | Descending
+
+type 'tag index_column =
+  | Index : {
+      column : ('t, 'tag) Expression.Column.t;
+      order : ordering;
+    }
+      -> 'tag index_column
+
+type 'tag index = 'tag index_column Nonempty_list.t
+
 module Column = struct
   module Type = Expression.Column.Type
 
@@ -116,6 +129,8 @@ module type META = sig
 
   val constraints :
     (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
+
+  val indexes : (columns, 'tag) Expression.Column.List.t -> 'tag index list
 end
 
 module Meta (Minimal : sig
@@ -141,6 +156,8 @@ struct
   let unmap v = v
 
   let constraints _ = []
+
+  let indexes _ = []
 end
 
 module type S = sig
