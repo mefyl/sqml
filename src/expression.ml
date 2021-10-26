@@ -150,6 +150,19 @@ let of_list l =
   in
   (type_, List v)
 
+(* This one looks a bit flaky, but we actually guarantee only this type/ast
+   combination is valid. We could preserve a strong typing on the AST, but it
+   would greatly complexify the code just for this specific case. *)
+let to_list = function
+  | type_, List value ->
+    let rec f : type a. a Hlist.t Type.t * _ -> (a, 'tag) List.t = function
+      | hd_t :: tl_t, hd :: tl -> (hd_t, hd) :: f (tl_t, tl)
+      | [], [] -> []
+      | _ -> failwith "unreachable"
+    in
+    f (type_, value)
+  | _ -> failwith "unreachable"
+
 let const type_ value = (type_, Const { type_; value })
 
 let null = (Type.Null, Null)

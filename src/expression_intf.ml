@@ -116,6 +116,8 @@ module type Interface = sig
 
   val of_list : ('l, 'tag) List.t -> ('l Hlist.t, 'tag) t
 
+  val to_list : ('l Hlist.t, 'tag) t -> ('l, 'tag) List.t
+
   val coalesce : ('t Option.t, 'tag) t list -> ('t Option.t, 'tag) t
 
   val coalesce_default :
