@@ -98,6 +98,8 @@ module type Interface = sig
   val case_else :
     ((bool, 'tag) t * ('t, 'tag) t) list -> ('t, 'tag) t -> ('t, 'tag) t
 
+  val now : (Timmy.Time.t, 'tag) t
+
   val to_ast : ('t, 'tag) t -> ast
 
   val to_type : ('t, 'tag) t -> 't Type.t

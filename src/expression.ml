@@ -209,6 +209,8 @@ let case_else cases default =
   in
   (type_, ast)
 
+let now = (Type.Time, Funcall { name = "NOW"; args = [] })
+
 let make_column ~selectable ~name type_ = Column.{ selectable; name; type_ }
 
 let coalesce = function
