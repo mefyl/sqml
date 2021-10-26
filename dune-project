@@ -2,7 +2,7 @@
 
 (name sqml)
 
-(version 0.3.9)
+(version 0.3.10)
 
 (generate_opam_files true)
 
