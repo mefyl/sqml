@@ -125,8 +125,6 @@ module Column = struct
   end)
 end
 
-type 'tag t = (module S' with type tag = 'tag)
-
 let name (type tag) (module T : S' with type tag = tag) = T.Meta.name
 
 module type META = sig
@@ -173,4 +171,8 @@ module type S = sig
   include S' with module Meta := Meta
 
   val constraints : tag constraint_ list
+
+  val indexes : tag index list
 end
+
+type 'tag t = (module S with type tag = 'tag)

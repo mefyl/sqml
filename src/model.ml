@@ -105,6 +105,8 @@ struct
       let to_ast () = Selectable.Selectable { alias = None; name }
 
       let constraints = Column.constraints @ Meta.constraints Column.columns
+
+      let indexes = Meta.indexes Column.columns
     end
 
     let _ = v.tables <- Array.append v.tables [| (module Res) |]
@@ -397,34 +399,35 @@ type column_creation = {
   primary : bool;
 }
 
-let schema (module Dialect : Dialect.S) (module Model : S) =
-  let create_table (module T : Table.S) =
-    let columns =
-      Table.Column.List.filter_map
-        ~f:
-          {
-            f =
-              (fun { name; primary; type_; _ } ->
-                Some { name; primary; type_ = Dialect.string_of_type type_ });
-          }
-        T.Meta.columns
-    in
-    let definitions =
-      List.map ~f:(fun { name; type_; _ } -> Fmt.str "%s %s" name type_) columns
-    in
-    let definitions =
-      match List.filter ~f:(fun c -> c.primary) columns with
-      | [] -> definitions
-      | primary ->
-        definitions
-        @ [
-            Fmt.(
-              str "PRIMARY KEY (%a)"
-                (hbox @@ list ~sep:comma (using (fun c -> c.name) string))
-                primary);
-          ]
-    in
-    let definitions =
+let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
+  let module T = (val table) in
+  let columns =
+    Table.Column.List.filter_map
+      ~f:
+        {
+          f =
+            (fun { name; primary; type_; _ } ->
+              Some { name; primary; type_ = Dialect.string_of_type type_ });
+        }
+      T.Meta.columns
+  in
+  let definitions =
+    List.map ~f:(fun { name; type_; _ } -> Fmt.str "%s %s" name type_) columns
+  in
+  let definitions =
+    match List.filter ~f:(fun c -> c.primary) columns with
+    | [] -> definitions
+    | primary ->
+      definitions
+      @ [
+          Fmt.(
+            str "PRIMARY KEY (%a)"
+              (hbox @@ list ~sep:comma (using (fun c -> c.name) string))
+              primary);
+        ]
+  and table_name = Dialect.table_name ?schema:T.Meta.schema T.Meta.name in
+  let definitions =
+    let constraints =
       let f = function
         | Table.Foreign_key references ->
           let f (Table.Foreign_reference { target; column }) =
@@ -445,12 +448,33 @@ let schema (module Dialect : Dialect.S) (module Model : S) =
               (hbox @@ list ~sep:comma string)
               references)
       in
-      definitions @ List.map ~f T.constraints
+      List.map ~f T.constraints
     in
-    Fmt.(
-      str "CREATE TABLE %s (%a)"
-        (Dialect.table_name ?schema:T.Meta.schema T.Meta.name)
-        (hbox @@ list ~sep:comma string)
-        definitions)
+    definitions @ constraints
+  and indexes =
+    let f columns =
+      let f = function
+        | Table.Index { column; order } ->
+          let order =
+            match order with
+            | Ascending -> "ASC"
+            | Descending -> "DESC"
+          in
+          Fmt.str "%s %s" column.name order
+      in
+      Fmt.(
+        str "CREATE INDEX ON %s (%a)" table_name (list ~sep:comma string)
+        @@ List.map ~f
+        @@ Table.Nonempty_list.to_list columns)
+    in
+    List.map ~f T.indexes
   in
-  Array.map ~f:create_table (Model.tables ()) |> Array.to_list
+  Fmt.(
+    str "CREATE TABLE %s (%a)" table_name
+      (hbox @@ list ~sep:comma string)
+      definitions)
+  :: indexes
+
+let schema dialect (module Model : S) =
+  let create_table (module T : Table.S) = table_schema dialect (module T) in
+  Array.map ~f:create_table (Model.tables ()) |> Array.to_list |> List.concat

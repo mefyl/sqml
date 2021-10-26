@@ -28,7 +28,15 @@ module T1_meta = struct
 
   let constraints Expression.Column.List.[ _id; _name; _description ] = []
 
-  let indexes _ = []
+  let indexes Expression.Column.List.[ id; _name; _desc ] =
+    [
+      Sqml.Table.(
+        Nonempty_list.
+          [
+            Index { column = id; order = Ascending };
+            Index { column = _name; order = Descending };
+          ]);
+    ]
 end
 
 module T1 = struct

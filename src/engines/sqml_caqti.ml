@@ -158,16 +158,18 @@ module Make (Model : Model.S) = struct
       if not @@ Caqti_driver_info.can_transact i then
         Lwt_result.return (false, (-1, -1, -1))
       else
-        let found_query =
+        let dialect, found_query =
           match Caqti_driver_info.dialect_tag i with
           | `Sqlite ->
-            Caqti_request.find Caqti_type.unit Caqti_type.bool
-              "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
-               name= 'sqml_metadata'"
+            ( Sqml.Dialect.sqlite,
+              Caqti_request.find Caqti_type.unit Caqti_type.bool
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
+                 name= 'sqml_metadata'" )
           | `Pgsql ->
-            Caqti_request.find Caqti_type.unit Caqti_type.bool
-              "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
-               table_schema = 'sqml' AND table_name = 'metadata')"
+            ( Sqml.Dialect.postgresql,
+              Caqti_request.find Caqti_type.unit Caqti_type.bool
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
+                 table_schema = 'sqml' AND table_name = 'metadata')" )
           | _ -> failwith "dialect not handled"
         in
         let* found = C.find found_query () in
@@ -211,49 +213,20 @@ module Make (Model : Model.S) = struct
                   C.exec query ())
               | _ -> failwith "dialect not handled"
             in
-            let columns = columns i T.Meta.columns in
-            let columns =
-              match primary T.Meta.columns with
-              | [] -> columns
-              | primary ->
-                columns
-                @ [
-                    Fmt.str "PRIMARY KEY (%s)"
-                    @@ String.concat ~sep:", " primary;
-                  ]
+            let queries = Sqml.Model.table_schema dialect (module T) in
+            let* () =
+              Log.debug (fun m ->
+                  m "create table: %a"
+                    Fmt.(list ~sep:(const char ';' ++ sp) string)
+                    queries)
             in
-            let columns =
-              let f = function
-                | Table.Foreign_key references ->
-                  let f (Table.Foreign_reference { target; column }) =
-                    (column.name, target.column.name)
-                  in
-                  let columns, references =
-                    Table.Nonempty_list.to_list references
-                    |> List.map ~f |> List.unzip
-                  and target_table =
-                    let (Table.Foreign_reference { target; _ }) =
-                      Table.Nonempty_list.hd_nonempty references
-                    in
-                    Table.name target.table
-                  in
-                  Fmt.(
-                    str "FOREIGN KEY (%a) REFERENCES %s(%a)"
-                      (list ~sep:comma string) columns target_table
-                      (list ~sep:comma string) references)
+            let exec query =
+              let query =
+                Caqti_request.exec ~oneshot:true Caqti_type.unit query
               in
-              columns @ List.map ~f T.constraints
+              C.exec query ()
             in
-            let query =
-              Fmt.str "CREATE TABLE %s (%s)"
-                (table_name i T.Meta.schema T.Meta.name)
-                (String.concat ~sep:", " columns)
-            in
-            let* () = Log.debug (fun m -> m "create table: %s" query) in
-            let query =
-              Caqti_request.exec ~oneshot:true Caqti_type.unit query
-            in
-            C.exec query ()
+            Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
           in
           let* () = Array.iter ~f:create_table (Model.tables ()) in
           let query =

@@ -27,7 +27,7 @@ module Sqlite : S = struct
   let table_name ?schema name =
     match schema with
     | None -> Fmt.str "%S" name
-    | Some schema -> Fmt.str "%S_%S" schema name
+    | Some schema -> Fmt.str "%S" @@ Fmt.str "%s_%s" schema name
 
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.t -> string = function
