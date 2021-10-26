@@ -463,17 +463,18 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
           Fmt.str "%s %s" column.name order
       in
       Fmt.(
-        str "CREATE INDEX %s ON %s (%a)"
+        str "@[<2>CREATE INDEX %s@ ON %s@ (%a)@]"
           (Dialect.index_name ?schema:T.Meta.schema name)
-          table_name (list ~sep:comma string)
+          table_name
+          (box @@ list ~sep:comma string)
         @@ List.map ~f
         @@ Table.Nonempty_list.to_list columns)
     in
     List.map ~f T.indexes
   in
   Fmt.(
-    str "CREATE TABLE %s (%a)" table_name
-      (hbox @@ list ~sep:comma string)
+    str "@[<hv 2>CREATE TABLE %s (@,%a)@]" table_name
+      (box @@ list ~sep:comma string)
       definitions)
   :: indexes
 
