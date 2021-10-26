@@ -405,8 +405,15 @@ module Make (Model : Model.S) = struct
           | `Mysql, _ ->
             failwith "dialect not handled"
         in
-        Fmt.pf f "INSERT%a INTO %S VALUES(%a)%a%a" conflict_sqlite ()
-          T.Meta.name pp_expression value conflict_pg () pp_returning returning
+        (* Explicitely enumerate columns order on insertion, migration that add
+           columns subsequently mess up the column ordering. *)
+        Fmt.(
+          pf f "INSERT%a INTO %S (%a) VALUES(%a)%a%a" conflict_sqlite ()
+            T.Meta.name (list ~sep:comma string)
+            (Table.Column.List.map
+               ~f:{ f = (fun { name; _ } -> name) }
+               T.Meta.columns)
+            pp_expression value conflict_pg () pp_returning returning)
       and pp_update
           (type res tag)
           (module T : Table.S with type model = Model.tag and type tag = tag)
