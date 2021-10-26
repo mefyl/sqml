@@ -41,8 +41,7 @@ struct
               let f (Table.Column.Reference target) =
                 Table.(
                   Foreign_key
-                    (Table.Nonempty_list.make
-                       (Foreign_reference { target; column })))
+                    Table.Nonempty_list.[ Foreign_reference { target; column } ])
               in
               List.map ~f foreign_keys
             and rest, rest_constraints = bind_columns tl in

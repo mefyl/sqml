@@ -61,15 +61,22 @@ module type COLLECTION = sig
 end
 
 module Nonempty_list = struct
-  type 'a t = 'a * 'a list
+  type ('a, 'empty) maybe =
+    | ( :: ) :
+        'a * ('a, [< `Nonempty | `Empty ]) maybe
+        -> ('a, [ `Nonempty ]) maybe
+    | [] : ('a, [ `Empty ]) maybe
 
   let map (hd, tl) ~f = (f hd, List.map ~f tl)
 
-  let make ?(tail = []) hd = (hd, tail)
+  let hd_nonempty = function
+    | hd :: _ -> hd
 
-  let hd_nonempty (v, _) = v
+  let rec to_list = function
+    | [ last ] -> Caml.List.[ last ]
+    | hd :: next :: tl -> Caml.List.cons hd (to_list (next :: tl))
 
-  let to_list (hd, tl) = hd :: tl
+  type 'a t = ('a, [ `Nonempty ]) maybe
 end
 
 type 'tag constraint_ =
