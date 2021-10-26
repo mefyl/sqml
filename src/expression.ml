@@ -150,6 +150,8 @@ let of_list l =
   in
   (type_, List v)
 
+module Transduce_exprs = Type.List.Transduce2 (List)
+
 (* This one looks a bit flaky, but we actually guarantee only this type/ast
    combination is valid. We could preserve a strong typing on the AST, but it
    would greatly complexify the code just for this specific case. *)
@@ -158,10 +160,18 @@ let to_list = function
     let rec f : type a. a Hlist.t Type.t * _ -> (a, 'tag) List.t = function
       | hd_t :: tl_t, hd :: tl -> (hd_t, hd) :: f (tl_t, tl)
       | [], [] -> []
-      | _ -> failwith "unreachable"
+      | _ -> failwith "unreachable B"
     in
     f (type_, value)
-  | _ -> failwith "unreachable"
+  | type_, Var { index; _ } ->
+    let rec f : type a. int -> a Hlist.t Type.t -> (a, 'tag) List.t =
+     fun i -> function
+      | hd :: tl -> (hd, Var { index = index + i; size = 1 }) :: f (i + 1) tl
+      | [] -> []
+      | _ -> failwith "unreachable C"
+    in
+    f 0 type_
+  | _ -> Fmt.failwith "unreachable A"
 
 let const type_ value = (type_, Const { type_; value })
 
@@ -182,8 +192,6 @@ let rec type_arity : type t. t Type.t -> int = function
   | String
   | Time ->
     1
-
-module Transduce_exprs = Type.List.Transduce2 (List)
 
 let prepare (type args) (types : args Type.List.t) : (args, 'free) List.t =
   let f index t =
