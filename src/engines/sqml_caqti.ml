@@ -415,16 +415,27 @@ module Make (Model : Model.S) = struct
                T.Meta.columns)
             pp_expression value conflict_pg () pp_returning returning)
       and pp_update
-          (type res tag)
+          (type res tag from)
           (module T : Table.S with type model = Model.tag and type tag = tag)
           (what : tag Expression.assignment list)
+          (from :
+            (module Selectable.S with type model = Model.tag and type tag = from)
+            option)
           (where : (bool, tag) Expression.t option)
           (returning : (res, tag) Expression.option) =
+        let from =
+          match from with
+          | None -> None
+          | Some (module From) -> Some (From.to_ast ())
+        in
         (box
         @@ const string "UPDATE" ++ sp
            ++ const pp_selectable (T.to_ast ())
            ++ sp ++ const string "SET" ++ sp
            ++ const (list ~sep:comma pp_assignment) what
+           ++ const
+                (option (sp ++ const string "FROM" ++ sp ++ pp_selectable))
+                from
            ++ const
                 (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
                 Expression.(Option.map ~f:to_ast where)
@@ -498,9 +509,9 @@ module Make (Model : Model.S) = struct
            ++ const (option (sp ++ pp_for)) for_)
           f ()
       | Update { into; what; where } ->
-        pp_update into what where Expression.None
-      | Update_returning { into; what; where; returning } ->
-        pp_update into what where Expression.(Some returning)
+        pp_update into what None where Expression.None
+      | Update_returning { from; into; returning; where; what } ->
+        pp_update into what from where Expression.(Some returning)
     in
     pp
 

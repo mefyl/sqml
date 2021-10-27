@@ -37,6 +37,12 @@ module T2 : sig
 
   include Table.S with type model = tag and type Meta.mapped = t
 
+  module Column : sig
+    include module type of Column
+
+    val id : int Expression.column
+  end
+
   val id : int Expression.t
 end
 

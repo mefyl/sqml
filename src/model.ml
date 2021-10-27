@@ -154,12 +154,26 @@ struct
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
-  let rec map_name f = function
-    | Selectable.Selectable { name; alias } ->
-      Selectable.Selectable
-        { name; alias = Some (f (Option.value ~default:name alias)) }
-    | Join ({ left; right; _ } as pl) ->
-      Join { pl with left = map_name f left; right = map_name f right }
+  let map_name f selectable =
+    let rec map_name = function
+      | Selectable.Selectable { name; alias } ->
+        let alias = Option.value ~default:name alias in
+        ( Selectable.Selectable { name; alias = Some (f alias) },
+          Set.of_list (module String) [ alias ] )
+      | Join ({ left; right; on; _ } as pl) ->
+        let left, left_mapped = map_name left
+        and right, right_mapped = map_name right in
+        let mapped = Set.union left_mapped right_mapped in
+        let on =
+          Option.map ~f:(Expression.traverse_ast ~f:(map_name_ast mapped)) on
+        in
+        (Join { pl with left; right; on }, mapped)
+    and map_name_ast mapped = function
+      | Column ({ selectable; _ } as pl) when Set.mem mapped selectable ->
+        Column { pl with selectable = f selectable }
+      | ast -> ast
+    in
+    map_name selectable |> fst
 
   module Join
       (L : Selectable.S with type model = tag)
@@ -302,6 +316,9 @@ struct
           -> (unit, zero) t
       | Update_returning : {
           into : (module Table.S with type model = tag and type tag = 'tag);
+          from :
+            (module Selectable.S with type model = tag and type tag = 'from)
+            option;
           what : 'tag Expression.assignment list;
           where : (bool, 'tag) Expression.t option;
           returning : ('t, 'tag) Expression.t;
@@ -347,7 +364,30 @@ struct
   let update into ?where what = Query.Update { into; where; what }
 
   let update_returning into ?where ~returning what =
-    Query.Update_returning { into; where; what; returning }
+    Query.Update_returning { from = None; into; returning; what; where }
+
+  let update_from_returning
+      (type from)
+      into
+      ~from:
+        (module From : Selectable.S with type model = tag and type tag = from)
+      ?where
+      ~returning
+      what =
+    let rename name = "from_" ^ name in
+    let map e = Expression.map_name rename e in
+    let from =
+      (module struct
+        include From
+
+        let to_ast () = map_name rename (to_ast ())
+      end : Selectable.S
+        with type model = tag
+         and type tag = from)
+    and returning = returning { map }
+    and what = what { map }
+    and where = Option.map ~f:(fun where -> where { map }) where in
+    Query.Update_returning { from = Some from; into; returning; what; where }
 
   (* Metadata *)
 

@@ -158,6 +158,10 @@ module type Interface = sig
     val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
 
     val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+
+    val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
+
+    val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   end
 
   include module type of Infix

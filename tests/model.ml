@@ -91,6 +91,12 @@ module T2 = struct
 
   include BindTable (Meta')
 
+  module Column = struct
+    include Column
+
+    let Sqml.Expression.Column.List.[ id ] = columns
+  end
+
   let Sqml.Expression.List.[ id ] = Expression.columns
 end
 

@@ -20,6 +20,10 @@ type 'tag excluded = {
   excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
 }
 
+type ('from, 'to_) mapper = {
+  map : 't. ('t, 'from) Expression.t -> ('t, 'to_) Expression.t;
+}
+
 type 'tag on_conflict =
   | Ignore : _ on_conflict
   | Set : ('tag excluded -> 'tag Expression.assignment list) -> 'tag on_conflict
@@ -157,6 +161,9 @@ module type S = sig
           -> (unit, zero) t
       | Update_returning : {
           into : (module Table.S with type model = tag and type tag = 'tag);
+          from :
+            (module Selectable.S with type model = tag and type tag = 'from)
+            option;
           what : 'tag Expression.assignment list;
           where : (bool, 'tag) Expression.t option;
           returning : ('t, 'tag) Expression.t;
@@ -217,6 +224,14 @@ module type S = sig
     ?where:(bool, 'tag) Expression.t ->
     returning:('t, 'tag) Expression.t ->
     'tag Expression.assignment list ->
+    ('t, many) Query.t
+
+  val update_from_returning :
+    (module Table.S with type model = tag and type tag = 'tag) ->
+    from:(module Selectable.S with type model = tag and type tag = 'from) ->
+    ?where:(('from, 'tag) mapper -> (bool, 'tag) Expression.t) ->
+    returning:(('from, 'tag) mapper -> ('t, 'tag) Expression.t) ->
+    (('from, 'tag) mapper -> 'tag Expression.assignment list) ->
     ('t, many) Query.t
 end
 

@@ -120,6 +120,26 @@ type ast =
     }
       -> ast
 
+let traverse_ast ast ~f =
+  let rec traverse_ast = function
+    | (Column _ | Const _ | Null | Var _) as ast -> f ast
+    | Funcall ({ args; _ } as pl) ->
+      Funcall { pl with args = List.map ~f:traverse_ast args }
+    | Infix ({ lhs; rhs; _ } as pl) ->
+      Infix { pl with lhs = traverse_ast lhs; rhs = traverse_ast rhs }
+    | List elts -> List (List.map ~f:traverse_ast elts)
+    | Switch { cases; default } ->
+      Switch
+        {
+          cases =
+            List.map
+              ~f:(fun (cond, v) -> (traverse_ast cond, traverse_ast v))
+              cases;
+          default = Option.map ~f:traverse_ast default;
+        }
+  in
+  traverse_ast ast
+
 let to_ast (_, ast) = ast
 
 let to_type (t, _) = t
@@ -286,6 +306,8 @@ type 'tag assignment =
 let assignment_to_ast (Set { column; value = _, ast }) = (column.name, ast)
 
 module Infix = struct
+  let arithmetics op (_, lhs) (_, rhs) = (Type.Int, Infix { op; lhs; rhs })
+
   let logic op (_, lhs) (_, rhs) = (Type.Bool, Infix { op; lhs; rhs })
 
   let ( && ) lhs rhs = logic "AND" lhs rhs
@@ -305,6 +327,12 @@ module Infix = struct
   let ( ^ ) (_, lhs) (_, rhs) = (Type.String, Infix { op = "||"; lhs; rhs })
 
   let ( || ) = logic "OR"
+
+  let ( + ) lhs rhs = arithmetics "+" lhs rhs
+
+  let ( - ) lhs rhs = arithmetics "-" lhs rhs
 end
 
 include Infix
+
+let coerce = Fn.id

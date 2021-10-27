@@ -31,6 +31,11 @@ module ModelS :
      and module Join = Model.Join =
   Model
 
+module J = Model.Join (Model.T1) (Model.T2)
+
+module T1_T2 =
+(val J.on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
+
 let convert_error =
   let f e = `Sqml_engine (Caqti_error.show e) in
   Result.map_error ~f
@@ -54,6 +59,18 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       ()
     in
     Lwt_list.map_s f t1s |> Lwt.map ~f:Result.all_unit
+
+  let populate_t2 t2s db =
+    let f t2 =
+      let q =
+        Model.insert
+          ~into:(module Model.T2)
+          Sqml.Expression.(const Model.T2.type_ t2)
+      in
+      let+ Zero = Engine.query db q in
+      ()
+    in
+    Lwt_list.map_s f t2s |> Lwt.map ~f:Result.all_unit
 
   let check_t1s db expected =
     let* (Many all) =
@@ -185,6 +202,43 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Alcotest.(check (list string) "updated names" [ "four"; "four" ] ids);
     check_t1s db
       [ (0, "four", Some "0"); (1, "four", Some "0"); (2, "four", Some "2") ]
+
+  let update_from db =
+    let update table ~from ?where ~returning what =
+      let* (Many results) =
+        Engine.query db
+        @@ Model.update_from_returning table ~from ?where ~returning what
+      in
+      Sequence.to_list results
+    in
+    let* () = populate db in
+    let* () = populate_t2 [ 1; 2 ] db in
+    let* res =
+      let open Sqml.Expression in
+      let returning Sqml.Model.{ map = mapper } = mapper Model.T1.name
+      and what _ = [ Model.T2.Column.id := Model.T2.id - const Int 1 ]
+      and where Sqml.Model.{ map } = map Model.T1.id = Model.T2.id in
+      update (module Model.T2) ~from:(module Model.T1) ~where ~returning what
+    in
+    let () =
+      Alcotest.(
+        check (list string) "retrieved descriptions" [ "one"; "two" ] res)
+    in
+    let* res =
+      let open Sqml.Expression in
+      let returning Sqml.Model.{ map = mapper } =
+        mapper (T1_T2.left Model.T1.name)
+      and what _ = [ Model.T1.Column.name := const String "" ]
+      and where Sqml.Model.{ map } =
+        map (T1_T2.right Model.T2.id) = Model.T1.id
+      in
+      update (module Model.T1) ~from:(module T1_T2) ~where ~returning what
+    in
+    let () =
+      Alcotest.(
+        check (list string) "retrieved descriptions" [ "zero"; "one" ] res)
+    in
+    Lwt_result.return ()
 
   let timestamp make () =
     let now =
@@ -344,10 +398,6 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
 
   let join db =
-    let module J = Model.Join (Model.T1) (Model.T2) in
-    let module T1_T2 =
-    (val J.on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
-    in
     let check expected =
       let* (Many v) =
         Engine.query db
@@ -525,6 +575,7 @@ let () =
              test_case "delete" Caqti_test.delete;
              test_case "delete_returning" Caqti_test.delete_returning;
              test_case "update" Caqti_test.update;
+             test_case "update_from" Caqti_test.update_from;
              test_case_db "timestamp" Caqti_test.timestamp;
              test_case "json" Caqti_test.json;
              test_case "conflict" @@ Caqti_test.conflict true;
