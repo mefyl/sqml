@@ -60,28 +60,9 @@ module type COLLECTION = sig
   val map : 'a t -> f:('a -> 'b) -> 'b t
 end
 
-module Nonempty_list = struct
-  type ('a, 'empty) maybe =
-    | ( :: ) :
-        'a * ('a, [< `Nonempty | `Empty ]) maybe
-        -> ('a, [ `Nonempty ]) maybe
-    | [] : ('a, [ `Empty ]) maybe
-
-  let map (hd, tl) ~f = (f hd, List.map ~f tl)
-
-  let hd_nonempty = function
-    | hd :: _ -> hd
-
-  let rec to_list = function
-    | [ last ] -> Caml.List.[ last ]
-    | hd :: next :: tl -> Caml.List.cons hd (to_list (next :: tl))
-
-  type 'a t = ('a, [ `Nonempty ]) maybe
-end
-
 type 'tag constraint_ =
   | Foreign_key :
-      ('tag, 'target) foreign_reference Nonempty_list.t
+      ('tag, 'target) foreign_reference List_nonempty.t
       -> 'tag constraint_
 
 type ordering =
@@ -96,7 +77,7 @@ type 'tag index_column =
       -> 'tag index_column
 
 type 'tag index = {
-  columns : 'tag index_column Nonempty_list.t;
+  columns : 'tag index_column List_nonempty.t;
   name : string;
 }
 

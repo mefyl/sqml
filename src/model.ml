@@ -41,7 +41,7 @@ struct
               let f (Table.Column.Reference target) =
                 Table.(
                   Foreign_key
-                    Table.Nonempty_list.[ Foreign_reference { target; column } ])
+                    List_nonempty.[ Foreign_reference { target; column } ])
               in
               List.map ~f foreign_keys
             and rest, rest_constraints = bind_columns tl in
@@ -474,10 +474,10 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
             (column.name, target.column.name)
           in
           let columns, references =
-            Table.Nonempty_list.to_list references |> List.map ~f |> List.unzip
+            List_nonempty.to_list references |> List.map ~f |> List.unzip
           and target_table =
             let (Table.Foreign_reference { target; _ }) =
-              Table.Nonempty_list.hd_nonempty references
+              List_nonempty.hd references
             in
             Table.name target.table
           in
@@ -508,7 +508,7 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
           table_name
           (box @@ list ~sep:comma string)
         @@ List.map ~f
-        @@ Table.Nonempty_list.to_list columns)
+        @@ List_nonempty.to_list columns)
     in
     List.map ~f T.indexes
   in

@@ -21,7 +21,7 @@
  (depends
   (acid
    (and
-    (>= 0.5.0)
+    (>= 0.5.2)
     (< 0.6.0)))
   (alcotest-lwt
    (and
