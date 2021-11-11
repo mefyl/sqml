@@ -12,6 +12,7 @@ module type Interface = sig
           }
             -> 'a t
         | Date : Timmy.Date.t t
+        | Float : float t
         | Int : int t
         | Json : Ezjsonm.value t
         | Nullable : 't t -> 't option t
@@ -33,6 +34,7 @@ module type Interface = sig
     type 'a t =
       | Bool : bool t
       | Date : Timmy.Date.t t
+      | Float : float t
       | Int : int t
       | Json : Ezjsonm.value t
       | Null : _ option t

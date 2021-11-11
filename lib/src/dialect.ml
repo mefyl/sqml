@@ -13,6 +13,7 @@ module Postgresql : S = struct
       | Bool -> "BOOLEAN"
       | Custom { repr; _ } -> f repr
       | Date -> "DATE"
+      | Float -> "REAL"
       | Int -> "INTEGER"
       | Json -> "JSONB"
       | Nullable t -> f t

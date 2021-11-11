@@ -44,6 +44,7 @@ module Make (Model : Model.S) = struct
     function
     | Bool -> Fmt.bool
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
+    | Float -> Fmt.float
     | Int -> Fmt.int
     | Json -> using Schematic.Json.to_string pp_literal_string
     | Null -> Fmt.(const string "NULL")
@@ -271,6 +272,7 @@ module Make (Model : Model.S) = struct
         |> Result.return
       in
       Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
+    | Float -> Caqti_type.float
     | Int -> Caqti_type.int
     | Json ->
       Caqti_type.(

@@ -12,6 +12,7 @@ module Column = struct
         }
           -> 'a t
       | Date : Timmy.Date.t t
+      | Float : float t
       | Int : int t
       | Json : Ezjsonm.value t
       | Nullable : 't t -> 't option t
@@ -35,6 +36,7 @@ module Type = struct
   type 'a t =
     | Bool : bool t
     | Date : Timmy.Date.t t
+    | Float : float t
     | Int : int t
     | Json : Ezjsonm.value t
     | Null : _ option t
@@ -59,6 +61,7 @@ module Type = struct
     | Custom { encode; decode; repr } ->
       Custom { encode; decode; repr = of_column_type repr }
     | Date -> Date
+    | Float -> Float
     | Int -> Int
     | Json -> Json
     | Nullable t -> Nullable (of_column_type t)
@@ -71,6 +74,7 @@ module Type = struct
     fun f -> function
       | Bool -> Fmt.string f "bool"
       | Custom { repr; _ } -> pp f repr
+      | Float -> Fmt.string f "float"
       | Date -> Fmt.string f "date"
       | Int -> Fmt.string f "int"
       | Json -> Fmt.string f "JSON"
@@ -206,6 +210,7 @@ let rec type_arity : type t. t Type.t -> int = function
   | Nullable t -> type_arity t
   | Bool
   | Date
+  | Float
   | Int
   | Json
   | Null
