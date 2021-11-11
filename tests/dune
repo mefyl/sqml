@@ -4,7 +4,7 @@
   alcotest-lwt
   logs.fmt
   sqml
-  sqml.caqti
+  sqml_caqti
   caqti-driver-postgresql
   caqti-driver-sqlite3
   ptime)

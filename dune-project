@@ -60,3 +60,14 @@
    (and
     (>= 0.11.0)
     (< 0.12.0)))))
+
+(package
+ (name sqml-caqti)
+ (synopsis "SQML Caqti backend engine.")
+ (depends
+  (schematic
+   (and
+    (>= 0.10.0)
+    (< 0.11.0)))
+  (sqml
+   (= :version))))

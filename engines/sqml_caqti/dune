@@ -1,5 +1,6 @@
+(include_subdirs unqualified)
+
 (library
  (name sqml_caqti)
- (public_name sqml.caqti)
- (modules sqml_caqti)
+ (public_name sqml-caqti)
  (libraries base caqti caqti-lwt logs logs.lwt lwt semver sqml))
