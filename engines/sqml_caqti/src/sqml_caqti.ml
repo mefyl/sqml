@@ -42,6 +42,7 @@ module Make (Model : Model.S) = struct
         pp_time
     in
     function
+    | Bigint -> Fmt.int64
     | Bool -> Fmt.bool
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
     | Float -> Fmt.float
@@ -261,6 +262,7 @@ module Make (Model : Model.S) = struct
 
   let rec type_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     function
+    | Bigint -> Caqti_type.int64
     | Bool -> Caqti_type.bool
     | Date ->
       let encode d =

@@ -4,6 +4,7 @@ module type Interface = sig
   module Column : sig
     module Type : sig
       type 'a t =
+        | Bigint : Int64.t t
         | Bool : bool t
         | Custom : {
             repr : 'repr t;
@@ -32,10 +33,11 @@ module type Interface = sig
 
   module Type : sig
     type 'a t =
+      | Bigint : Int64.t t
       | Bool : bool t
       | Date : Timmy.Date.t t
       | Float : float t
-      | Int : int t
+      | Int : int t (* FIXME: should be int32 ? *)
       | Json : Ezjsonm.value t
       | Null : _ option t
       | Nullable : 't t -> 't option t

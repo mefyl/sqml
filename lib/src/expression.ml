@@ -4,6 +4,7 @@ include Expression_intf
 module Column = struct
   module Type = struct
     type 'a t =
+      | Bigint : Int64.t t
       | Bool : bool t
       | Custom : {
           repr : 'repr t;
@@ -34,6 +35,7 @@ end
 
 module Type = struct
   type 'a t =
+    | Bigint : Int64.t t
     | Bool : bool t
     | Date : Timmy.Date.t t
     | Float : float t
@@ -57,6 +59,7 @@ module Type = struct
   end)
 
   let rec of_column_type : type a. a Column.Type.t -> a t = function
+    | Bigint -> Bigint
     | Bool -> Bool
     | Custom { encode; decode; repr } ->
       Custom { encode; decode; repr = of_column_type repr }
@@ -72,6 +75,7 @@ module Type = struct
   let rec pp : type a. a t Fmt.t =
     let open Fmt in
     fun f -> function
+      | Bigint -> Fmt.string f "bigint"
       | Bool -> Fmt.string f "bool"
       | Custom { repr; _ } -> pp f repr
       | Float -> Fmt.string f "float"
@@ -208,6 +212,7 @@ let rec type_arity : type t. t Type.t -> int = function
   | [] -> 0
   | hd :: tl -> type_arity hd + type_arity tl
   | Nullable t -> type_arity t
+  | Bigint
   | Bool
   | Date
   | Float

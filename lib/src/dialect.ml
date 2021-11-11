@@ -10,6 +10,7 @@ module Postgresql : S = struct
 
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.t -> string = function
+      | Bigint -> "BIGINT"
       | Bool -> "BOOLEAN"
       | Custom { repr; _ } -> f repr
       | Date -> "DATE"
