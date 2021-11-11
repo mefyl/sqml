@@ -13,7 +13,7 @@ module Column = struct
           -> 'a t
       | Date : Timmy.Date.t t
       | Int : int t
-      | Json : Schematic.Json.t t
+      | Json : Ezjsonm.value t
       | Nullable : 't t -> 't option t
       | Text : string t
       | Time : Timmy.Time.t t
@@ -36,7 +36,7 @@ module Type = struct
     | Bool : bool t
     | Date : Timmy.Date.t t
     | Int : int t
-    | Json : Schematic.Json.t t
+    | Json : Ezjsonm.value t
     | Null : _ option t
     | Nullable : 't t -> 't option t
     | String : string t

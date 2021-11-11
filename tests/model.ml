@@ -124,8 +124,18 @@ module Ts = struct
   let Sqml.Expression.List.[ time ] = Expression.columns
 end
 
+type value =
+  [ `Null
+  | `Bool of bool
+  | `Float of float
+  | `String of string
+  | `A of value list
+  | `O of (string * value) list
+  ]
+[@@deriving eq, show]
+
 module Configs = struct
-  type t = string * Schematic.Json.t [@@deriving eq, show]
+  type t = string * value [@@deriving eq, show]
 
   module Meta_ = struct
     include Table.Meta (struct
@@ -135,7 +145,7 @@ module Configs = struct
 
       let config = Column.(make "config" Type.Json)
 
-      type columns = string * (Schematic.Json.t * unit)
+      type columns = string * (Ezjsonm.value * unit)
 
       let columns = Column.List.[ id; config ]
     end)

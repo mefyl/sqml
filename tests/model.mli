@@ -53,13 +53,13 @@ module Ts : sig
 end
 
 module Configs : sig
-  type t = string * Schematic.Json.t
+  type t = string * Ezjsonm.value
 
   include Table.S with type model = tag and type Meta.mapped = t
 
   val id : string Expression.t
 
-  val config : Schematic.Json.t Expression.t
+  val config : Ezjsonm.value Expression.t
 
   val equal : t -> t -> bool
 
