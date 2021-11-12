@@ -30,6 +30,7 @@
   ezjsonm
   (fmt
    (>= 0.8.8))
+  logs
   (lwt
    (>= 5.3.0))
   (lwt_ppx
