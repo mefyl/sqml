@@ -27,18 +27,6 @@
    (and
     (>= 1.1.0)
     :with-test))
-  (caqti-driver-postgresql
-   (and
-    (>= 1.6.0)
-    :with-test))
-  (caqti-driver-sqlite3
-   (and
-    (= 1.6.0)
-    :with-test))
-  (caqti
-   (>= 1.6.0))
-  (caqti-lwt
-   (>= 1.6.0))
   ezjsonm
   (fmt
    (>= 0.8.8))
@@ -54,8 +42,6 @@
    (>= 0.8.5))
   (semver
    (>= 0.1.0))
-  (sqlite3
-   (>= 5.0.1))
   (timmy
    (and
     (>= 0.11.0)
@@ -65,9 +51,23 @@
  (name sqml-caqti)
  (synopsis "SQML Caqti backend engine.")
  (depends
+  (caqti-driver-postgresql
+   (and
+    (>= 1.6.0)
+    :with-test))
+  (caqti-driver-sqlite3
+   (and
+    (= 1.6.0)
+    :with-test))
+  (caqti
+   (>= 1.6.0))
+  (caqti-lwt
+   (>= 1.6.0))
   (schematic
    (and
     (>= 0.10.0)
     (< 0.11.0)))
+  (sqlite3
+   (>= 5.0.1))
   (sqml
    (= :version))))

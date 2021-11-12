@@ -11,10 +11,6 @@ depends: [
   "dune" {>= "2.8"}
   "acid" {>= "0.6.0" & < "0.7.0"}
   "alcotest-lwt" {>= "1.1.0" & with-test}
-  "caqti-driver-postgresql" {>= "1.6.0" & with-test}
-  "caqti-driver-sqlite3" {= "1.6.0" & with-test}
-  "caqti" {>= "1.6.0"}
-  "caqti-lwt" {>= "1.6.0"}
   "ezjsonm"
   "fmt" {>= "0.8.8"}
   "lwt" {>= "5.3.0"}
@@ -22,7 +18,6 @@ depends: [
   "ocamlformat" {= "0.17.0" & dev}
   "ptime" {>= "0.8.5"}
   "semver" {>= "0.1.0"}
-  "sqlite3" {>= "5.0.1"}
   "timmy" {>= "0.11.0" & < "0.12.0"}
   "odoc" {with-doc}
 ]
