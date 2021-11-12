@@ -9,3 +9,15 @@
     (cat %{opam})
     (echo
      "url {\n  src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml}\"\n}\n")))))
+
+(rule
+ (target sqml-caqti.%{version:sqml-caqti}.opam)
+ (deps
+  (:opam sqml-caqti.opam))
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (cat %{opam})
+    (echo
+     "url {\n  src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml-caqti}\"\n}\n")))))
