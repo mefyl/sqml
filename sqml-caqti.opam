@@ -13,7 +13,7 @@ depends: [
   "caqti-driver-sqlite3" {= "1.6.0" & with-test}
   "caqti" {>= "1.6.0"}
   "caqti-lwt" {>= "1.6.0"}
-  "schematic" {>= "0.10.0" & < "0.11.0"}
+  "schematic" {>= "0.11.0" & < "0.12.0"}
   "sqlite3" {>= "5.0.1"}
   "sqml" {= version}
   "odoc" {with-doc}
