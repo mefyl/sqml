@@ -28,6 +28,9 @@ module T1_meta = struct
 
   let constraints Expression.Column.List.[ _id; _name; _description ] = []
 
+  let primary Expression.Column.List.[ id; _name; _desc ] =
+    [ Sqml.Table.Primary { column = id } ]
+
   let indexes Expression.Column.List.[ id; _name; _desc ] =
     [
       Sqml.Table.

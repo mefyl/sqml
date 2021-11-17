@@ -23,8 +23,9 @@ module type Interface = sig
     end
 
     type ('t, 'tag) t = private {
-      selectable : string;
       name : string;
+      primary : bool;
+      selectable : string;
       type_ : 't Type.t;
     }
 

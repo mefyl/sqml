@@ -5,7 +5,11 @@ include Interface
 val traverse_ast : ast -> f:(ast -> ast) -> ast
 
 val make_column :
-  selectable:string -> name:string -> 't Column.Type.t -> ('t, 'tag) Column.t
+  name:string ->
+  primary:bool ->
+  selectable:string ->
+  't Column.Type.t ->
+  ('t, 'tag) Column.t
 
 val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
 

@@ -33,9 +33,10 @@ struct
             l Table.Column.List.t ->
             (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
           function
-          | Table.Column.List.({ name; type_; foreign_keys; _ } :: tl) ->
+          | Table.Column.List.({ foreign_keys; name; primary; type_; _ } :: tl)
+            ->
             let column =
-              Expression.make_column ~selectable:Meta.name ~name type_
+              Expression.make_column ~name ~primary ~selectable:Meta.name type_
             in
             let constraints =
               let f (Table.Column.Reference target) =
@@ -105,6 +106,8 @@ struct
       let to_ast () = Selectable.Selectable { alias = None; name }
 
       let constraints = Column.constraints @ Meta.constraints Column.columns
+
+      let primary = Meta.primary Column.columns
 
       let indexes = Meta.indexes Column.columns
     end
@@ -426,6 +429,13 @@ struct
 
       let constraints _ = []
 
+      let primary Expression.Column.List.[ major; minor; subminor; _ ] =
+        [
+          Table.Primary { column = major };
+          Table.Primary { column = minor };
+          Table.Primary { column = subminor };
+        ]
+
       let indexes _ = []
     end
 
@@ -455,14 +465,18 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
     List.map ~f:(fun { name; type_; _ } -> Fmt.str "%s %s" name type_) columns
   in
   let definitions =
-    match List.filter ~f:(fun c -> c.primary) columns with
+    match T.primary with
     | [] -> definitions
     | primary ->
       definitions
       @ [
           Fmt.(
             str "PRIMARY KEY (%a)"
-              (hbox @@ list ~sep:comma (using (fun c -> c.name) string))
+              (hbox
+              @@ list ~sep:comma
+                   (using
+                      (fun (Table.Primary { column }) -> column.name)
+                      string))
               primary);
         ]
   and table_name = Dialect.table_name ?schema:T.Meta.schema T.Meta.name in

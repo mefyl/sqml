@@ -69,6 +69,11 @@ type ordering =
   | Ascending
   | Descending
 
+type 'tag primary_column =
+  | Primary : { column : ('t, 'tag) Expression.Column.t } -> 'tag primary_column
+
+type 'tag primary = 'tag primary_column list
+
 type 'tag index_column =
   | Index : {
       column : ('t, 'tag) Expression.Column.t;
@@ -119,6 +124,8 @@ module type META = sig
   val constraints :
     (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
 
+  val primary : (columns, 'tag) Expression.Column.List.t -> 'tag primary
+
   val indexes : (columns, 'tag) Expression.Column.List.t -> 'tag index list
 end
 
@@ -146,6 +153,14 @@ struct
 
   let constraints _ = []
 
+  let primary columns =
+    Expression.Column.List.filter_map
+      ~f:
+        {
+          f = (fun column -> Option.some_if column.primary (Primary { column }));
+        }
+      columns
+
   let indexes _ = []
 end
 
@@ -155,6 +170,8 @@ module type S = sig
   include S' with module Meta := Meta
 
   val constraints : tag constraint_ list
+
+  val primary : tag primary
 
   val indexes : tag index list
 end

@@ -23,8 +23,9 @@ module Column = struct
   end
 
   type ('t, 'tag) t = {
-    selectable : string;
     name : string;
+    primary : bool;
+    selectable : string;
     type_ : 't Type.t;
   }
 
@@ -262,7 +263,8 @@ let case_else cases default =
 
 let now = (Type.Time, Funcall { name = "NOW"; args = [] })
 
-let make_column ~selectable ~name type_ = Column.{ selectable; name; type_ }
+let make_column ~name ~primary ~selectable type_ =
+  Column.{ name; primary; selectable; type_ }
 
 let coalesce = function
   | [] -> null
@@ -274,7 +276,7 @@ let coalesce_default args default =
   let args = Base.List.map ~f:snd args in
   (to_type default, Funcall { args = args @ [ snd default ]; name = "COALESCE" })
 
-let column Column.{ name; selectable; type_ } =
+let column Column.{ name; selectable; type_; _ } =
   (Type.of_column_type type_, Column { name; selectable })
 
 let map ~decode ~encode (type_, v) =
