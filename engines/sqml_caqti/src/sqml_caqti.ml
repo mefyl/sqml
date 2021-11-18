@@ -47,7 +47,7 @@ module Make (Model : Model.S) = struct
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
     | Float -> Fmt.float
     | Int -> Fmt.int
-    | Json -> using Schematic.Json.to_string pp_literal_string
+    | Json -> using Ezjsonm.(value_to_string ~minify:true) pp_literal_string
     | Null -> Fmt.(const string "NULL")
     | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
     | String -> pp_literal_string
@@ -277,10 +277,13 @@ module Make (Model : Model.S) = struct
     | Float -> Caqti_type.float
     | Int -> Caqti_type.int
     | Json ->
-      Caqti_type.(
-        custom
-          ~encode:(Fn.compose Result.return Schematic.Json.to_string)
-          ~decode:Schematic.Json.of_string string)
+      let encode json =
+        Result.return (Ezjsonm.value_to_string ~minify:true json)
+      and decode string =
+        try Result.return (Ezjsonm.value_from_string string) with
+        | Ezjsonm.Parse_error (_, error) -> Result.fail error
+      in
+      Caqti_type.(custom ~encode ~decode string)
     | Null -> failwith "FIXME"
     | Nullable t -> Caqti_type.option (type_of_type t)
     | String -> Caqti_type.string
