@@ -9,7 +9,7 @@ open Let.Syntax' (Lwt)
 module Make (Model : Model.S) = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
 
-  type transaction = (module Caqti_lwt.CONNECTION)
+  type transaction = (module Caqti_lwt.CONNECTION) Lwt_guarded.t
 
   let quote_pattern = String.Search_pattern.create "'"
 
@@ -522,66 +522,67 @@ module Make (Model : Model.S) = struct
     in
     pp
 
-  let query
-      (module C : Caqti_lwt.CONNECTION)
-      (type res arity)
-      (query : (res, arity) Model.Query.t) :
+  let query transaction (type res arity) (query : (res, arity) Model.Query.t) :
       ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
-    let collect query =
-      let f response =
-        let f stream =
-          Lwt.bind (stream ()) ~f:(function
-            | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-            | Error e -> Lwt_result.fail e |> error
-            | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-        and init = C.Response.to_stream response in
-        Lwt_result.return @@ Sqml.Model.Many (Sequence.unfold_step ~init ~f)
+    let f (module C : Caqti_lwt.CONNECTION) =
+      let collect query =
+        let f response =
+          let f stream =
+            Lwt.bind (stream ()) ~f:(function
+              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+              | Error e -> Lwt_result.fail e |> error
+              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+          and init = C.Response.to_stream response in
+          Lwt_result.return @@ Sqml.Model.Many (Sequence.unfold_step ~init ~f)
+        in
+        C.call ~f query ()
       in
-      C.call ~f query ()
+      let query_str =
+        Fmt.str "%a" (pp_query @@ dialect_of_driver_info C.driver_info) query
+      in
+      let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+      let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
+        match query with
+        | Delete _ ->
+          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let+ () = C.exec query () in
+          Sqml.Model.Zero
+        | Delete_returning { returning; _ } ->
+          let query =
+            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+              query_str
+          in
+          collect query
+        | Select { what; _ } ->
+          let query =
+            Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
+          in
+          collect query
+        | Insert _ ->
+          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let+ () = C.exec query () in
+          Sqml.Model.Zero
+        | Insert_returning { returning; _ } ->
+          let query =
+            Caqti_request.find Caqti_type.unit (type_of_expr returning)
+              query_str
+          in
+          let+ res = C.find query () in
+          Sqml.Model.One res
+        | Update _ ->
+          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let+ () = C.exec query () in
+          Sqml.Model.Zero
+        | Update_returning { returning; _ } ->
+          let query =
+            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
+              query_str
+          in
+          collect query
+      in
+      res |> error
     in
-    let query_str =
-      Fmt.str "%a" (pp_query @@ dialect_of_driver_info C.driver_info) query
-    in
-    let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
-    let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
-      match query with
-      | Delete _ ->
-        let query = Caqti_request.exec Caqti_type.unit query_str in
-        let+ () = C.exec query () in
-        Sqml.Model.Zero
-      | Delete_returning { returning; _ } ->
-        let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-            query_str
-        in
-        collect query
-      | Select { what; _ } ->
-        let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
-        in
-        collect query
-      | Insert _ ->
-        let query = Caqti_request.exec Caqti_type.unit query_str in
-        let+ () = C.exec query () in
-        Sqml.Model.Zero
-      | Insert_returning { returning; _ } ->
-        let query =
-          Caqti_request.find Caqti_type.unit (type_of_expr returning) query_str
-        in
-        let+ res = C.find query () in
-        Sqml.Model.One res
-      | Update _ ->
-        let query = Caqti_request.exec Caqti_type.unit query_str in
-        let+ () = C.exec query () in
-        Sqml.Model.Zero
-      | Update_returning { returning; _ } ->
-        let query =
-          Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-            query_str
-        in
-        collect query
-    in
-    res |> error
+    Lwt_guarded.acquire ~f transaction
 
   module Hlist_printers = Hlist.Make (struct
     type 'a t = 'a Fmt.t
@@ -640,46 +641,59 @@ module Make (Model : Model.S) = struct
       let prepared =
         Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) values ->
+      fun transaction values ->
         let* () =
           Log.debug (fun m ->
               m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
         and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
-        let+ () = C.exec prepared (Hlist.to_pairs values) |> error in
+        let+ () =
+          let f (module C : Caqti_lwt.CONNECTION) =
+            C.exec prepared (Hlist.to_pairs values) |> error
+          in
+          Lwt_guarded.acquire ~f transaction
+        in
         Sqml.Model.Zero
     | One ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.one
           prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) values ->
+      fun transaction values ->
         let* () =
           Log.debug (fun m ->
               m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
         and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
-        let+ res = C.find prepared (Hlist.to_pairs values) |> error in
+        let+ res =
+          let f (module C : Caqti_lwt.CONNECTION) =
+            C.find prepared (Hlist.to_pairs values) |> error
+          in
+          Lwt_guarded.acquire ~f transaction
+        in
         Sqml.Model.One res
     | Many ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
           prepare_str
       in
-      fun (module C : Caqti_lwt.CONNECTION) values ->
+      fun transaction values ->
         let* () =
           Log.debug (fun m ->
               m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
         and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
         let+ res =
-          let f response =
-            let f stream =
-              Lwt.bind (stream ()) ~f:(function
-                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-                | Error e -> Lwt_result.fail e |> error
-                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-            and init = C.Response.to_stream response in
-            Lwt_result.return @@ Sequence.unfold_step ~init ~f
+          let f (module C : Caqti_lwt.CONNECTION) =
+            let f response =
+              let f stream =
+                Lwt.bind (stream ()) ~f:(function
+                  | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                  | Error e -> Lwt_result.fail e |> error
+                  | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+              and init = C.Response.to_stream response in
+              Lwt_result.return @@ Sequence.unfold_step ~init ~f
+            in
+            C.call ~f prepared (Hlist.to_pairs values) |> error
           in
-          C.call ~f prepared (Hlist.to_pairs values) |> error
+          Lwt_guarded.acquire ~f transaction
         in
         Sqml.Model.Many res
 
@@ -688,7 +702,7 @@ module Make (Model : Model.S) = struct
       let module C = (val c : Caqti_lwt.CONNECTION) in
       let* () = C.start () in
       let f () =
-        f c >>=: function
+        f (Lwt_guarded.make c) >>=: function
         | Result.Error e ->
           let* () = C.rollback () in
           Lwt_result.fail (`Shitty_api e)
