@@ -95,10 +95,24 @@ struct
         type nonrec 't t = ('t, tag) t
 
         type nonrec 't column = ('t, tag) Column.t
+
+        module List = struct
+          include List
+
+          type 't t = ('t, tag) List.t
+
+          type 't value = ('t, tag) List.value
+        end
       end
 
       let all =
         let columns = Expression.(of_list columns) in
+        Expression.map
+          ~decode:(fun v -> Result.return (Meta.map v))
+          ~encode:Meta.unmap columns
+
+      let make columns =
+        let columns = Expression.of_list columns in
         Expression.map
           ~decode:(fun v -> Result.return (Meta.map v))
           ~encode:Meta.unmap columns
