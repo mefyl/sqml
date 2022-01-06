@@ -72,6 +72,8 @@ module Make (Model : Model.S) = struct
       | Infix { op; lhs; rhs } ->
         let fmt = const pp lhs ++ sp ++ const string op ++ sp ++ const pp rhs in
         fmt f ()
+      | Is_null ast -> (pp ++ sp ++ const string "IS NULL") f ast
+      | Is_not_null ast -> (pp ++ sp ++ const string "IS NOT NULL") f ast
       | List l -> list ~sep:comma pp f l
       | Null -> Fmt.string f "NULL"
       | Switch { cases; default } ->
@@ -370,8 +372,9 @@ module Make (Model : Model.S) = struct
        fun f -> function
         | Expression.None -> ()
         | Some e ->
-          Fmt.(sp ++ const string "RETURNING" ++ sp ++ pp_expression)
-            f (Expression.to_ast e)
+          Fmt.(
+            (sp ++ const string "RETURNING" ++ sp ++ box pp_expression)
+              f (Expression.to_ast e))
       in
       let pp_insert
           (type mapped res tag)
@@ -467,8 +470,7 @@ module Make (Model : Model.S) = struct
         pp_insert into { excluded } on_conflict Expression.None
           Expression.(to_ast value)
       | Insert_returning { excluded; into; on_conflict; returning; value } ->
-        pp_insert into { excluded } on_conflict
-          Expression.(Some returning)
+        pp_insert into { excluded } on_conflict (Some returning)
           Expression.(to_ast value)
       | Select { for_; from; what; where } ->
         let pp_for f =

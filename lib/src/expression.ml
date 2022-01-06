@@ -116,6 +116,8 @@ type ast =
       rhs : ast;
     }
       -> ast
+  | Is_null : ast -> ast
+  | Is_not_null : ast -> ast
   | List : ast list -> ast
   | Null : ast
   | Switch : {
@@ -136,6 +138,8 @@ let traverse_ast ast ~f =
       Funcall { pl with args = List.map ~f:traverse_ast args }
     | Infix ({ lhs; rhs; _ } as pl) ->
       Infix { pl with lhs = traverse_ast lhs; rhs = traverse_ast rhs }
+    | Is_null ast -> Is_null (traverse_ast ast)
+    | Is_not_null ast -> Is_not_null (traverse_ast ast)
     | List elts -> List (List.map ~f:traverse_ast elts)
     | Switch { cases; default } ->
       Switch
@@ -205,6 +209,10 @@ let to_list = function
 let const type_ value = (type_, Const { type_; value })
 
 let null = (Type.Null, Null)
+
+let is_null (_, v) = (Type.Bool, Is_null v)
+
+let is_not_null (_, v) = (Type.Bool, Is_not_null v)
 
 let some (t, v) = (Type.Nullable t, v)
 
@@ -285,28 +293,12 @@ let map ~decode ~encode (type_, v) =
   (type_, v)
 
 let map_name f (t, v) =
-  let rec map_name = function
+  let f = function
     | Column ({ selectable; _ } as pl) ->
       Column { pl with selectable = f selectable }
-    | Infix ({ lhs; rhs; _ } as pl) ->
-      Infix { pl with lhs = map_name lhs; rhs = map_name rhs }
-    | Const _ as e -> e
-    | Funcall ({ args; _ } as pl) ->
-      Funcall { pl with args = Base.List.map ~f:map_name args }
-    | List l -> List (Base.List.map ~f:map_name l)
-    | Switch { cases; default } ->
-      Switch
-        {
-          cases =
-            Base.List.map
-              ~f:(fun (cond, value) -> (map_name cond, map_name value))
-              cases;
-          default = Option.map ~f:map_name default;
-        }
-    | Null as e -> e
-    | Var _ as e -> e
+    | ast -> ast
   in
-  (t, map_name v)
+  (t, traverse_ast ~f v)
 
 type 'tag assignment =
   | Set : {

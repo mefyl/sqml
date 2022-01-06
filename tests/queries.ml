@@ -366,6 +366,34 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
+  let is_null db =
+    let* () = populate db in
+    let* (Many res) =
+      let q =
+        Model.select
+          ~from:(module Model.T1)
+          Sqml.Expression.(
+            of_list
+              [ is_null Model.T1.description; is_not_null Model.T1.description ])
+      in
+      Engine.query db q
+    in
+    let* res =
+      Sequence.(
+        res
+        |> map ~f:(fun Hlist.[ l; r ] -> Lwt_result.return (l, r))
+        |> to_list)
+    in
+    let () =
+      Alcotest.(
+        check
+          (list (pair bool bool))
+          "null values"
+          [ (true, false); (false, true); (false, true) ]
+          res)
+    in
+    Lwt_result.return ()
+
   let prepared db =
     let get Sqml.Expression.List.[ id ] =
       Model.select
@@ -577,6 +605,7 @@ let () =
              test_case "update" Caqti_test.update;
              test_case "update_from" Caqti_test.update_from;
              test_case_db "timestamp" Caqti_test.timestamp;
+             test_case "is_null" Caqti_test.is_null;
              test_case "json" Caqti_test.json;
              test_case "conflict" @@ Caqti_test.conflict true;
              test_case_db "versioning-stable" Caqti_test.Versioning.stable;

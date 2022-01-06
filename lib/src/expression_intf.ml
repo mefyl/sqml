@@ -82,6 +82,8 @@ module type Interface = sig
         rhs : ast;
       }
         -> ast
+    | Is_null : ast -> ast
+    | Is_not_null : ast -> ast
     | List : ast list -> ast
     | Null : ast
     | Switch : {
@@ -139,6 +141,10 @@ module type Interface = sig
     ('t, 'tag) t
 
   val null : (_ Option.t, 'tag) t
+
+  val is_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
+
+  val is_not_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
 
   val some : ('t, 'tag) t -> ('t Option.t, 'tag) t
 
