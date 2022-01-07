@@ -101,20 +101,10 @@ module Make (Model : Model.S) = struct
       | `Pgsql -> Fmt.str "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
-  let nullable : type t. t Expression.Column.Type.t -> bool = function
-    | Nullable _ -> true
-    | _ -> false
-
   let string_of_type info t =
-    let type_ =
-      match Caqti_driver_info.dialect_tag info with
-      | `Sqlite -> Dialect.Sqlite.string_of_type t
-      | _ -> Dialect.Postgresql.string_of_type t
-    in
-    if nullable t then
-      Fmt.str "%s NULL" type_
-    else
-      Fmt.str "%s NOT NULL" type_
+    match Caqti_driver_info.dialect_tag info with
+    | `Sqlite -> Dialect.Sqlite.string_of_type t
+    | _ -> Dialect.Postgresql.string_of_type t
 
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt

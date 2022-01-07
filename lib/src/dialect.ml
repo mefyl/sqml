@@ -1,6 +1,21 @@
 include Dialect_intf
 
-module Postgresql : S = struct
+let nullable : type t. t Expression.Column.Type.t -> bool = function
+  | Nullable _ -> true
+  | _ -> false
+
+module Make (D : S) = struct
+  include D
+
+  let string_of_type t =
+    let type_ = string_of_type t in
+    if nullable t then
+      type_
+    else
+      Fmt.str "%s NOT NULL" type_
+end
+
+module Postgresql : S = Make (struct
   let table_name ?schema name =
     match schema with
     | None -> Fmt.str "%S" name
@@ -23,11 +38,11 @@ module Postgresql : S = struct
       | Varchar len -> Fmt.str "VARCHAR(%i)" len
     in
     f t
-end
+end)
 
 let postgresql = (module Postgresql : S)
 
-module Sqlite : S = struct
+module Sqlite : S = Make (struct
   include Postgresql
 
   let table_name ?schema name =
@@ -46,6 +61,6 @@ module Sqlite : S = struct
       | t -> string_of_type t
     in
     f t
-end
+end)
 
 let sqlite = (module Sqlite : S)
