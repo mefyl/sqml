@@ -35,10 +35,6 @@
    (>= 5.3.0))
   (lwt_ppx
    (>= 2.0.0))
-  (ocamlformat
-   (and
-    (= 0.17.0)
-    :dev))
   (ptime
    (>= 0.8.5))
   (semver
