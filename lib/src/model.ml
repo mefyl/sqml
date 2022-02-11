@@ -8,11 +8,9 @@ struct
   let version = Meta.version
 
   type tag = unit
-
   type t = { mutable tables : (module Table.S) Array.t }
 
   let v = { tables = [||] }
-
   let tables () = v.tables
 
   module BindTable (Meta : Table.META) = struct
@@ -93,14 +91,12 @@ struct
         include Expression
 
         type nonrec 't t = ('t, tag) t
-
         type nonrec 't column = ('t, tag) Column.t
 
         module List = struct
           include List
 
           type 't t = ('t, tag) List.t
-
           type 't value = ('t, tag) List.value
         end
       end
@@ -118,11 +114,8 @@ struct
           ~encode:Meta.unmap columns
 
       let to_ast () = Selectable.Selectable { alias = None; name }
-
       let constraints = Column.constraints @ Meta.constraints Column.columns
-
       let primary = Meta.primary Column.columns
-
       let indexes = Meta.indexes Column.columns
     end
 
@@ -133,9 +126,7 @@ struct
 
   module type JOIN = sig
     include Selectable.S
-
     module L : Selectable.S with type model = model
-
     module R : Selectable.S with type model = model
   end
 
@@ -143,7 +134,6 @@ struct
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
   end
 
@@ -151,7 +141,6 @@ struct
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
@@ -159,7 +148,6 @@ struct
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
   end
 
@@ -167,7 +155,6 @@ struct
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
@@ -210,7 +197,6 @@ struct
         RIGHT_OUTER_JOIN with type model = tag and module L = L and module R = R
 
       type model = tag
-
       type tag = unit
 
       module L = L
@@ -383,14 +369,10 @@ struct
   let update_returning into ?where ~returning what =
     Query.Update_returning { from = None; into; returning; what; where }
 
-  let update_from_returning
-      (type from)
-      into
+  let update_from_returning (type from) into
       ~from:
         (module From : Selectable.S with type model = tag and type tag = from)
-      ?where
-      ~returning
-      what =
+      ?where ~returning what =
     let rename name = "from_" ^ name in
     let map e = Expression.map_name rename e in
     let from =
@@ -420,15 +402,10 @@ struct
       type mapped = t
 
       let schema = Some "sqml"
-
       let name = "metadata"
-
       let major = Table.Column.(make "major" Type.Int)
-
       let minor = Table.Column.(make "minor" Type.Int)
-
       let subminor = Table.Column.(make "subminor" Type.Int)
-
       let migrated = Table.Column.(make "migrated" Type.Time)
 
       type columns = int * (int * (int * (Timmy.Time.t * unit)))
@@ -524,9 +501,7 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
       let f = function
         | Table.Index { column; order } ->
           let order =
-            match order with
-            | Ascending -> "ASC"
-            | Descending -> "DESC"
+            match order with Ascending -> "ASC" | Descending -> "DESC"
           in
           Fmt.str "%s %s" column.name order
       in

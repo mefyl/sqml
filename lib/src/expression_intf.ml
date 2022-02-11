@@ -56,7 +56,6 @@ module type Interface = sig
     module List : Hlist.S with type 't value = 't t
 
     val of_column_type : 't Column.Type.t -> 't t
-
     val pp : 't t Fmt.t
   end
 
@@ -106,9 +105,7 @@ module type Interface = sig
     ((bool, 'tag) t * ('t, 'tag) t) list -> ('t, 'tag) t -> ('t, 'tag) t
 
   val now : (Timmy.Time.t, 'tag) t
-
   val to_ast : ('t, 'tag) t -> ast
-
   val to_type : ('t, 'tag) t -> 't Type.t
 
   type ('t, 'tag) option =
@@ -122,16 +119,13 @@ module type Interface = sig
   module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
   val of_list : ('l, 'tag) List.t -> ('l Hlist.t, 'tag) t
-
   val to_list : ('l Hlist.t, 'tag) t -> ('l, 'tag) List.t
-
   val coalesce : ('t Option.t, 'tag) t list -> ('t Option.t, 'tag) t
 
   val coalesce_default :
     ('t Option.t, 'tag) t list -> ('t, 'tag) t -> ('t, 'tag) t
 
   val column : ('t, 'tag) Column.t -> ('t, 'tag) t
-
   val const : 't Type.t -> 't -> ('t, 'tag) t
 
   val map :
@@ -141,11 +135,8 @@ module type Interface = sig
     ('t, 'tag) t
 
   val null : (_ Option.t, 'tag) t
-
   val is_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
-
   val is_not_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
-
   val some : ('t, 'tag) t -> ('t Option.t, 'tag) t
 
   (* FIXME: private *)
@@ -153,25 +144,15 @@ module type Interface = sig
 
   module Infix : sig
     val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
-
     val ( := ) : ('t, 'tag) Column.t -> ('t, 'tag) t -> 'tag assignment
-
     val ( < ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
     val ( <= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
     val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
     val ( > ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
     val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
-
     val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
-
     val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
-
     val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
-
     val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   end
 

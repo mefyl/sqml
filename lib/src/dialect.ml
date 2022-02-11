@@ -9,10 +9,7 @@ module Make (D : S) = struct
 
   let string_of_type t =
     let type_ = string_of_type t in
-    if nullable t then
-      type_
-    else
-      Fmt.str "%s NOT NULL" type_
+    if nullable t then type_ else Fmt.str "%s NOT NULL" type_
 end
 
 module Postgresql : S = Make (struct
@@ -55,9 +52,7 @@ module Sqlite : S = Make (struct
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.t -> string = function
       | Custom { repr; _ } -> f repr
-      | Date
-      | Time ->
-        "TEXT"
+      | Date | Time -> "TEXT"
       | t -> string_of_type t
     in
     f t

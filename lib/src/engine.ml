@@ -4,7 +4,6 @@ type error = [ `Sqml_engine of string ]
 
 module type S = sig
   type t
-
   type transaction
 
   module Model : Model.S

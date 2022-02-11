@@ -1,7 +1,5 @@
 open Sqml.Utils
-
 open Let.Syntax2 (Lwt_result)
-
 module Sequence = Sqml.Utils.Sequence
 
 module Alcotest = struct
@@ -41,7 +39,6 @@ let convert_error =
   Result.map_error ~f
 
 let t1 = Alcotest.(testable Model.T1.pp Model.T1.equal)
-
 let t2 = Alcotest.(testable Model.T2.pp Model.T2.equal)
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
@@ -361,8 +358,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
             check (option string) "updated row description" (Some "3")
               description)
         | _ -> Alcotest.fail "wrong number of lines"
-      else
-        Lwt_result.return ()
+      else Lwt_result.return ()
     in
     Lwt_result.return ()
 
@@ -546,8 +542,8 @@ let () =
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
              test_case "json" @@ make Caqti_test.json;
              test_case "versioning-stable"
-             @@ make_db Caqti_test.Versioning.stable;
-             (* test_case "prepared" @@ make Caqti_test.prepared; *)
+             @@ make_db Caqti_test.Versioning.stable
+             (* test_case "prepared" @@ make Caqti_test.prepared; *);
            ] );
          ( "Caqti-PostgreSQL",
            let make_db db test switch () =

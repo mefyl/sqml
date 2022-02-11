@@ -2,21 +2,17 @@ open Acid
 
 module type META' = sig
   val schema : string option
-
   val name : string
 
   type columns
-
   type mapped
 
   val map : columns Hlist.t -> mapped
-
   val unmap : mapped -> columns Hlist.t
 end
 
 module type S' = sig
   include Selectable.S
-
   module Meta : META'
 
   module Column : sig
@@ -26,23 +22,19 @@ module type S' = sig
   end
 
   val const : Meta.mapped -> (Meta.mapped, _) Expression.t
-
   val column_types : Meta.columns Expression.Type.List.t
-
   val type_ : Meta.mapped Expression.Type.t
 
   module Expression : sig
     include module type of Expression
 
     type 't t = ('t, tag) Expression.t
-
     type 't column = ('t, tag) Expression.Column.t
 
     module List : sig
       include module type of List
 
       type 't t = ('t, tag) List.t
-
       type 't value = ('t, tag) List.value
     end
 
@@ -50,7 +42,6 @@ module type S' = sig
   end
 
   val all : Meta.mapped Expression.t
-
   val make : Meta.columns Expression.List.t -> Meta.mapped Expression.t
 end
 
@@ -137,7 +128,6 @@ module type META = sig
     (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
 
   val primary : (columns, 'tag) Expression.Column.List.t -> 'tag primary
-
   val indexes : (columns, 'tag) Expression.Column.List.t -> 'tag index list
 end
 
@@ -150,7 +140,6 @@ module Meta (Minimal : sig
 end) =
 struct
   let schema = None
-
   let name = Minimal.name
 
   type columns = Minimal.columns
@@ -160,9 +149,7 @@ struct
   type mapped = columns Hlist.t
 
   let map v = v
-
   let unmap v = v
-
   let constraints _ = []
 
   let primary columns =
@@ -178,13 +165,10 @@ end
 
 module type S = sig
   module Meta : META
-
   include S' with module Meta := Meta
 
   val constraints : tag constraint_ list
-
   val primary : tag primary
-
   val indexes : tag index list
 end
 

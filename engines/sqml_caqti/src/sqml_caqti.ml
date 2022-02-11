@@ -1,14 +1,11 @@
 open Sqml
 open Utils
 module Array = Array.Monadic2 (Lwt_result)
-
 open Let.Syntax2 (Lwt_result)
-
 open Let.Syntax' (Lwt)
 
 module Make (Model : Model.S) = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
-
   type transaction = (module Caqti_lwt.CONNECTION) Lwt_guarded.t
 
   let quote_pattern = String.Search_pattern.create "'"
@@ -120,9 +117,7 @@ module Make (Model : Model.S) = struct
   let column_map (f : 'res column_mapper) =
     let rec map : type t. t Column.List.t -> 'res list = function
       | Column.List.(column :: tl) -> (
-        match f.f column with
-        | Some value -> value :: map tl
-        | None -> map tl)
+        match f.f column with Some value -> value :: map tl | None -> map tl)
       | [] -> []
     in
     map
@@ -134,12 +129,7 @@ module Make (Model : Model.S) = struct
     column_map { f } columns
 
   and primary columns =
-    let f { Column.name; primary; _ } =
-      if primary then
-        Some name
-      else
-        None
-    in
+    let f { Column.name; primary; _ } = if primary then Some name else None in
     column_map { f } columns
 
   let make ?max_size uri =
@@ -176,9 +166,8 @@ module Make (Model : Model.S) = struct
                   DESC LIMIT 1"
                  (table_name i (Some "sqml") "metadata")
                  (if Poly.(Caqti_driver_info.dialect_tag i = `Sqlite) then
-                   "datetime(migrated)"
-                 else
-                   "migrated"))
+                  "datetime(migrated)"
+                 else "migrated"))
           in
           let* major, minor, subminor, _ = C.find query () in
           let current = (major, minor, subminor) in
@@ -243,10 +232,8 @@ module Make (Model : Model.S) = struct
         fail "model version mismatch: code at %s, data at %s"
           (Semver.to_string Model.version)
           (Semver.to_string current)
-      else
-        Lwt_result.return { pool }
-    else
-      fail "backend does not support transactions"
+      else Lwt_result.return { pool }
+    else fail "backend does not support transactions"
 
   let close { pool } = Caqti_lwt.Pool.drain pool
 
@@ -272,8 +259,8 @@ module Make (Model : Model.S) = struct
       let encode json =
         Result.return (Ezjsonm.value_to_string ~minify:true json)
       and decode string =
-        try Result.return (Ezjsonm.value_from_string string) with
-        | Ezjsonm.Parse_error (_, error) -> Result.fail error
+        try Result.return (Ezjsonm.value_from_string string)
+        with Ezjsonm.Parse_error (_, error) -> Result.fail error
       in
       Caqti_type.(custom ~encode ~decode string)
     | Null -> failwith "FIXME"
@@ -366,16 +353,14 @@ module Make (Model : Model.S) = struct
             (sp ++ const string "RETURNING" ++ sp ++ box pp_expression)
               f (Expression.to_ast e))
       in
-      let pp_insert
-          (type mapped res tag)
+      let pp_insert (type mapped res tag)
           (module T : Table.S
             with type model = Model.tag
              and type tag = tag
              and type Meta.mapped = mapped)
           ({ excluded } : tag Sqml.Model.excluded)
           (on_conflict : tag Sqml.Model.on_conflict option)
-          (returning : (res, tag) Expression.option)
-          value =
+          (returning : (res, tag) Expression.option) value =
         let conflict_sqlite, conflict_pg =
           let open Fmt in
           match (dialect, on_conflict) with
@@ -401,9 +386,7 @@ module Make (Model : Model.S) = struct
                    (column_map { f } T.Meta.columns) )
           | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
           | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
-          | `Sqlite, Some (Set _)
-          | `Mysql, _ ->
-            failwith "dialect not handled"
+          | `Sqlite, Some (Set _) | `Mysql, _ -> failwith "dialect not handled"
         in
         (* Explicitely enumerate columns order on insertion, migration that add
            columns subsequently mess up the column ordering. *)
@@ -414,14 +397,12 @@ module Make (Model : Model.S) = struct
                ~f:{ f = (fun { name; _ } -> name) }
                T.Meta.columns)
             pp_expression value conflict_pg () pp_returning returning)
-      and pp_update
-          (type res tag from)
+      and pp_update (type res tag from)
           (module T : Table.S with type model = Model.tag and type tag = tag)
           (what : tag Expression.assignment list)
           (from :
             (module Selectable.S with type model = Model.tag and type tag = from)
-            option)
-          (where : (bool, tag) Expression.t option)
+            option) (where : (bool, tag) Expression.t option)
           (returning : (res, tag) Expression.option) =
         let from =
           match from with
@@ -483,8 +464,7 @@ module Make (Model : Model.S) = struct
             let module From = (val from) in
             forable (From.to_ast ())
           and pp_forable f forable =
-            if List.for_all ~f:snd forable then
-              ()
+            if List.for_all ~f:snd forable then ()
             else
               Fmt.pf f " OF %a" (list ~sep:comma string)
               @@ List.filter_map
@@ -599,9 +579,7 @@ module Make (Model : Model.S) = struct
     in
     const string "[" ++ sp ++ print printers ++ sp ++ const string "]"
 
-  let prepare
-      (type args res arity)
-      (types : args Expression.Type.List.t)
+  let prepare (type args res arity) (types : args Expression.Type.List.t)
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       transaction ->
       args Hlist.t ->

@@ -154,7 +154,6 @@ let traverse_ast ast ~f =
   traverse_ast ast
 
 let to_ast (_, ast) = ast
-
 let to_type (t, _) = t
 
 type ('t, 'tag) t = 't Type.t * ast
@@ -207,13 +206,9 @@ let to_list = function
   | _ -> Fmt.failwith "unreachable A"
 
 let const type_ value = (type_, Const { type_; value })
-
 let null = (Type.Null, Null)
-
 let is_null (_, v) = (Type.Bool, Is_null v)
-
 let is_not_null (_, v) = (Type.Bool, Is_not_null v)
-
 let some (t, v) = (Type.Nullable t, v)
 
 let rec type_arity : type t. t Type.t -> int = function
@@ -221,16 +216,7 @@ let rec type_arity : type t. t Type.t -> int = function
   | [] -> 0
   | hd :: tl -> type_arity hd + type_arity tl
   | Nullable t -> type_arity t
-  | Bigint
-  | Bool
-  | Date
-  | Float
-  | Int
-  | Json
-  | Null
-  | String
-  | Time ->
-    1
+  | Bigint | Bool | Date | Float | Int | Json | Null | String | Time -> 1
 
 let prepare (type args) (types : args Type.List.t) : (args, 'free) List.t =
   let f index t =
@@ -311,29 +297,17 @@ let assignment_to_ast (Set { column; value = _, ast }) = (column.name, ast)
 
 module Infix = struct
   let arithmetics op (_, lhs) (_, rhs) = (Type.Int, Infix { op; lhs; rhs })
-
   let logic op (_, lhs) (_, rhs) = (Type.Bool, Infix { op; lhs; rhs })
-
   let ( && ) lhs rhs = logic "AND" lhs rhs
-
   let ( := ) column value = Set { column; value }
-
   let ( < ) lhs rhs = logic "<" lhs rhs
-
   let ( <= ) lhs rhs = logic "<=" lhs rhs
-
   let ( = ) lhs rhs = logic "=" lhs rhs
-
   let ( > ) lhs rhs = logic ">" lhs rhs
-
   let ( >= ) lhs rhs = logic ">=" lhs rhs
-
   let ( ^ ) (_, lhs) (_, rhs) = (Type.String, Infix { op = "||"; lhs; rhs })
-
   let ( || ) = logic "OR"
-
   let ( + ) lhs rhs = arithmetics "+" lhs rhs
-
   let ( - ) lhs rhs = arithmetics "-" lhs rhs
 end
 

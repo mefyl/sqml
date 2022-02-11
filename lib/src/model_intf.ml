@@ -1,9 +1,7 @@
 open Utils
 
 type many = Many
-
 type one = One
-
 type zero = Zero
 
 type _ arity =
@@ -45,9 +43,7 @@ module type S = sig
 
   module type JOIN = sig
     include Selectable.S
-
     module L : Selectable.S with type model = model
-
     module R : Selectable.S with type model = model
   end
 
@@ -55,7 +51,6 @@ module type S = sig
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
   end
 
@@ -63,7 +58,6 @@ module type S = sig
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
@@ -71,7 +65,6 @@ module type S = sig
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t, tag) Expression.t
   end
 
@@ -79,7 +72,6 @@ module type S = sig
     include JOIN
 
     val left : ('t, L.tag) Expression.t -> ('t Option.t, tag) Expression.t
-
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
@@ -101,11 +93,8 @@ module type S = sig
     include INNER
 
     val on : (bool, tag) Expression.t -> (module INNER)
-
     val outer_on : (bool, tag) Expression.t -> (module OUTER)
-
     val left_on : (bool, tag) Expression.t -> (module LEFT_OUTER)
-
     val right_on : (bool, tag) Expression.t -> (module RIGHT_OUTER)
   end
 

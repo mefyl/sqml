@@ -5,5 +5,4 @@ module Make (Meta : sig
 end) : S
 
 val table_schema : Dialect.t -> _ Table.t -> string list
-
 val schema : Dialect.t -> t -> string list
