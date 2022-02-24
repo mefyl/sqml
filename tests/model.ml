@@ -2,7 +2,7 @@ open Sqml
 open Utils
 
 include Sqml.Model.Make (struct
-  let version = (0, 0, 0)
+  let version = Option.value_exn (Semver.from_parts 0 0 0 [] [])
 end)
 
 module T1_meta = struct

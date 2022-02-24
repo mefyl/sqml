@@ -12,5 +12,5 @@
   lwt
   ptime
   ptime.clock.os
-  semver
+  semver2
   timmy))

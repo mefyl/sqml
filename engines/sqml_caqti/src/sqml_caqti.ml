@@ -139,8 +139,7 @@ module Make (Model : Model.S) = struct
     in
     let create (module C : Caqti_lwt.CONNECTION) =
       let i = C.driver_info in
-      if not @@ Caqti_driver_info.can_transact i then
-        Lwt_result.return (false, (-1, -1, -1))
+      if not @@ Caqti_driver_info.can_transact i then Lwt_result.return None
       else
         let dialect, found_query =
           match Caqti_driver_info.dialect_tag i with
@@ -170,12 +169,12 @@ module Make (Model : Model.S) = struct
                  else "migrated"))
           in
           let* major, minor, subminor, _ = C.find query () in
-          let current = (major, minor, subminor) in
+          let current = Semver.from_parts major minor subminor [] [] in
           let* () =
             Log.info (fun m ->
-                m "load model at version %s" @@ Semver.to_string current)
+                m "load model at version %a" Fmt.(option Semver.pp) current)
           in
-          Lwt_result.return (true, current)
+          Lwt_result.return current
         else
           let* () =
             Log.info (fun m ->
@@ -220,20 +219,20 @@ module Make (Model : Model.S) = struct
                  (table_name i (Some "sqml") "metadata"))
           in
           let* () =
-            let major, minor, subminor = Model.version
+            let Semver.{ major; minor; patch; _ } = Model.version
             and now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
-            C.exec query (major, minor, subminor, now)
+            C.exec query (major, minor, patch, now)
           in
-          Lwt_result.return (true, Model.version)
+          Lwt_result.return (Some Model.version)
     in
-    let* transaction, current = Caqti_lwt.Pool.use create pool |> error in
-    if transaction then
+    Caqti_lwt.Pool.use create pool |> error >>= function
+    | Some current ->
       if Poly.(current <> Model.version) then
         fail "model version mismatch: code at %s, data at %s"
           (Semver.to_string Model.version)
           (Semver.to_string current)
       else Lwt_result.return { pool }
-    else fail "backend does not support transactions"
+    | None -> fail "backend does not support transactions"
 
   let close { pool } = Caqti_lwt.Pool.drain pool
 
