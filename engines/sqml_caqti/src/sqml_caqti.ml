@@ -578,13 +578,26 @@ module Make (Model : Model.S) = struct
     in
     const string "[" ++ sp ++ print printers ++ sp ++ const string "]"
 
+  type ('args, 'tag, 'res, 'arity) prepared = {
+    query : ('res, 'arity) Model.Query.t;
+    prepared : ('args, 'res, 'arity) prepared_query;
+    types : 'args Expression.Type.List.t;
+  }
+
+  and ('args, 'res, 'arity) prepared_query =
+    | Zero :
+        ('args, unit, [ `Zero ]) Caqti_request.t
+        -> ('args, 'res, Sqml.Model.zero) prepared_query
+    | One :
+        ('args, 'res, [ `One ]) Caqti_request.t
+        -> ('args, 'res, Sqml.Model.one) prepared_query
+    | Many :
+        ('args, 'res, [ `Many | `One | `Zero ]) Caqti_request.t
+        -> ('args, 'res, Sqml.Model.many) prepared_query
+
   let prepare (type args res arity) (types : args Expression.Type.List.t)
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
-      transaction ->
-      args Hlist.t ->
-      ( (res, arity, ([> Engine.error ] as 'error)) Sqml.Model.result,
-        'error )
-      Lwt_result.t =
+      (args, _, res, arity) prepared =
     let query = query @@ Sqml.Expression.prepare types
     and args = type_of_types types in
     let query_str dialect =
@@ -603,68 +616,79 @@ module Make (Model : Model.S) = struct
       in
       q
     in
-    let prepare_str info = query_str (dialect_of_driver_info info)
-    and pp_values = pp_values_of_types types in
+    let prepare_str info = query_str (dialect_of_driver_info info) in
     match Model.Query.arity query with
     | Zero ->
       let prepared =
         Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero prepare_str
       in
-      fun transaction values ->
-        let* () =
-          Log.debug (fun m ->
-              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
-        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
-        let+ () =
-          let f (module C : Caqti_lwt.CONNECTION) =
-            C.exec prepared (Hlist.to_pairs values) |> error
-          in
-          Lwt_guarded.acquire ~f transaction
-        in
-        Sqml.Model.Zero
+      { query; prepared = Zero prepared; types }
     | One ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.one
           prepare_str
       in
-      fun transaction values ->
-        let* () =
-          Log.debug (fun m ->
-              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
-        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
-        let+ res =
-          let f (module C : Caqti_lwt.CONNECTION) =
-            C.find prepared (Hlist.to_pairs values) |> error
-          in
-          Lwt_guarded.acquire ~f transaction
-        in
-        Sqml.Model.One res
+      { query; prepared = One prepared; types }
     | Many ->
       let prepared =
         Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
           prepare_str
       in
-      fun transaction values ->
-        let* () =
-          Log.debug (fun m ->
-              m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
-        and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
-        let+ res =
-          let f (module C : Caqti_lwt.CONNECTION) =
-            let f response =
-              let f stream =
-                Lwt.bind (stream ()) ~f:(function
-                  | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-                  | Error e -> Lwt_result.fail e |> error
-                  | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-              and init = C.Response.to_stream response in
-              Lwt_result.return @@ Sequence.unfold_step ~init ~f
-            in
-            C.call ~f prepared (Hlist.to_pairs values) |> error
-          in
-          Lwt_guarded.acquire ~f transaction
+      { query; prepared = Many prepared; types }
+
+  let run (type args res arity)
+      ({ query; prepared; types } : (args, 'tag, res, arity) prepared)
+      transaction (values : args Hlist.t) :
+      ( (res, arity, ([> Sqml.Engine.error ] as 'error)) Sqml.Model.result,
+        'error )
+      Lwt_result.t =
+    let pp_values = pp_values_of_types types in
+    match prepared with
+    | Zero prepared ->
+      let* () =
+        Log.debug (fun m ->
+            m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+      and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
+      let+ () =
+        let f (module C : Caqti_lwt.CONNECTION) =
+          C.exec prepared (Hlist.to_pairs values) |> error
         in
-        Sqml.Model.Many res
+        Lwt_guarded.acquire ~f transaction
+      in
+      Sqml.Model.Zero
+    | One prepared ->
+      let* () =
+        Log.debug (fun m ->
+            m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+      and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
+      let+ res =
+        let f (module C : Caqti_lwt.CONNECTION) =
+          C.find prepared (Hlist.to_pairs values) |> error
+        in
+        Lwt_guarded.acquire ~f transaction
+      in
+      Sqml.Model.One res
+    | Many prepared ->
+      let* () =
+        Log.debug (fun m ->
+            m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+      and* () = Log.debug (fun m -> m "caqti: values: %a" pp_values values) in
+      let+ res =
+        let f (module C : Caqti_lwt.CONNECTION) =
+          let f response =
+            let f stream =
+              Lwt.bind (stream ()) ~f:(function
+                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+                | Error e -> Lwt_result.fail e |> error
+                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
+            and init = C.Response.to_stream response in
+            Lwt_result.return @@ Sequence.unfold_step ~init ~f
+          in
+          C.call ~f prepared (Hlist.to_pairs values) |> error
+        in
+        Lwt_guarded.acquire ~f transaction
+      in
+      Sqml.Model.Many res
 
   let connect { pool } f =
     let f c =

@@ -405,16 +405,20 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let get = Engine.prepare [ Int ] get
     and put = Engine.prepare [ Model.T1.type_ ] put
     and update = Engine.prepare [ Int; String ] update in
-    let* Zero = put db Hlist.[ (271, "prepared", Some "prepared") ] in
-    let* (Many res) = get db Hlist.[ 271 ] in
+    let* Zero =
+      Engine.run put db Hlist.[ (271, "prepared", Some "prepared") ]
+    in
+    let* (Many res) = Engine.run get db Hlist.[ 271 ] in
     let* res = Sequence.to_list res in
     Alcotest.(check (list string) "selected" [ "prepared" ] res);
-    let* Zero = put db Hlist.[ (272, "prepared'", Some "prepared'") ] in
-    let* (Many res) = get db Hlist.[ 272 ] in
+    let* Zero =
+      Engine.run put db Hlist.[ (272, "prepared'", Some "prepared'") ]
+    in
+    let* (Many res) = Engine.run get db Hlist.[ 272 ] in
     let* res = Sequence.to_list res in
     Alcotest.(check (list string) "selected'" [ "prepared'" ] res);
-    let* Zero = update db Hlist.[ 272; "prepared''" ] in
-    let* (Many res) = get db Hlist.[ 272 ] in
+    let* Zero = Engine.run update db Hlist.[ 272; "prepared''" ] in
+    let* (Many res) = Engine.run get db Hlist.[ 272 ] in
     let+ res = Sequence.to_list res in
     Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
 

@@ -15,9 +15,15 @@ module type S = sig
       'error )
     Lwt_result.t
 
+  type ('args, 'tag, 'res, 'arity) prepared
+
   val prepare :
     'args Expression.Type.List.t ->
     (('args, 'tag) Expression.List.t -> ('res, 'arity) Model.Query.t) ->
+    ('args, 'tag, 'res, 'arity) prepared
+
+  val run :
+    ('args, 'tag, 'res, 'arity) prepared ->
     transaction ->
     'args Hlist.t ->
     ( ('res, 'arity, ([> error ] as 'error)) Root.Model.result,
