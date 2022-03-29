@@ -375,10 +375,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* res =
-      Sequence.(
-        res
-        |> map ~f:(fun Hlist.[ l; r ] -> Lwt_result.return (l, r))
-        |> to_list)
+      Sequence.(res |> map ~f:(fun Hlist.[ l; r ] -> (l, r)) |> to_list)
     in
     let () =
       Alcotest.(
@@ -432,7 +429,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       let+ v =
         v
-        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> Lwt_result.return (t1, t2))
+        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> (t1, t2))
         |> Sequence.to_list
       in
       Alcotest.(check (list (pair t1 t2)) "selected" expected v)
@@ -472,7 +469,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       let+ v =
         v
-        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> Lwt_result.return (t1, t2))
+        |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> (t1, t2))
         |> Sequence.to_list
       in
       let v =
