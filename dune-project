@@ -33,8 +33,6 @@
   logs
   (lwt
    (>= 5.3.0))
-  (lwt_ppx
-   (>= 2.0.0))
   (ptime
    (>= 0.8.5))
   semver2
