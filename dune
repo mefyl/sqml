@@ -47,7 +47,7 @@
    %{target}
    (run
     %{bin:awk}
-    "/^build: / { exit 0 }; !/^  \"(acid|ocaml|schematic|timmy)/ { print($0) }"
+    "/^build: / { exit 0 }; !/^  \"(acid|ocaml|sqml|schematic|timmy)/ { print($0) }"
     %{dep:sqml.opam.locked}))))
 
 (rule
@@ -66,5 +66,5 @@
    %{target}
    (run
     %{bin:awk}
-    "/^build: / { exit 0 }; !/^  \"(acid|ocaml|schematic|timmy)/ { print($0) }"
+    "/^build: / { exit 0 }; !/^  \"(acid|ocaml|schematic|sqml|timmy)/ { print($0) }"
     %{dep:sqml-caqti.opam.locked}))))

@@ -1,5 +1,6 @@
 (tests
  (names queries)
+ (package sqml-caqti)
  (libraries
   alcotest-lwt
   logs.fmt
