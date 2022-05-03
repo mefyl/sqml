@@ -133,6 +133,7 @@ module Make (Model : Model.S) = struct
     column_map { f } columns
 
   let make ?max_size uri =
+    let open Caqti_request.Infix in
     let* pool =
       Caqti_lwt.connect_pool ?max_size (Uri.of_string uri)
       |> Lwt.return |> error
@@ -145,12 +146,12 @@ module Make (Model : Model.S) = struct
           match Caqti_driver_info.dialect_tag i with
           | `Sqlite ->
             ( Sqml.Dialect.sqlite,
-              Caqti_request.find Caqti_type.unit Caqti_type.bool
+              (Caqti_type.unit ->! Caqti_type.bool)
                 "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
                  name= 'sqml_metadata'" )
           | `Pgsql ->
             ( Sqml.Dialect.postgresql,
-              Caqti_request.find Caqti_type.unit Caqti_type.bool
+              (Caqti_type.unit ->! Caqti_type.bool)
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
                  table_schema = 'sqml' AND table_name = 'metadata')" )
           | _ -> failwith "dialect not handled"
@@ -159,7 +160,7 @@ module Make (Model : Model.S) = struct
         let caqti_metadata_type = Caqti_type.(tup4 int int int ptime) in
         if found then
           let query =
-            Caqti_request.find Caqti_type.unit caqti_metadata_type
+            (Caqti_type.unit ->! caqti_metadata_type)
               (Fmt.str
                  "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
                   DESC LIMIT 1"
@@ -189,7 +190,8 @@ module Make (Model : Model.S) = struct
                 | None -> Lwt_result.return ()
                 | Some schema ->
                   let query =
-                    Caqti_request.exec ~oneshot:true Caqti_type.unit
+                    (Caqti_type.unit ->. Caqti_type.unit)
+                      ~oneshot:true
                       (Fmt.str "CREATE SCHEMA IF NOT EXISTS %S" schema)
                   in
                   C.exec query ())
@@ -204,7 +206,7 @@ module Make (Model : Model.S) = struct
             in
             let exec query =
               let query =
-                Caqti_request.exec ~oneshot:true Caqti_type.unit query
+                (Caqti_type.unit ->. Caqti_type.unit) ~oneshot:true query
               in
               C.exec query ()
             in
@@ -212,7 +214,7 @@ module Make (Model : Model.S) = struct
           in
           let* () = Array.iter ~f:create_table (Model.tables ()) in
           let query =
-            Caqti_request.exec caqti_metadata_type
+            (caqti_metadata_type ->. Caqti_type.unit)
               (Fmt.str
                  "INSERT INTO %s (major, minor, subminor, migrated) VALUES (?, \
                   ?, ?, ?)"
@@ -331,8 +333,7 @@ module Make (Model : Model.S) = struct
       ++ const (option ~none:(const string "true") pp_expression) on)
         f ()
 
-  let dialect_of_driver_info driver_info =
-    match Caqti_driver_info.dialect_tag driver_info with
+  let dialect_of_dialect_tag = function
     | #Caqti_driver_info.sql_dialect_tag as t -> t
     | _ -> `Other
 
@@ -496,6 +497,7 @@ module Make (Model : Model.S) = struct
 
   let query transaction (type res arity) (query : (res, arity) Model.Query.t) :
       ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
+    let open Caqti_request.Infix in
     let f (module C : Caqti_lwt.CONNECTION) =
       let collect query =
         let f response =
@@ -510,46 +512,38 @@ module Make (Model : Model.S) = struct
         C.call ~f query ()
       in
       let query_str =
-        Fmt.str "%a" (pp_query @@ dialect_of_driver_info C.driver_info) query
+        Fmt.str "%a"
+          (pp_query @@ dialect_of_dialect_tag
+          @@ Caqti_driver_info.dialect_tag C.driver_info)
+          query
       in
       let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
       let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
         match query with
         | Delete _ ->
-          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+ () = C.exec query () in
           Sqml.Model.Zero
         | Delete_returning { returning; _ } ->
-          let query =
-            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-              query_str
-          in
+          let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
         | Select { what; _ } ->
-          let query =
-            Caqti_request.collect Caqti_type.unit (type_of_expr what) query_str
-          in
+          let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query
         | Insert _ ->
-          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+ () = C.exec query () in
           Sqml.Model.Zero
         | Insert_returning { returning; _ } ->
-          let query =
-            Caqti_request.find Caqti_type.unit (type_of_expr returning)
-              query_str
-          in
+          let query = (Caqti_type.unit ->! type_of_expr returning) query_str in
           let+ res = C.find query () in
           Sqml.Model.One res
         | Update _ ->
-          let query = Caqti_request.exec Caqti_type.unit query_str in
+          let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+ () = C.exec query () in
           Sqml.Model.Zero
         | Update_returning { returning; _ } ->
-          let query =
-            Caqti_request.collect Caqti_type.unit (type_of_expr returning)
-              query_str
-          in
+          let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
       in
       res |> error
@@ -601,7 +595,7 @@ module Make (Model : Model.S) = struct
       (args, _, res, arity) prepared =
     let query = query @@ Sqml.Expression.prepare types
     and args = type_of_types types in
-    let prepare_str info =
+    let prepare_str tag =
       let query_str dialect =
         let q = Fmt.str "%a" (pp_query dialect) query in
         let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q)
@@ -618,25 +612,18 @@ module Make (Model : Model.S) = struct
         in
         q
       in
-      query_str (dialect_of_driver_info info)
+      query_str (dialect_of_dialect_tag tag)
     in
+    let open Caqti_request.Infix in
     match Model.Query.arity query with
     | Zero ->
-      let prepared =
-        Caqti_request.create_p args Caqti_type.unit Caqti_mult.zero prepare_str
-      in
+      let prepared = (args -->. Caqti_type.unit) @@:- prepare_str in
       { query; prepared = Zero prepared; types }
     | One ->
-      let prepared =
-        Caqti_request.create_p args (query_type query) Caqti_mult.one
-          prepare_str
-      in
+      let prepared = (args -->! query_type query) @@:- prepare_str in
       { query; prepared = One prepared; types }
     | Many ->
-      let prepared =
-        Caqti_request.create_p args (query_type query) Caqti_mult.zero_or_more
-          prepare_str
-      in
+      let prepared = (args -->* query_type query) @@:- prepare_str in
       { query; prepared = Many prepared; types }
 
   let run (type args res arity)

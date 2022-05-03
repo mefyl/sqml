@@ -1,3 +1,4 @@
+open Caqti_request.Infix
 open Sqml.Utils
 open Let.Syntax2 (Lwt_result)
 module Sequence = Sqml.Utils.Sequence
@@ -561,13 +562,13 @@ let () =
                let () =
                  Lwt_switch.add_hook (Some switch) (fun () ->
                      C.exec
-                       (Caqti_request.exec Caqti_type.unit
+                       ((Caqti_type.unit ->. Caqti_type.unit)
                        @@ Fmt.str "DROP DATABASE %S" db)
                        ()
                      |> Lwt.map ~f:ignore)
                in
                C.exec
-                 (Caqti_request.exec Caqti_type.unit
+                 ((Caqti_type.unit ->. Caqti_type.unit)
                  @@ Fmt.str "CREATE DATABASE %S" db)
                  ()
                |> Lwt.map ~f:convert_error

@@ -47,8 +47,8 @@
  (depends
   (caqti
    (and
-    (>= 1.6.0)
-    (< 1.7.0)))
+    (>= 1.8.0)
+    (< 1.9.0)))
   (caqti-driver-postgresql :with-test)
   (caqti-driver-sqlite3 :with-test)
   caqti-lwt

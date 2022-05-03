@@ -19,10 +19,10 @@ depends: [
   "bigarray-compat" {= "1.1.0"}
   "bigstringaf" {= "0.9.0"}
   "biniou" {= "1.2.1"}
-  "caqti" {= "1.6.0"}
-  "caqti-driver-postgresql" {= "1.6.0" & with-test}
-  "caqti-driver-sqlite3" {= "1.6.0" & with-test}
-  "caqti-lwt" {= "1.6.0"}
+  "caqti" {= "1.8.0"}
+  "caqti-driver-postgresql" {= "1.8.0" & with-test}
+  "caqti-driver-sqlite3" {= "1.8.0" & with-test}
+  "caqti-lwt" {= "1.8.0"}
   "cmdliner" {= "1.1.1"}
   "conf-pkg-config" {= "2"}
   "conf-postgresql" {= "1" & with-test}
