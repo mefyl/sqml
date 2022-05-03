@@ -3,9 +3,8 @@
  (deps
   sqml.opam
   sqml-caqti.opam
-  (alias_rec lib/all)
-  (alias_rec engines/all)
-  (alias_rec runtest)))
+  (alias_rec lib/default)
+  (alias_rec engines/default)))
 
 (rule
  (target sqml.%{version:sqml}.opam)
