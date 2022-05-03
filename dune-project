@@ -45,18 +45,13 @@
  (name sqml-caqti)
  (synopsis "SQML Caqti backend engine.")
  (depends
-  (caqti-driver-postgresql
+  (caqti
    (and
     (>= 1.6.0)
-    :with-test))
-  (caqti-driver-sqlite3
-   (and
-    (= 1.6.0)
-    :with-test))
-  (caqti
-   (>= 1.6.0))
-  (caqti-lwt
-   (>= 1.6.0))
+    (< 1.7.0)))
+  (caqti-driver-postgresql :with-test)
+  (caqti-driver-sqlite3 :with-test)
+  caqti-lwt
   (sqlite3
    (>= 5.0.1))
   (sqml

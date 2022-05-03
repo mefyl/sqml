@@ -9,10 +9,10 @@ homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
   "dune" {>= "2.8"}
-  "caqti-driver-postgresql" {>= "1.6.0" & with-test}
-  "caqti-driver-sqlite3" {= "1.6.0" & with-test}
-  "caqti" {>= "1.6.0"}
-  "caqti-lwt" {>= "1.6.0"}
+  "caqti" {>= "1.6.0" & < "1.7.0"}
+  "caqti-driver-postgresql" {with-test}
+  "caqti-driver-sqlite3" {with-test}
+  "caqti-lwt"
   "sqlite3" {>= "5.0.1"}
   "sqml" {= version}
   "odoc" {with-doc}
