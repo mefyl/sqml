@@ -52,8 +52,13 @@ type ('t, 'target) reference = {
 
 type ('tag, 'target) foreign_reference =
   | Foreign_reference : {
-      target : ('t, 'target) reference;
       column : ('t, 'tag) Expression.Column.t;
+      target : ('t, 'target) reference;
+    }
+      -> ('tag, 'target) foreign_reference
+  | Foreign_reference_opt : {
+      column : ('t option, 'tag) Expression.Column.t;
+      target : ('t, 'target) reference;
     }
       -> ('tag, 'target) foreign_reference
 
@@ -92,7 +97,9 @@ type 'tag index = {
 module Column = struct
   module Type = Expression.Column.Type
 
-  type 't foreign_key = Reference : ('t, _) reference -> 't foreign_key
+  type 't foreign_key =
+    | Reference : ('t, _) reference -> 't foreign_key
+    | Reference_opt : ('t, _) reference -> 't option foreign_key
 
   type 't t = {
     name : string;
