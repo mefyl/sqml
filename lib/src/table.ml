@@ -50,6 +50,19 @@ type ('t, 'target) reference = {
   column : ('t, 'target) Expression.Column.t;
 }
 
+type ('ref, 'target) reference_with_actions = {
+  reference : 'ref;
+  on_delete : referential_action; [@default No_action]
+  on_update : referential_action; [@default No_action]
+}
+
+and referential_action =
+  | No_action
+  | Restrict
+  | Cascade
+  | Set_null
+  | Set_default
+
 type ('tag, 'target) foreign_reference =
   | Foreign_reference : {
       column : ('t, 'tag) Expression.Column.t;
@@ -70,8 +83,19 @@ end
 
 type 'tag constraint_ =
   | Foreign_key :
-      ('tag, 'target) foreign_reference List_nonempty.t
+      ( ('tag, 'target) foreign_reference List_nonempty.t,
+        'target )
+      reference_with_actions
       -> 'tag constraint_
+
+let pp_referential_action f =
+  let open Fmt in
+  function
+  | No_action -> string f "NO ACTION"
+  | Restrict -> string f "RESTRICT"
+  | Cascade -> string f "CASCADE"
+  | Set_null -> string f "SET NULL"
+  | Set_default -> string f "SET DEFAULT"
 
 type ordering =
   | Ascending
@@ -97,15 +121,26 @@ type 'tag index = {
 module Column = struct
   module Type = Expression.Column.Type
 
-  type 't foreign_key =
-    | Reference : ('t, _) reference -> 't foreign_key
-    | Reference_opt : ('t, _) reference -> 't option foreign_key
+  module Foreign_key = struct
+    type 't t =
+      | Reference : (('t, 'tag) reference, 'tag) reference_with_actions -> 't t
+      | Reference_opt :
+          (('t, 'tag) reference, 'tag) reference_with_actions
+          -> 't option t
+
+    let make ?(on_delete = No_action) ?(on_update = No_action) reference =
+      Reference { reference; on_delete; on_update }
+
+    let make_nullable ?(on_delete = No_action) ?(on_update = No_action)
+        reference =
+      Reference_opt { reference; on_delete; on_update }
+  end
 
   type 't t = {
     name : string;
     type_ : 't Expression.Column.Type.t;
     primary : bool;
-    foreign_keys : 't foreign_key list;
+    foreign_keys : 't Foreign_key.t list;
   }
 
   let make ?primary ?(foreign_keys = []) name type_ =

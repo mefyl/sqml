@@ -68,7 +68,7 @@ module T2 = struct
           make "id"
             ~foreign_keys:
               [
-                Table.Column.Reference
+                Table.Column.Foreign_key.make
                   { table = (module T1); column = T1.Column.id };
               ]
             Type.Int)

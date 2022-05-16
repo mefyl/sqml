@@ -39,15 +39,28 @@ struct
             let constraints =
               List.map
                 ~f:(function
-                  | Table.Column.Reference target ->
+                  | Table.Column.Foreign_key.Reference
+                      { reference = target; on_delete; on_update } ->
                     Table.(
                       Foreign_key
-                        List_nonempty.[ Foreign_reference { column; target } ])
-                  | Table.Column.Reference_opt target ->
+                        {
+                          reference =
+                            List_nonempty.
+                              [ Foreign_reference { column; target } ];
+                          on_delete;
+                          on_update;
+                        })
+                  | Table.Column.Foreign_key.Reference_opt
+                      { reference = target; on_delete; on_update } ->
                     Table.(
                       Foreign_key
-                        List_nonempty.
-                          [ Foreign_reference_opt { column; target } ]))
+                        {
+                          reference =
+                            List_nonempty.
+                              [ Foreign_reference_opt { column; target } ];
+                          on_delete;
+                          on_update;
+                        }))
                 foreign_keys
             and rest, rest_constraints = bind_columns tl in
             ( Expression.Column.List.(column :: rest),
@@ -480,27 +493,42 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
   let definitions =
     let constraints =
       let f = function
-        | Table.Foreign_key references ->
+        | Table.Foreign_key { reference; on_delete; on_update } ->
           let f = function
             | Table.Foreign_reference { target; column } ->
               (column.name, target.column.name)
             | Table.Foreign_reference_opt { target; column } ->
               (column.name, target.column.name)
           in
+          let on_delete =
+            match on_delete with No_action -> None | action -> Some action
+          and on_update =
+            match on_update with No_action -> None | action -> Some action
+          in
           let columns, references =
-            List_nonempty.to_list references |> List.map ~f |> List.unzip
+            List_nonempty.to_list reference |> List.map ~f |> List.unzip
           and target_table =
-            match List_nonempty.hd references with
+            match List_nonempty.hd reference with
             | Table.Foreign_reference { target; _ } -> Table.name target.table
             | Table.Foreign_reference_opt { target; _ } ->
               Table.name target.table
           in
           Fmt.(
-            str "FOREIGN KEY (%a) REFERENCES %s(%a)"
+            str "FOREIGN KEY (%a) REFERENCES %s(%a)%a%a"
               (hbox @@ list ~sep:comma string)
               columns target_table
               (hbox @@ list ~sep:comma string)
-              references)
+              references
+              (hbox
+              @@ option
+                   (sp ++ const string "ON DELETE "
+                  ++ Table.pp_referential_action))
+              on_delete
+              (hbox
+              @@ option
+                   (sp ++ const string "ON UPDATE "
+                  ++ Table.pp_referential_action))
+              on_update)
       in
       List.map ~f T.constraints
     in
