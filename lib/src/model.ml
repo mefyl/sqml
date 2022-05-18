@@ -561,3 +561,41 @@ let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
 let schema dialect (module Model : S) =
   let create_table (module T : Table.S) = table_schema dialect (module T) in
   Array.map ~f:create_table (Model.tables ()) |> Array.to_list |> List.concat
+
+let diff meta (module Model : S) =
+  let effective, expected =
+    let tables =
+      Model.tables () |> Array.to_list |> List.map ~f:Table.Schema.of_table
+    and map l =
+      l
+      |> List.map ~f:(fun t -> (Table.Schema.table_name t, t))
+      |> Map.of_alist_exn (module String)
+    in
+    (map meta, map tables)
+  and f = function
+    | _, `Left t -> Some (`Drop t)
+    | _, `Right t -> Some (`Create t)
+    | _, `Unequal (effective, expected) ->
+      let columns =
+        let effective_columns, expected_columns =
+          let map columns =
+            let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
+            columns |> Set.to_list |> List.map ~f
+            |> Map.of_alist_exn (module String)
+          in
+          (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
+        and f = function
+          | _, `Left c -> Some (`Drop c)
+          | _, `Right c -> Some (`Create c)
+          | _, `Unequal _ -> None
+        in
+        Map.symmetric_diff ~data_equal:Table.Schema.equal_column
+          effective_columns expected_columns
+        |> Base.Sequence.filter_map ~f
+        |> Base.Sequence.to_list
+      in
+      Some (`Alter (expected, columns))
+  in
+  Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected
+  |> Base.Sequence.filter_map ~f
+  |> Base.Sequence.to_list

@@ -20,6 +20,8 @@ module Column = struct
       | Text : string t
       | Time : Timmy.Time.t t
       | Varchar : int -> string t
+
+    type any = Type : _ t -> any
   end
 
   type ('t, 'tag) t = {

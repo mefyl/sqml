@@ -13,4 +13,6 @@
   ptime
   ptime.clock.os
   semver2
-  timmy))
+  timmy)
+ (preprocess
+  (pps ppx_deriving.eq)))

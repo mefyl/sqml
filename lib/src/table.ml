@@ -215,3 +215,45 @@ module type S = sig
 end
 
 type 'tag t = (module S with type tag = 'tag)
+
+module Schema = struct
+  type column = {
+    name : string;
+    type_ : Column.Type.any;
+  }
+
+  let equal_column (l : column) (r : column) = String.equal l.name r.name
+
+  module Column_by_name = struct
+    type t = column
+
+    include Base.Comparable.Make (struct
+      type t = column
+
+      let compare ({ name = l; _ } : t) ({ name = r; _ } : t) =
+        String.compare l r
+
+      let sexp_of_t ({ name; _ } : t) = Sexp.Atom name
+    end)
+  end
+
+  type t = {
+    name : string;
+    schema : string option;
+    columns : (column, Column_by_name.comparator_witness) Set.t;
+        [@equal Set.equal]
+  }
+  [@@deriving eq]
+
+  let table_name = function
+    | { schema = Some schema; name; _ } -> Fmt.str "%s.%s" schema name
+    | { name; _ } -> name
+
+  let of_table (module Table : S) =
+    let columns =
+      let f Column.{ name; type_; _ } = { name; type_ = Type type_ } in
+      Column.List.map ~f:{ f } Table.Meta.columns
+      |> Set.of_list (module Column_by_name)
+    in
+    { name = Table.Meta.name; schema = Table.Meta.schema; columns }
+end

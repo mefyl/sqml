@@ -36,4 +36,12 @@ module type S = sig
     ('res, ([> error ] as 'error)) Lwt_result.t
 
   val close : t -> unit Lwt.t
+
+  val schema :
+    t -> (Table.Schema.t list, [ `Sqml_engine of string ]) Lwt_result.t
 end
+
+let diff (type t) (module E : S with type t = t) (t : t) =
+  let open Let.Syntax2 (Lwt_result) in
+  let+ meta = E.schema t in
+  Model.diff meta (module E.Model)

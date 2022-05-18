@@ -678,4 +678,84 @@ end = struct
         : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t
         :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
     |> Lwt_result.map_err unmap
+
+  let schema t =
+    let type_of_info column char_length nullable data_type =
+      let open Let.Syntax2 (Result) in
+      let nullable (Column.Type.Type t as type_) =
+        if String.(nullable = "YES") then Column.Type.Type (Nullable t)
+        else type_
+      in
+      let+ type_ =
+        match (data_type, char_length) with
+        | "boolean", _ -> Result.return (Column.Type.Type Bool)
+        | "character varying", Some l ->
+          Result.return (Column.Type.Type (Varchar l))
+        | "character varying", None ->
+          Result.fail
+            (`Sqml_engine
+              (Fmt.str
+                 "missing character_maximum_length in information_schema for \
+                  column %s"
+                 column))
+        | "date", _ -> Result.return (Column.Type.Type Date)
+        | "integer", _ -> Result.return (Column.Type.Type Int)
+        | "jsonb", _ -> Result.return (Column.Type.Type Json)
+        | "text", _ -> Result.return (Column.Type.Type Text)
+        | ("timestamp" | "timestamp without time zone"), _ ->
+          Result.return (Column.Type.Type Time)
+        | _ ->
+          Result.fail
+            (`Sqml_engine
+              (Fmt.str "unrecognized data_type in information_schema: %S"
+                 data_type))
+      in
+      nullable type_
+    in
+    let f (module C : Caqti_lwt.CONNECTION) =
+      let open Caqti_request.Infix in
+      let* tables =
+        let query =
+          (Caqti_type.unit ->* Caqti_type.(tup2 string string))
+            ~oneshot:true
+            {| SELECT schemaname, tablename FROM pg_catalog.pg_tables
+               WHERE schemaname != 'pg_catalog'
+                 AND schemaname != 'information_schema' |}
+        in
+        C.collect_list query () |> error
+      in
+      let f (schema, name) =
+        let* columns =
+          let query =
+            (Caqti_type.(tup2 string string)
+            ->* Caqti_type.(tup4 (option int) string string string))
+              {| SELECT character_maximum_length,
+                        column_name,
+                        data_type,
+                        is_nullable
+                 FROM information_schema.columns
+                 WHERE table_schema = $1
+                   AND table_name   = $2 |}
+          in
+          C.collect_list query (schema, name) |> error
+        in
+        let+ columns =
+          let f (char_length, name, data_type, nullable) =
+            let open Let.Syntax2 (Result) in
+            let+ type_ = type_of_info name char_length nullable data_type in
+            { Table.Schema.name; type_ }
+          in
+          columns |> List.map ~f |> Result.all |> Lwt.return
+        in
+        let schema = match schema with "public" -> None | _ -> Some schema in
+        {
+          Sqml.Table.Schema.columns =
+            Set.of_list (module Table.Schema.Column_by_name) columns;
+          name;
+          schema;
+        }
+      in
+      Sequence.of_list tables |> Sequence.Seq.map ~f |> Sequence.to_list
+    in
+    connect t (fun transaction -> Lwt_guarded.acquire ~f transaction)
 end
