@@ -4,7 +4,12 @@ module Array = Array.Monadic2 (Lwt_result)
 open Let.Syntax2 (Lwt_result)
 open Let.Syntax' (Lwt)
 
-module Make (Model : Model.S) = struct
+module Make (Model : Model.S) : sig
+  include Engine.S with module Model = Model
+
+  val make :
+    ?max_size:int -> string -> (t, [> `Sqml_engine of string ]) Lwt_result.t
+end = struct
   type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
   type transaction = (module Caqti_lwt.CONNECTION) Lwt_guarded.t
 
@@ -98,11 +103,6 @@ module Make (Model : Model.S) = struct
       | `Pgsql -> Fmt.str "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
-  let string_of_type info t =
-    match Caqti_driver_info.dialect_tag info with
-    | `Sqlite -> Dialect.Sqlite.string_of_type t
-    | _ -> Dialect.Postgresql.string_of_type t
-
   let fail fmt =
     Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
@@ -122,13 +122,7 @@ module Make (Model : Model.S) = struct
     in
     map
 
-  let columns i columns =
-    let f { Column.name; type_; _ } =
-      Option.return @@ Fmt.str "%s %s" name (string_of_type i type_)
-    in
-    column_map { f } columns
-
-  and primary columns =
+  let primary columns =
     let f { Column.name; primary; _ } = if primary then Some name else None in
     column_map { f } columns
 
@@ -290,20 +284,6 @@ module Make (Model : Model.S) = struct
     | [] -> Caqti_type.unit
 
   let type_of_expr e = Sqml.Expression.to_type e |> type_of_type
-
-  let rec type_of_expressions :
-      type t tag. (t, tag) Expression.List.t -> t Hlist.t Caqti_type.t =
-    function
-    | Expression.List.[] ->
-      Caqti_type.custom
-        ~decode:(fun () -> Result.Ok Hlist.[])
-        ~encode:(fun Hlist.[] -> Result.Ok ())
-      @@ Caqti_type.unit
-    | c :: tl ->
-      Caqti_type.custom
-        ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
-        ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
-      @@ Caqti_type.tup2 (type_of_expr c) (type_of_expressions tl)
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function

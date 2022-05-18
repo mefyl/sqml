@@ -34,4 +34,6 @@ module type S = sig
     t ->
     (transaction -> ('res, 'error) Lwt_result.t) ->
     ('res, ([> error ] as 'error)) Lwt_result.t
+
+  val close : t -> unit Lwt.t
 end
