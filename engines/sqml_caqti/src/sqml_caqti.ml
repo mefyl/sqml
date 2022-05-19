@@ -194,7 +194,7 @@ end = struct
             let queries = Sqml.Model.table_schema dialect (module T) in
             let* () =
               Log.debug (fun m ->
-                  m "create table: %a"
+                  m "@[create table:@ %a@]"
                     Fmt.(list ~sep:(const char ';' ++ sp) string)
                     queries)
             in
@@ -497,7 +497,7 @@ end = struct
           @@ Caqti_driver_info.dialect_tag C.driver_info)
           query
       in
-      let* () = Log.debug @@ fun m -> m "caqti: execute query: %s" query_str in
+      let* () = Log.debug @@ fun m -> m "@[execute query:@ %s@]" query_str in
       let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
         match query with
         | Delete _ ->
@@ -611,10 +611,10 @@ end = struct
       transaction (values : args Hlist.t) =
     let* () =
       Log.debug (fun m ->
-          m "caqti: execute prepared query: %a" (pp_query `Pgsql) query)
+          m "@[execute prepared query:@ %a@]" (pp_query `Pgsql) query)
     and* () =
       let pp_values = pp_values_of_types types in
-      Log.debug (fun m -> m "caqti: values: %a" pp_values values)
+      Log.debug (fun m -> m "@[values:@ %a@]" pp_values values)
     in
     match prepared with
     | Zero prepared ->
