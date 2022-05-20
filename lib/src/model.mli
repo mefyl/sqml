@@ -4,12 +4,12 @@ module Make (Meta : sig
   val version : Semver.t
 end) : S
 
-val table_schema : Dialect.t -> _ Table.t -> string list
-val schema : Dialect.t -> t -> string list
+val create : t -> Table.Query.t list
 
 val diff :
-  Table.Schema.t list ->
+  Dialect.t ->
   (module S) ->
+  Table.Schema.t list ->
   [> `Alter of
      Table.Schema.t
      * [> `Create of Table.Schema.column | `Drop of Table.Schema.column ] list

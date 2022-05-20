@@ -42,6 +42,37 @@ let convert_error =
 let t1 = Alcotest.(testable Model.T1.pp Model.T1.equal)
 let t2 = Alcotest.(testable Model.T2.pp Model.T2.equal)
 
+module Queries = struct
+  let create () =
+    let buffer = Buffer.create 0 in
+    let output =
+      let fmt = Fmt.with_buffer buffer in
+      let () = Caml.Format.pp_set_margin fmt 60 in
+      fmt
+    in
+    let () =
+      let queries =
+        Sqml.Table.Query.create (module Model.T1)
+        @ Sqml.Table.Query.create (module Model.T2)
+      in
+      Fmt.(
+        pf output "@[<v>%a@]"
+          (list ~sep:nop (Sqml.Table.Query.pp Sqml.Dialect.postgresql ++ semi))
+          queries)
+    and expected =
+      {|CREATE TABLE "table1" (
+  description TEXT,
+  id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  PRIMARY KEY (id));
+CREATE INDEX ids ON "table1" (id ASC, name DESC);
+CREATE TABLE "table2" (
+  id INTEGER NOT NULL,
+  FOREIGN KEY (id) REFERENCES "table1"(id));|}
+    in
+    Alcotest.(check string "creation queries" expected (Buffer.contents buffer))
+end
+
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let default_t1s =
     [ (0, "zero", None); (1, "one", Some "1"); (2, "two", Some "2") ]
@@ -510,11 +541,18 @@ let () =
         ~f:Alcotest.(check (result unit error) "result" (Result.Ok ()))
         (f switch ())
     in
-    test_case name `Quick f
+    test_case name `Slow f
   in
   Lwt_main.run
   @@ run "SQML"
        [
+         ( "Queries",
+           let test_case name f =
+             Alcotest_lwt.test_case name `Quick (fun _ () ->
+                 let () = f () in
+                 Lwt.return ())
+           in
+           [ test_case "create" Queries.create ] );
          ( "Caqti-SQLite",
            let make test _ () =
              let open Let.Syntax2 (Lwt_result) in

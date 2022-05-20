@@ -17,6 +17,8 @@ module type S = sig
 
   type ('args, 'tag, 'res, 'arity) prepared
 
+  val dialect : t -> (module Dialect.S)
+
   val prepare :
     'args Expression.Type.List.t ->
     (('args, 'tag) Expression.List.t -> ('res, 'arity) Model.Query.t) ->
@@ -44,4 +46,4 @@ end
 let diff (type t) (module E : S with type t = t) (t : t) =
   let open Let.Syntax2 (Lwt_result) in
   let+ meta = E.schema t in
-  Model.diff meta (module E.Model)
+  Model.diff (E.dialect t) (module E.Model) meta

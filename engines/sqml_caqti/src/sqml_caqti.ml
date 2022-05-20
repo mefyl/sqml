@@ -10,7 +10,13 @@ module Make (Model : Model.S) : sig
   val make :
     ?max_size:int -> string -> (t, [> `Sqml_engine of string ]) Lwt_result.t
 end = struct
-  type t = { pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t }
+  type t = {
+    dialect : Sqml.Dialect.t;
+    pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t;
+  }
+
+  let dialect { dialect; _ } = dialect
+
   type transaction = (module Caqti_lwt.CONNECTION) Lwt_guarded.t
 
   let quote_pattern = String.Search_pattern.create "'"
@@ -134,22 +140,23 @@ end = struct
     in
     let create (module C : Caqti_lwt.CONNECTION) =
       let i = C.driver_info in
-      if not @@ Caqti_driver_info.can_transact i then Lwt_result.return None
+      let dialect, found_query =
+        match Caqti_driver_info.dialect_tag i with
+        | `Sqlite ->
+          ( Sqml.Dialect.sqlite,
+            (Caqti_type.unit ->! Caqti_type.bool)
+              "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
+               name= 'sqml_metadata'" )
+        | `Pgsql ->
+          ( Sqml.Dialect.postgresql,
+            (Caqti_type.unit ->! Caqti_type.bool)
+              "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
+               table_schema = 'sqml' AND table_name = 'metadata')" )
+        | _ -> failwith "dialect not handled"
+      in
+      if not @@ Caqti_driver_info.can_transact i then
+        Lwt_result.return (None, dialect)
       else
-        let dialect, found_query =
-          match Caqti_driver_info.dialect_tag i with
-          | `Sqlite ->
-            ( Sqml.Dialect.sqlite,
-              (Caqti_type.unit ->! Caqti_type.bool)
-                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
-                 name= 'sqml_metadata'" )
-          | `Pgsql ->
-            ( Sqml.Dialect.postgresql,
-              (Caqti_type.unit ->! Caqti_type.bool)
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
-                 table_schema = 'sqml' AND table_name = 'metadata')" )
-          | _ -> failwith "dialect not handled"
-        in
         let* found = C.find found_query () in
         let caqti_metadata_type = Caqti_type.(tup4 int int int ptime) in
         if found then
@@ -169,7 +176,7 @@ end = struct
             Log.info (fun m ->
                 m "load model at version %a" Fmt.(option Semver.pp) current)
           in
-          Lwt_result.return current
+          Lwt_result.return (current, dialect)
         else
           let* () =
             Log.info (fun m ->
@@ -191,16 +198,22 @@ end = struct
                   C.exec query ())
               | _ -> failwith "dialect not handled"
             in
-            let queries = Sqml.Model.table_schema dialect (module T) in
+            let queries = Sqml.Table.Query.create (module T) in
+            (* let queries = Sqml.Model.table_schema dialect (module T) in *)
             let* () =
               Log.debug (fun m ->
                   m "@[create table:@ %a@]"
-                    Fmt.(list ~sep:(const char ';' ++ sp) string)
+                    Fmt.(
+                      list
+                        ~sep:(const char ';' ++ sp)
+                        (Sqml.Table.Query.pp dialect))
                     queries)
             in
             let exec query =
               let query =
-                (Caqti_type.unit ->. Caqti_type.unit) ~oneshot:true query
+                (Caqti_type.unit ->. Caqti_type.unit)
+                  ~oneshot:true
+                  (Fmt.str "%a" (Sqml.Table.Query.pp dialect) query)
               in
               C.exec query ()
             in
@@ -219,18 +232,18 @@ end = struct
             and now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
             C.exec query (major, minor, patch, now)
           in
-          Lwt_result.return (Some Model.version)
+          Lwt_result.return (Some Model.version, dialect)
     in
     Caqti_lwt.Pool.use create pool |> error >>= function
-    | Some current ->
+    | Some current, dialect ->
       if Poly.(current <> Model.version) then
         fail "model version mismatch: code at %s, data at %s"
           (Semver.to_string Model.version)
           (Semver.to_string current)
-      else Lwt_result.return { pool }
-    | None -> fail "backend does not support transactions"
+      else Lwt_result.return { dialect; pool }
+    | None, _ -> fail "backend does not support transactions"
 
-  let close { pool } = Caqti_lwt.Pool.drain pool
+  let close { pool; _ } = Caqti_lwt.Pool.drain pool
 
   module Model = Model
 
@@ -652,7 +665,7 @@ end = struct
       in
       Sqml.Model.Many res
 
-  let connect { pool } f =
+  let connect { pool; _ } f =
     let f c =
       let module C = (val c : Caqti_lwt.CONNECTION) in
       let* () = C.start () in
@@ -749,10 +762,11 @@ end = struct
         in
         let schema = match schema with "public" -> None | _ -> Some schema in
         {
+          constraints = [ (* FIXME *) ];
           Sqml.Table.Schema.columns =
             Set.of_list (module Table.Schema.Column_by_name) columns;
-          name;
-          schema;
+          indexes = [ (* FIXME *) ];
+          name = { name; schema };
         }
       in
       Sequence.of_list tables |> Sequence.Seq.map ~f |> Sequence.to_list

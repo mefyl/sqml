@@ -453,122 +453,23 @@ struct
   end
 end
 
-type column_creation = {
-  name : string;
-  type_ : string;
-  primary : bool;
-}
+let create (module Model : S) =
+  Array.map ~f:Table.Query.create (Model.tables ())
+  |> Array.to_list |> List.concat
 
-let table_schema (type tag) (module Dialect : Dialect.S) (table : tag Table.t) =
-  let module T = (val table) in
-  let columns =
-    Table.Column.List.filter_map
-      ~f:
-        {
-          f =
-            (fun { name; primary; type_; _ } ->
-              Some { name; primary; type_ = Dialect.string_of_type type_ });
-        }
-      T.Meta.columns
-  in
-  let definitions =
-    List.map ~f:(fun { name; type_; _ } -> Fmt.str "%s %s" name type_) columns
-  in
-  let definitions =
-    match T.primary with
-    | [] -> definitions
-    | primary ->
-      definitions
-      @ [
-          Fmt.(
-            str "PRIMARY KEY (%a)"
-              (hbox
-              @@ list ~sep:comma
-                   (using
-                      (fun (Table.Primary { column }) -> column.name)
-                      string))
-              primary);
-        ]
-  and table_name = Dialect.table_name ?schema:T.Meta.schema T.Meta.name in
-  let definitions =
-    let constraints =
-      let f = function
-        | Table.Foreign_key { reference; on_delete; on_update } ->
-          let f = function
-            | Table.Foreign_reference { target; column } ->
-              (column.name, target.column.name)
-            | Table.Foreign_reference_opt { target; column } ->
-              (column.name, target.column.name)
-          in
-          let on_delete =
-            match on_delete with No_action -> None | action -> Some action
-          and on_update =
-            match on_update with No_action -> None | action -> Some action
-          in
-          let columns, references =
-            List_nonempty.to_list reference |> List.map ~f |> List.unzip
-          and target_table =
-            match List_nonempty.hd reference with
-            | Table.Foreign_reference { target; _ } -> Table.name target.table
-            | Table.Foreign_reference_opt { target; _ } ->
-              Table.name target.table
-          in
-          Fmt.(
-            str "FOREIGN KEY (%a) REFERENCES %s(%a)%a%a"
-              (hbox @@ list ~sep:comma string)
-              columns target_table
-              (hbox @@ list ~sep:comma string)
-              references
-              (hbox
-              @@ option
-                   (sp ++ const string "ON DELETE "
-                  ++ Table.pp_referential_action))
-              on_delete
-              (hbox
-              @@ option
-                   (sp ++ const string "ON UPDATE "
-                  ++ Table.pp_referential_action))
-              on_update)
-      in
-      List.map ~f T.constraints
-    in
-    definitions @ constraints
-  and indexes =
-    let f Table.{ columns; name } =
-      let f = function
-        | Table.Index { column; order } ->
-          let order =
-            match order with Ascending -> "ASC" | Descending -> "DESC"
-          in
-          Fmt.str "%s %s" column.name order
-      in
-      Fmt.(
-        str "@[<2>CREATE INDEX %s@ ON %s@ (%a)@]"
-          (Dialect.index_name ?schema:T.Meta.schema name)
-          table_name
-          (box @@ list ~sep:comma string)
-        @@ List.map ~f
-        @@ List_nonempty.to_list columns)
-    in
-    List.map ~f T.indexes
-  in
-  Fmt.(
-    str "@[<hv 2>CREATE TABLE %s (@,%a)@]" table_name
-      (box @@ list ~sep:comma string)
-      definitions)
-  :: indexes
-
-let schema dialect (module Model : S) =
-  let create_table (module T : Table.S) = table_schema dialect (module T) in
-  Array.map ~f:create_table (Model.tables ()) |> Array.to_list |> List.concat
-
-let diff meta (module Model : S) =
+let diff (module Dialect : Dialect.S) (module Model : S) meta =
   let effective, expected =
     let tables =
       Model.tables () |> Array.to_list |> List.map ~f:Table.Schema.of_table
-    and map l =
-      l
-      |> List.map ~f:(fun t -> (Table.Schema.table_name t, t))
+    and map (l : Table.Schema.t list) =
+      List.map
+        ~f:(fun t ->
+          ( Fmt.(
+              str "%a%s"
+                (option string ++ const char '.')
+                t.name.schema t.name.name),
+            t ))
+        l
       |> Map.of_alist_exn (module String)
     in
     (map meta, map tables)
