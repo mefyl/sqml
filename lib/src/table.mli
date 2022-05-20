@@ -55,6 +55,7 @@ end
 module Query : sig
   type t
 
-  val pp : Dialect.t -> t Fmt.t
   val create : (module S) -> t list
+  val drop : (module S) -> t list
+  val pp : Dialect.t -> t Fmt.t
 end

@@ -137,6 +137,7 @@ module Query = struct
   type t =
     | Create_index of Schema.name * Schema.index
     | Create_table of Schema.t
+    | Drop_table of Schema.t
 
   let create t =
     let schema = Schema.of_table t in
@@ -146,9 +147,13 @@ module Query = struct
     in
     Create_table schema :: indexes
 
+  let drop t = [ Drop_table (Schema.of_table t) ]
   let pp_either l r f = function Either.First v -> l f v | Second v -> r f v
 
-  let pp_constraint (module Dialect : Dialect.S) f = function
+  let pp_table_name (module Dialect : Dialect.S) f Schema.{ name; schema } =
+    Fmt.string f (Dialect.table_name ?schema name)
+
+  let pp_constraint dialect f = function
     | Schema.Primary_key columns ->
       Fmt.(pf f "PRIMARY KEY (@[<h>%a@])" (list ~sep:comma string) columns)
     | Schema.Foreign_key { table; source; target; on_delete; on_update } ->
@@ -158,10 +163,9 @@ module Query = struct
         match on_update with No_action -> None | action -> Some action
       in
       Fmt.(
-        pf f "FOREIGN KEY (%a)@ REFERENCES %s(%a)%a%a"
+        pf f "FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a"
           (hvbox @@ list ~sep:comma string)
-          source
-          (Dialect.table_name ?schema:table.schema table.name)
+          source (pp_table_name dialect) table
           (hbox @@ list ~sep:comma string)
           target
           (hbox
@@ -171,28 +175,27 @@ module Query = struct
           @@ option (sp ++ const string "ON UPDATE " ++ pp_referential_action))
           on_update)
 
-  let pp ((module Dialect : Dialect.S) as dialect) f = function
-    | Create_index
-        ( { name = table_name; schema = table_schema },
-          { name = { name; schema }; columns } ) ->
-      Fmt.(
-        pf f "@[<2>CREATE INDEX %s@ ON %s@ (%a)@]"
-          (Dialect.index_name ?schema name)
-          (Dialect.table_name ?schema:table_schema table_name)
-          (box
-          @@ list ~sep:comma (fun f (name, ordering) ->
-                 Fmt.pf f "%s %a" name pp_ordering ordering))
-          (List_nonempty.to_list columns))
+  let pp ((module Dialect : Dialect.S) as dialect) f =
+    let open Fmt in
+    function
+    | Create_index (table_name, { name = { name; schema }; columns }) ->
+      pf f "@[<2>CREATE INDEX %s@ ON %a@ (%a)@]"
+        (Dialect.index_name ?schema name)
+        (pp_table_name dialect) table_name
+        (box
+        @@ list ~sep:comma (fun f (name, ordering) ->
+               Fmt.pf f "%s %a" name pp_ordering ordering))
+        (List_nonempty.to_list columns)
     | Create_table { columns; constraints; name; _ } ->
       let columns =
         Set.to_list columns
         |> List.map ~f:(fun Schema.{ name; type_ = Type type_ } ->
                Either.First
                  (Fmt.str "%s %s" name (Dialect.string_of_type type_)))
-      and constraints = List.map ~f:Either.second constraints
-      and table_name = Dialect.table_name ?schema:name.schema name.name in
-      Fmt.(
-        pf f "@[<hv 2>CREATE TABLE %s (@,%a)@]" table_name
-          (list ~sep:comma (box @@ pp_either string (pp_constraint dialect)))
-          (columns @ constraints))
+      and constraints = List.map ~f:Either.second constraints in
+      pf f "@[<hv 2>CREATE TABLE %a (@,%a)@]" (pp_table_name dialect) name
+        (list ~sep:comma (box @@ pp_either string (pp_constraint dialect)))
+        (columns @ constraints)
+    | Drop_table { name; _ } ->
+      pf f "@[<h> DROP TABLE %a@]" (pp_table_name dialect) name
 end
