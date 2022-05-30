@@ -693,6 +693,7 @@ end = struct
     |> Lwt_result.map_err unmap
 
   let schema t =
+    let schema_of_name = function "public" -> None | name -> Some name in
     let type_of_info column char_length nullable data_type =
       let open Let.Syntax2 (Result) in
       let nullable (Column.Type.Type t as type_) =
@@ -752,6 +753,62 @@ end = struct
           in
           C.collect_list query (schema, name) |> error
         in
+        let* foreign_keys =
+          let query =
+            (Caqti_type.(tup2 string string)
+            ->* Caqti_type.(
+                  tup4 string string string
+                    (option (tup4 (tup2 string string) string string string))))
+              {| SELECT cons.constraint_name,
+                        col.column_name,
+                        cons.constraint_type,
+                        target.table_schema AS target_schema,
+                        target.table_name AS target_table,
+                        target_col.column_name AS target_column,
+                        delete_rule,
+                        update_rule
+                 FROM information_schema.table_constraints cons
+                 LEFT JOIN information_schema.referential_constraints ref
+                   ON cons.constraint_name = ref.constraint_name
+                 LEFT JOIN information_schema.key_column_usage col
+                   ON col.constraint_name  = cons.constraint_name
+                 LEFT JOIN information_schema.table_constraints target
+                   ON target.constraint_name = ref.unique_constraint_name
+                 LEFT JOIN information_schema.key_column_usage target_col
+                   ON target_col.constraint_name = target.constraint_name AND col.ordinal_position = target_col.ordinal_position
+                 WHERE cons.table_schema = $1 AND cons.table_name = $2
+                 ORDER BY cons.constraint_name |}
+          in
+          let+ rows = C.collect_list query (schema, name) |> error in
+          let f = function
+            | (_, _, "FOREIGN KEY", Some ((schema, name), _, delete, update))
+              :: _ as columns ->
+              let action_of_string s =
+                Sqml.Table.referential_action_of_string s
+                |> Result.of_option
+                     ~error:(Fmt.str "invalid referential action: %S" s)
+                |> Result.ok_or_failwith
+              and get_source (_, c, _, _) = c
+              and get_target = function
+                | _, _, _, Some (_, c, _, _) -> c
+                | _ -> failwith "missing target column in constraint"
+              in
+              Some
+                (Table.Schema.Foreign_key
+                   {
+                     table = { schema = schema_of_name schema; name };
+                     source = List.map ~f:get_source columns;
+                     target = List.map ~f:get_target columns;
+                     on_delete = action_of_string delete;
+                     on_update = action_of_string update;
+                   })
+            | _ -> None
+          in
+          rows
+          |> List.group ~break:(fun (left, _, _, _) (right, _, _, _) ->
+                 String.(left = right))
+          |> List.filter_map ~f
+        in
         let+ columns =
           let f (char_length, name, data_type, nullable) =
             let open Let.Syntax2 (Result) in
@@ -760,13 +817,12 @@ end = struct
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in
-        let schema = match schema with "public" -> None | _ -> Some schema in
         {
-          constraints = [ (* FIXME *) ];
+          constraints = foreign_keys (* FIXME: primary keys too etc *);
           Sqml.Table.Schema.columns =
             Set.of_list (module Table.Schema.Column_by_name) columns;
           indexes = [ (* FIXME *) ];
-          name = { name; schema };
+          name = { name; schema = schema_of_name schema };
         }
       in
       Sequence.of_list tables |> Sequence.Seq.map ~f |> Sequence.to_list

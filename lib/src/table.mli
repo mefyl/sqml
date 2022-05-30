@@ -1,6 +1,7 @@
 include module type of Table_intf
 
 val pp_referential_action : referential_action Fmt.t
+val referential_action_of_string : string -> referential_action option
 val name : (module S' with type tag = _) -> string
 
 module Column : sig

@@ -10,6 +10,14 @@ let pp_referential_action f =
   | Set_null -> string f "SET NULL"
   | Set_default -> string f "SET DEFAULT"
 
+let referential_action_of_string = function
+  | "NO ACTION" -> Some No_action
+  | "RESTRICT" -> Some Restrict
+  | "CASCADE" -> Some Cascade
+  | "SET NULL" -> Some Set_null
+  | "SET DEFAULT" -> Some Set_default
+  | _ -> None
+
 let pp_ordering f =
   let open Fmt in
   function Ascending -> string f "ASC" | Descending -> string f "DESC"
