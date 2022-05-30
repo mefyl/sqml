@@ -75,7 +75,7 @@ struct
 end
 
 module Schema = struct
-  let of_table (module T : S) =
+  let of_table (type tag) (module T : S with type tag = tag) =
     let columns =
       let f Column.{ name; type_; _ } = Schema.{ name; type_ = Type type_ } in
       Column.List.map ~f:{ f } T.Meta.columns
@@ -137,17 +137,30 @@ module Query = struct
   type t =
     | Create_index of Schema.name * Schema.index
     | Create_table of Schema.t
+    | Drop_column of Schema.name * Schema.column
     | Drop_table of Schema.t
 
-  let create t =
-    let schema = Schema.of_table t in
-    let indexes =
-      List.map schema.indexes ~f:(fun index ->
-          Create_index (schema.name, index))
-    in
-    Create_table schema :: indexes
+  module Schema_ = struct
+    let create (schema : Schema.t) =
+      let indexes =
+        List.map schema.indexes ~f:(fun index ->
+            Create_index (schema.name, index))
+      in
+      Create_table schema :: indexes
 
-  let drop t = [ Drop_table (Schema.of_table t) ]
+    let drop schema = [ Drop_table schema ]
+    let drop_column table column = [ Drop_column (table, column) ]
+  end
+
+  let create t = Schema.of_table t |> Schema_.create
+  let drop t = Schema.of_table t |> Schema_.drop
+
+  let drop_column (table : (module S with type tag = 'tag))
+      ({ name; type_; _ } : ('t, 'tag) Expression.Column.t) =
+    let table = Schema.of_table table
+    and column : Schema.column = { name; type_ = Column.Type.Type type_ } in
+    [ Drop_column (table.name, column) ]
+
   let pp_either l r f = function Either.First v -> l f v | Second v -> r f v
 
   let pp_table_name (module Dialect : Dialect.S) f Schema.{ name; schema } =
@@ -196,6 +209,11 @@ module Query = struct
       pf f "@[<hv 2>CREATE TABLE %a (@,%a)@]" (pp_table_name dialect) name
         (list ~sep:comma (box @@ pp_either string (pp_constraint dialect)))
         (columns @ constraints)
+    | Drop_column (table, { name; _ }) ->
+      pf f "@[<h>ALTER TABLE %a DROP COLUMN %s@]" (pp_table_name dialect) table
+        name
     | Drop_table { name; _ } ->
       pf f "@[<h> DROP TABLE %a@]" (pp_table_name dialect) name
+
+  module Schema = Schema_
 end

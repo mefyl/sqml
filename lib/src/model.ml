@@ -453,50 +453,50 @@ struct
   end
 end
 
-let create (module Model : S) =
+let create (type tag) (module Model : S with type tag = tag) =
   Array.map ~f:Table.Query.create (Model.tables ())
   |> Array.to_list |> List.concat
 
-let diff (module Dialect : Dialect.S) (module Model : S) meta =
-  let effective, expected =
-    let tables =
-      Model.tables () |> Array.to_list |> List.map ~f:Table.Schema.of_table
-    and map (l : Table.Schema.t list) =
-      List.map
-        ~f:(fun t ->
-          ( Fmt.(
-              str "%a%s"
-                (option string ++ const char '.')
-                t.name.schema t.name.name),
-            t ))
-        l
-      |> Map.of_alist_exn (module String)
-    in
-    (map meta, map tables)
+let diff (type tag) (module Dialect : Dialect.S)
+    (module Model : S with type tag = tag) meta =
+  let effective =
+    List.map meta ~f:(fun (t : Table.Schema.t) ->
+        (Dialect.table_name ?schema:t.name.schema t.name.name, t))
+    |> Map.of_alist_exn (module String)
+  and expected =
+    Model.tables () |> Array.to_list
+    |> List.map ~f:(fun ((module T : Table.S with type tag = tag) as t) ->
+           ( Dialect.table_name ?schema:T.Meta.schema T.Meta.name,
+             Table.Schema.of_table t ))
+    |> Map.of_alist_exn (module String)
   and f = function
-    | _, `Left t -> Some (`Drop t)
-    | _, `Right t -> Some (`Create t)
+    | _, `Left t -> [ Either.First (Table.Query.Schema.drop t) ]
+    | _, `Right t -> [ Either.First (Table.Query.Schema.create t) ]
     | _, `Unequal (effective, expected) ->
-      let columns =
-        let effective_columns, expected_columns =
-          let map columns =
-            let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
-            columns |> Set.to_list |> List.map ~f
-            |> Map.of_alist_exn (module String)
-          in
-          (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
-        and f = function
-          | _, `Left c -> Some (`Drop c)
-          | _, `Right c -> Some (`Create c)
-          | _, `Unequal _ -> None
+      let effective_columns, expected_columns =
+        let map columns =
+          let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
+          columns |> Set.to_list |> List.map ~f
+          |> Map.of_alist_exn (module String)
         in
-        Map.symmetric_diff ~data_equal:Table.Schema.equal_column
-          effective_columns expected_columns
-        |> Base.Sequence.filter_map ~f
-        |> Base.Sequence.to_list
+        (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
+      and f = function
+        | _, `Left c ->
+          Either.first (Table.Query.Schema.drop_column effective.name c)
+        | _, `Right (c : Table.Schema.column) ->
+          Either.second
+            (Fmt.str "add column %s to %s" c.name
+               (Dialect.table_name ?schema:effective.name.schema
+                  effective.name.name))
+        | _, `Unequal ((c : Table.Schema.column), _) ->
+          Either.second
+            (Fmt.str "alter column %s of %s" c.name
+               (Dialect.table_name ?schema:effective.name.schema
+                  effective.name.name))
       in
-      Some (`Alter (expected, columns))
+      Map.symmetric_diff ~data_equal:Table.Schema.equal_column effective_columns
+        expected_columns
+      |> Base.Sequence.map ~f |> Base.Sequence.to_list
   in
   Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected
-  |> Base.Sequence.filter_map ~f
-  |> Base.Sequence.to_list
+  |> Base.Sequence.map ~f |> Base.Sequence.to_list |> List.concat

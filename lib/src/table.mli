@@ -49,13 +49,23 @@ module Schema : sig
   include module type of Schema
 
   val equal_column : column -> column -> bool
-  val of_table : (module S) -> t
+  val of_table : (module S with type tag = 'tag) -> t
 end
 
 module Query : sig
   type t
 
-  val create : (module S) -> t list
-  val drop : (module S) -> t list
+  val create : (module S with type tag = 'tag) -> t list
+  val drop : (module S with type tag = 'tag) -> t list
+
+  val drop_column :
+    (module S with type tag = 'tag) -> (_, 'tag) Expression.Column.t -> t list
+
   val pp : Dialect.t -> t Fmt.t
+
+  module Schema : sig
+    val create : Schema.t -> t list
+    val drop : Schema.t -> t list
+    val drop_column : Schema.name -> Schema.column -> t list
+  end
 end
