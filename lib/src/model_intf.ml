@@ -36,7 +36,7 @@ module type S = sig
 
   type tag
 
-  val tables : unit -> (module Table.S) array
+  val tables : unit -> (module Table.S with type tag = tag) array
 
   module BindTable (Meta : Table.META) :
     Table.S with type model = tag and module Meta = Meta

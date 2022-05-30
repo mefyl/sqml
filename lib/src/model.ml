@@ -8,7 +8,7 @@ struct
   let version = Meta.version
 
   type tag = unit
-  type t = { mutable tables : (module Table.S) Array.t }
+  type t = { mutable tables : (module Table.S with type tag = tag) Array.t }
 
   let v = { tables = [||] }
   let tables () = v.tables

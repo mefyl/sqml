@@ -182,7 +182,7 @@ end = struct
             Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
-          let create_table (module T : Table.S) =
+          let create_table (type tag) (module T : Table.S with type tag = tag) =
             let* () =
               match Caqti_driver_info.dialect_tag i with
               | `Sqlite -> Lwt_result.return ()
