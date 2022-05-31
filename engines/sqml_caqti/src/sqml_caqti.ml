@@ -761,7 +761,7 @@ end = struct
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in
-        let+ foreign_keys =
+        let+ constraints =
           let query =
             (Caqti_type.(tup2 string string)
             ->* Caqti_type.(
@@ -785,10 +785,18 @@ end = struct
                  LEFT JOIN information_schema.key_column_usage target_col
                    ON target_col.constraint_name = target.constraint_name AND col.ordinal_position = target_col.ordinal_position
                  WHERE cons.table_schema = $1 AND cons.table_name = $2
-                 ORDER BY cons.constraint_name |}
+                 ORDER BY cons.constraint_name, col.ordinal_position |}
           in
           let+ rows = C.collect_list query (schema, name) |> error in
           let f = function
+            | (constraint_name, _, "PRIMARY KEY", _) :: _ as columns ->
+              let get_column (_, c, _, _) = c in
+              Some
+                (Table.Schema.Constraint.Primary_key
+                   {
+                     name = Some constraint_name;
+                     columns = List.map ~f:get_column columns;
+                   })
             | ( constraint_name,
                 _,
                 "FOREIGN KEY",
@@ -818,11 +826,11 @@ end = struct
           in
           rows
           |> List.group ~break:(fun (left, _, _, _) (right, _, _, _) ->
-                 String.(left = right))
+                 String.(left <> right))
           |> List.filter_map ~f
         in
         {
-          constraints = foreign_keys (* FIXME: primary keys too etc *);
+          constraints;
           Sqml.Table.Schema.columns =
             Set.of_list (module Table.Schema.Column_by_name) columns;
           indexes = [ (* FIXME *) ];

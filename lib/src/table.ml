@@ -116,7 +116,11 @@ module Schema = struct
       | [] -> foreign
       | primary ->
         Schema.Constraint.Primary_key
-          (List.map ~f:(fun (Primary { column }) -> column.name) primary)
+          {
+            name = None;
+            columns =
+              List.map ~f:(fun (Primary { column }) -> column.name) primary;
+          }
         :: foreign
     and indexes =
       let f { columns; name } =
@@ -148,6 +152,7 @@ end
 module Query = struct
   type t =
     | Add_constraint of Schema.name * Schema.Constraint.t
+    | Alter_column_nullable of Schema.name * string * bool
     | Alter_column_type of
         Schema.name
         * string
@@ -160,10 +165,13 @@ module Query = struct
     | Drop_table of Schema.t
 
   module Schema_ = struct
-    let add_constraint table c = [ Add_constraint (table, c) ]
+    let add_constraint table c = Add_constraint (table, c)
+
+    let alter_column_nullable table c nullable =
+      Alter_column_nullable (table, c, nullable)
 
     let alter_column_type table c from to_ =
-      [ Alter_column_type (table, c, from, to_) ]
+      Alter_column_type (table, c, from, to_)
 
     let create (schema : Schema.t) =
       let indexes =
@@ -191,29 +199,30 @@ module Query = struct
   let pp_table_name (module Dialect : Dialect.S) f Schema.{ name; schema } =
     Fmt.string f (Dialect.table_name ?schema name)
 
-  let pp_constraint dialect f = function
-    | Schema.Constraint.Primary_key columns ->
-      Fmt.(pf f "PRIMARY KEY (@[<h>%a@])" (list ~sep:comma string) columns)
+  let pp_constraint dialect f =
+    let open Fmt in
+    let pp_constraint_name = option @@ fmt "CONSTRAINT %s " in
+    function
+    | Schema.Constraint.Primary_key { name; columns } ->
+      pf f "%aPRIMARY KEY (@[<h>%a@])" pp_constraint_name name
+        (list ~sep:comma string) columns
     | Foreign_key { name; table; source; target; on_delete; on_update } ->
       let on_delete =
         match on_delete with No_action -> None | action -> Some action
       and on_update =
         match on_update with No_action -> None | action -> Some action
       in
-      Fmt.(
-        pf f "%aFOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a"
-          (option @@ fmt "CONSTRAINT %s ")
-          name
-          (hvbox @@ list ~sep:comma string)
-          source (pp_table_name dialect) table
-          (hbox @@ list ~sep:comma string)
-          target
-          (hbox
-          @@ option (sp ++ const string "ON DELETE " ++ pp_referential_action))
-          on_delete
-          (hbox
-          @@ option (sp ++ const string "ON UPDATE " ++ pp_referential_action))
-          on_update)
+      pf f "%aFOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a" pp_constraint_name name
+        (hvbox @@ list ~sep:comma string)
+        source (pp_table_name dialect) table
+        (hbox @@ list ~sep:comma string)
+        target
+        (hbox
+        @@ option (sp ++ const string "ON DELETE " ++ pp_referential_action))
+        on_delete
+        (hbox
+        @@ option (sp ++ const string "ON UPDATE " ++ pp_referential_action))
+        on_update
 
   let pp ((module Dialect : Dialect.S) as dialect) f =
     let open Fmt in
@@ -221,11 +230,15 @@ module Query = struct
     | Add_constraint (table, c) ->
       pf f "@[<h>ALTER TABLE %a ADD CONSTRAINT %a@]" (pp_table_name dialect)
         table (pp_constraint dialect) c
+    | Alter_column_nullable (table, column, nullable) ->
+      pf f "@[<h>ALTER TABLE %a ALTER COLUMN %s SET %s@]"
+        (pp_table_name dialect) table column
+        (if nullable then "NULL" else "NOT NULL")
     | Alter_column_type (table, column, Type from, Type to_) ->
       pf f "@[<h>ALTER TABLE %a ALTER COLUMN %s TYPE %s /* from %s */@]"
         (pp_table_name dialect) table column
-        (Dialect.string_of_type to_)
-        (Dialect.string_of_type from)
+        (Dialect.string_of_type ~include_nullable:false to_)
+        (Dialect.string_of_type ~include_nullable:false from)
     | Create_index (table_name, { name = { name; schema }; columns }) ->
       pf f "@[<2>CREATE INDEX %s@ ON %a@ (%a)@]"
         (Dialect.index_name ?schema name)

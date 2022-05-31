@@ -4,12 +4,18 @@ let nullable : type t. t Expression.Column.Type.t -> bool = function
   | Nullable _ -> true
   | _ -> false
 
-module Make (D : S) = struct
+module Make (D : sig
+  include S
+
+  val string_of_type : _ Expression.Column.Type.t -> string
+end) =
+struct
   include D
 
-  let string_of_type t =
+  let string_of_type ?(include_nullable = true) t =
     let type_ = string_of_type t in
-    if nullable t then type_ else Fmt.str "%s NOT NULL" type_
+    if (not include_nullable) || nullable t then type_
+    else Fmt.str "%s NOT NULL" type_
 end
 
 module Postgresql : S = Make (struct

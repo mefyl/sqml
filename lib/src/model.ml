@@ -494,8 +494,25 @@ let diff (type tag) (module Dialect : Dialect.S)
               `Unequal
                 ( Table.Schema.{ name; type_ = l; _ },
                   Table.Schema.{ type_ = r; _ } ) ) ->
-            Either.first
-              (Table.Query.Schema.alter_column_type effective.name name l r)
+            let rec f = function
+              | ( Expression.Column.Type.Type (Nullable l),
+                  Expression.Column.Type.Type (Nullable r) ) ->
+                f (Type l, Type r)
+              | ( Expression.Column.Type.Type (Nullable l),
+                  Expression.Column.Type.Type r ) ->
+                Table.Query.Schema.alter_column_nullable effective.name name
+                  false
+                :: f (Type l, Type r)
+              | ( Expression.Column.Type.Type l,
+                  Expression.Column.Type.Type (Nullable r) ) ->
+                Table.Query.Schema.alter_column_nullable effective.name name
+                  true
+                :: f (Type l, Type r)
+              | l, r when not (Expression.Column.Type.equal_any l r) ->
+                [ Table.Query.Schema.alter_column_type effective.name name l r ]
+              | _ -> []
+            in
+            f (l, r) |> Either.first
         in
         Map.symmetric_diff ~data_equal:Table.Schema.equal_column
           effective_columns expected_columns
@@ -507,7 +524,9 @@ let diff (type tag) (module Dialect : Dialect.S)
             set expected.Table.Schema.constraints )
         and f = function
           | Either.First
-              (Table.Schema.Constraint.Foreign_key { name = Some name; _ }) ->
+              (Table.Schema.Constraint.Foreign_key { name = Some name; _ })
+          | Either.First
+              (Table.Schema.Constraint.Primary_key { name = Some name; _ }) ->
             Either.first
               (Table.Query.Schema.drop_constraint effective.name name)
           | Either.First _ ->
@@ -516,7 +535,7 @@ let diff (type tag) (module Dialect : Dialect.S)
                  (Dialect.table_name ?schema:effective.name.schema
                     effective.name.name))
           | Either.Second c ->
-            Either.first (Table.Query.Schema.add_constraint effective.name c)
+            Either.first [ Table.Query.Schema.add_constraint effective.name c ]
         in
         Set.symmetric_diff effective_constraints expected_constraints
         |> Seq.map ~f

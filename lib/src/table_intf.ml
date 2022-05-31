@@ -180,14 +180,17 @@ module Schema = struct
   module Constraint = struct
     type t =
       | Foreign_key of {
-          name : string option;
+          name : string option; [@compare fun _ _ -> 0]
           table : name;
           source : string list;
           target : string list;
           on_delete : referential_action;
           on_update : referential_action;
         }
-      | Primary_key of string list
+      | Primary_key of {
+          name : string option; [@compare fun _ _ -> 0]
+          columns : string list;
+        }
     [@@deriving eq, ord, sexp_of]
   end
 
