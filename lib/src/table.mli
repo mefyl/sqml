@@ -49,6 +49,11 @@ end) : META with type columns = Minimal.columns
 module Schema : sig
   include module type of Schema
 
+  module Constraint : sig
+    include module type of Constraint
+    include Base.Comparable.S with type t := t
+  end
+
   val equal_column : column -> column -> bool
   val of_table : (module S with type tag = 'tag) -> t
 end
@@ -65,8 +70,10 @@ module Query : sig
   val pp : Dialect.t -> t Fmt.t
 
   module Schema : sig
+    val add_constraint : Schema.name -> Schema.Constraint.t -> t list
     val create : Schema.t -> t list
     val drop : Schema.t -> t list
     val drop_column : Schema.name -> Schema.column -> t list
+    val drop_constraint : Schema.name -> string -> t list
   end
 end

@@ -107,14 +107,15 @@ module Schema = struct
                 ->
                 Schema.{ name = T.Meta.name; schema = T.Meta.schema }
             in
-            Schema.Foreign_key { table; source; target; on_delete; on_update }
+            Schema.Constraint.Foreign_key
+              { name = None; table; source; target; on_delete; on_update }
         in
         List.map ~f T.constraints
       in
       match T.primary with
       | [] -> foreign
       | primary ->
-        Schema.Primary_key
+        Schema.Constraint.Primary_key
           (List.map ~f:(fun (Primary { column }) -> column.name) primary)
         :: foreign
     and indexes =
@@ -137,16 +138,25 @@ module Schema = struct
       }
 
   include Schema
+
+  module Constraint = struct
+    include Constraint
+    include Base.Comparable.Make (Constraint)
+  end
 end
 
 module Query = struct
   type t =
+    | Add_constraint of Schema.name * Schema.Constraint.t
     | Create_index of Schema.name * Schema.index
     | Create_table of Schema.t
     | Drop_column of Schema.name * Schema.column
+    | Drop_constraint of Schema.name * string
     | Drop_table of Schema.t
 
   module Schema_ = struct
+    let add_constraint table c = [ Add_constraint (table, c) ]
+
     let create (schema : Schema.t) =
       let indexes =
         List.map schema.indexes ~f:(fun index ->
@@ -155,6 +165,7 @@ module Query = struct
       Create_table schema :: indexes
 
     let drop schema = [ Drop_table schema ]
+    let drop_constraint table name = [ Drop_constraint (table, name) ]
     let drop_column table column = [ Drop_column (table, column) ]
   end
 
@@ -173,16 +184,18 @@ module Query = struct
     Fmt.string f (Dialect.table_name ?schema name)
 
   let pp_constraint dialect f = function
-    | Schema.Primary_key columns ->
+    | Schema.Constraint.Primary_key columns ->
       Fmt.(pf f "PRIMARY KEY (@[<h>%a@])" (list ~sep:comma string) columns)
-    | Schema.Foreign_key { table; source; target; on_delete; on_update } ->
+    | Foreign_key { name; table; source; target; on_delete; on_update } ->
       let on_delete =
         match on_delete with No_action -> None | action -> Some action
       and on_update =
         match on_update with No_action -> None | action -> Some action
       in
       Fmt.(
-        pf f "FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a"
+        pf f "%aFOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a"
+          (option @@ fmt "CONSTRAINT %s ")
+          name
           (hvbox @@ list ~sep:comma string)
           source (pp_table_name dialect) table
           (hbox @@ list ~sep:comma string)
@@ -197,6 +210,9 @@ module Query = struct
   let pp ((module Dialect : Dialect.S) as dialect) f =
     let open Fmt in
     function
+    | Add_constraint (table, c) ->
+      pf f "@[<h>ALTER TABLE %a ADD CONSTRAINT %a@]" (pp_table_name dialect)
+        table (pp_constraint dialect) c
     | Create_index (table_name, { name = { name; schema }; columns }) ->
       pf f "@[<2>CREATE INDEX %s@ ON %a@ (%a)@]"
         (Dialect.index_name ?schema name)
@@ -218,6 +234,9 @@ module Query = struct
     | Drop_column (table, { name; _ }) ->
       pf f "@[<h>ALTER TABLE %a DROP COLUMN %s@]" (pp_table_name dialect) table
         name
+    | Drop_constraint (table, name) ->
+      pf f "@[<h>ALTER TABLE %a DROP CONSTRAINT %s@]" (pp_table_name dialect)
+        table name
     | Drop_table { name; _ } ->
       pf f "@[<h> DROP TABLE %a@]" (pp_table_name dialect) name
 

@@ -459,6 +459,7 @@ let create (type tag) (module Model : S with type tag = tag) =
 
 let diff (type tag) (module Dialect : Dialect.S)
     (module Model : S with type tag = tag) meta =
+  let module Seq = Base.Sequence in
   let effective =
     List.map meta ~f:(fun (t : Table.Schema.t) ->
         (Dialect.table_name ?schema:t.name.schema t.name.name, t))
@@ -473,30 +474,54 @@ let diff (type tag) (module Dialect : Dialect.S)
     | _, `Left t -> [ Either.First (Table.Query.Schema.drop t) ]
     | _, `Right t -> [ Either.First (Table.Query.Schema.create t) ]
     | _, `Unequal (effective, expected) ->
-      let effective_columns, expected_columns =
-        let map columns =
-          let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
-          columns |> Set.to_list |> List.map ~f
-          |> Map.of_alist_exn (module String)
+      let columns_diff =
+        let effective_columns, expected_columns =
+          let map columns =
+            let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
+            columns |> Set.to_list |> List.map ~f
+            |> Map.of_alist_exn (module String)
+          in
+          (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
+        and f = function
+          | _, `Left c ->
+            Either.first (Table.Query.Schema.drop_column effective.name c)
+          | _, `Right (c : Table.Schema.column) ->
+            Either.second
+              (Fmt.str "add column %s to %s" c.name
+                 (Dialect.table_name ?schema:effective.name.schema
+                    effective.name.name))
+          | _, `Unequal ((c : Table.Schema.column), _) ->
+            Either.second
+              (Fmt.str "alter column %s of %s" c.name
+                 (Dialect.table_name ?schema:effective.name.schema
+                    effective.name.name))
         in
-        (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
-      and f = function
-        | _, `Left c ->
-          Either.first (Table.Query.Schema.drop_column effective.name c)
-        | _, `Right (c : Table.Schema.column) ->
-          Either.second
-            (Fmt.str "add column %s to %s" c.name
-               (Dialect.table_name ?schema:effective.name.schema
-                  effective.name.name))
-        | _, `Unequal ((c : Table.Schema.column), _) ->
-          Either.second
-            (Fmt.str "alter column %s of %s" c.name
-               (Dialect.table_name ?schema:effective.name.schema
-                  effective.name.name))
+        Map.symmetric_diff ~data_equal:Table.Schema.equal_column
+          effective_columns expected_columns
+        |> Seq.map ~f
+      and constraints_diff =
+        let effective_constraints, expected_constraints =
+          let set = Set.of_list (module Table.Schema.Constraint) in
+          ( set effective.Table.Schema.constraints,
+            set expected.Table.Schema.constraints )
+        and f = function
+          | Either.First
+              (Table.Schema.Constraint.Foreign_key { name = Some name; _ }) ->
+            Either.first
+              (Table.Query.Schema.drop_constraint effective.name name)
+          | Either.First _ ->
+            Either.second
+              (Fmt.str "drop unnamed constraint on %s"
+                 (Dialect.table_name ?schema:effective.name.schema
+                    effective.name.name))
+          | Either.Second c ->
+            Either.first (Table.Query.Schema.add_constraint effective.name c)
+        in
+        Set.symmetric_diff effective_constraints expected_constraints
+        |> Seq.map ~f
       in
-      Map.symmetric_diff ~data_equal:Table.Schema.equal_column effective_columns
-        expected_columns
-      |> Base.Sequence.map ~f |> Base.Sequence.to_list
+      Seq.of_list [ columns_diff; constraints_diff ]
+      |> Seq.concat |> Seq.to_list
   in
   Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected
-  |> Base.Sequence.map ~f |> Base.Sequence.to_list |> List.concat
+  |> Seq.map ~f |> Seq.to_list |> List.concat

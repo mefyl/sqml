@@ -781,7 +781,10 @@ end = struct
           in
           let+ rows = C.collect_list query (schema, name) |> error in
           let f = function
-            | (_, _, "FOREIGN KEY", Some ((schema, name), _, delete, update))
+            | ( constraint_name,
+                _,
+                "FOREIGN KEY",
+                Some ((schema, name), _, delete, update) )
               :: _ as columns ->
               let action_of_string s =
                 Sqml.Table.referential_action_of_string s
@@ -794,8 +797,9 @@ end = struct
                 | _ -> failwith "missing target column in constraint"
               in
               Some
-                (Table.Schema.Foreign_key
+                (Table.Schema.Constraint.Foreign_key
                    {
+                     name = Some constraint_name;
                      table = { schema = schema_of_name schema; name };
                      source = List.map ~f:get_source columns;
                      target = List.map ~f:get_target columns;

@@ -56,7 +56,7 @@ type referential_action =
   | Cascade
   | Set_null
   | Set_default
-[@@deriving eq]
+[@@deriving eq, ord, sexp_of]
 
 type ('ref, 'target) reference_with_actions = {
   reference : 'ref;
@@ -153,10 +153,10 @@ type 'tag t = (module S with type tag = 'tag)
 
 module Schema = struct
   type name = {
-    name : string;
     schema : string option;
+    name : string;
   }
-  [@@deriving eq]
+  [@@deriving eq, ord, sexp_of]
 
   type column = {
     name : string;
@@ -177,16 +177,19 @@ module Schema = struct
     end)
   end
 
-  type constraint_ =
-    | Foreign_key of {
-        table : name;
-        source : string list;
-        target : string list;
-        on_delete : referential_action;
-        on_update : referential_action;
-      }
-    | Primary_key of string list
-  [@@deriving eq]
+  module Constraint = struct
+    type t =
+      | Foreign_key of {
+          name : string option;
+          table : name;
+          source : string list;
+          target : string list;
+          on_delete : referential_action;
+          on_update : referential_action;
+        }
+      | Primary_key of string list
+    [@@deriving eq, ord, sexp_of]
+  end
 
   type index = {
     name : name;
@@ -197,7 +200,7 @@ module Schema = struct
   type t = {
     columns : (column, Column_by_name.comparator_witness) Set.t;
         [@equal Set.equal]
-    constraints : constraint_ list;
+    constraints : Constraint.t list;
     indexes : index list;
     name : name;
   }
