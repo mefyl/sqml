@@ -137,8 +137,6 @@ module Schema = struct
       }
 
   include Schema
-
-  let equal_column (l : column) (r : column) = String.equal l.name r.name
 end
 
 module Query = struct

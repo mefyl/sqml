@@ -22,6 +22,26 @@ module Column = struct
       | Varchar : int -> string t
 
     type any = Type : _ t -> any
+
+    let rec equal : type l r. l t -> r t -> bool =
+     fun l r ->
+      match (l, r) with
+      | Bigint, Bigint
+      | Bool, Bool
+      | Date, Date
+      | Float, Float
+      | Int, Int
+      | Json, Json
+      | Text, Text
+      | Time, Time ->
+        true
+      | Custom { repr; _ }, r -> equal repr r
+      | l, Custom { repr; _ } -> equal l repr
+      | Nullable l, Nullable r -> equal l r
+      | Varchar l, Varchar r -> l = r
+      | _ -> false
+
+    let equal_any (Type l) (Type r) = equal l r
   end
 
   type ('t, 'tag) t = {

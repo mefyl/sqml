@@ -162,6 +162,7 @@ module Schema = struct
     name : string;
     type_ : Column.Type.any;
   }
+  [@@deriving eq]
 
   module Column_by_name = struct
     type t = column

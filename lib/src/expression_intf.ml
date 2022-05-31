@@ -21,7 +21,11 @@ module type Interface = sig
         | Time : Timmy.Time.t t
         | Varchar : int -> string t
 
+      val equal : 'a t -> 'b t -> bool
+
       type any = Type : _ t -> any
+
+      val equal_any : any -> any -> bool
     end
 
     type ('t, 'tag) t = private {
