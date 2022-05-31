@@ -490,11 +490,12 @@ let diff (type tag) (module Dialect : Dialect.S)
               (Fmt.str "add column %s to %s" c.name
                  (Dialect.table_name ?schema:effective.name.schema
                     effective.name.name))
-          | _, `Unequal ((c : Table.Schema.column), _) ->
-            Either.second
-              (Fmt.str "alter column %s of %s" c.name
-                 (Dialect.table_name ?schema:effective.name.schema
-                    effective.name.name))
+          | ( _,
+              `Unequal
+                ( Table.Schema.{ name; type_ = l; _ },
+                  Table.Schema.{ type_ = r; _ } ) ) ->
+            Either.first
+              (Table.Query.Schema.alter_column_type effective.name name l r)
         in
         Map.symmetric_diff ~data_equal:Table.Schema.equal_column
           effective_columns expected_columns

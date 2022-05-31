@@ -740,20 +740,28 @@ end = struct
       in
       let f (schema, name) =
         let* columns =
-          let query =
-            (Caqti_type.(tup2 string string)
-            ->* Caqti_type.(tup4 (option int) string string string))
-              {| SELECT character_maximum_length,
+          let* columns =
+            let query =
+              (Caqti_type.(tup2 string string)
+              ->* Caqti_type.(tup4 (option int) string string string))
+                {| SELECT character_maximum_length,
                         column_name,
                         data_type,
                         is_nullable
                  FROM information_schema.columns
                  WHERE table_schema = $1
                    AND table_name   = $2 |}
+            in
+            C.collect_list query (schema, name) |> error
           in
-          C.collect_list query (schema, name) |> error
+          let f (char_length, name, data_type, nullable) =
+            let open Let.Syntax2 (Result) in
+            let+ type_ = type_of_info name char_length nullable data_type in
+            { Table.Schema.name; type_ }
+          in
+          columns |> List.map ~f |> Result.all |> Lwt.return
         in
-        let* foreign_keys =
+        let+ foreign_keys =
           let query =
             (Caqti_type.(tup2 string string)
             ->* Caqti_type.(
@@ -812,14 +820,6 @@ end = struct
           |> List.group ~break:(fun (left, _, _, _) (right, _, _, _) ->
                  String.(left = right))
           |> List.filter_map ~f
-        in
-        let+ columns =
-          let f (char_length, name, data_type, nullable) =
-            let open Let.Syntax2 (Result) in
-            let+ type_ = type_of_info name char_length nullable data_type in
-            { Table.Schema.name; type_ }
-          in
-          columns |> List.map ~f |> Result.all |> Lwt.return
         in
         {
           constraints = foreign_keys (* FIXME: primary keys too etc *);

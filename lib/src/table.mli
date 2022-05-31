@@ -71,6 +71,14 @@ module Query : sig
 
   module Schema : sig
     val add_constraint : Schema.name -> Schema.Constraint.t -> t list
+
+    val alter_column_type :
+      Schema.name ->
+      string ->
+      Expression.Column.Type.any ->
+      Expression.Column.Type.any ->
+      t list
+
     val create : Schema.t -> t list
     val drop : Schema.t -> t list
     val drop_column : Schema.name -> Schema.column -> t list

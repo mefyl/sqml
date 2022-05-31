@@ -148,6 +148,11 @@ end
 module Query = struct
   type t =
     | Add_constraint of Schema.name * Schema.Constraint.t
+    | Alter_column_type of
+        Schema.name
+        * string
+        * Expression.Column.Type.any
+        * Expression.Column.Type.any
     | Create_index of Schema.name * Schema.index
     | Create_table of Schema.t
     | Drop_column of Schema.name * Schema.column
@@ -156,6 +161,9 @@ module Query = struct
 
   module Schema_ = struct
     let add_constraint table c = [ Add_constraint (table, c) ]
+
+    let alter_column_type table c from to_ =
+      [ Alter_column_type (table, c, from, to_) ]
 
     let create (schema : Schema.t) =
       let indexes =
@@ -213,6 +221,11 @@ module Query = struct
     | Add_constraint (table, c) ->
       pf f "@[<h>ALTER TABLE %a ADD CONSTRAINT %a@]" (pp_table_name dialect)
         table (pp_constraint dialect) c
+    | Alter_column_type (table, column, Type from, Type to_) ->
+      pf f "@[<h>ALTER TABLE %a ALTER COLUMN %s TYPE %s /* from %s */@]"
+        (pp_table_name dialect) table column
+        (Dialect.string_of_type to_)
+        (Dialect.string_of_type from)
     | Create_index (table_name, { name = { name; schema }; columns }) ->
       pf f "@[<2>CREATE INDEX %s@ ON %a@ (%a)@]"
         (Dialect.index_name ?schema name)
