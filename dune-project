@@ -33,6 +33,7 @@
   logs
   (lwt
    (>= 5.3.0))
+  ppx_sexp_conv
   (ptime
    (>= 0.8.5))
   semver2
