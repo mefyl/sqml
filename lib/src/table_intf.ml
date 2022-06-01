@@ -188,7 +188,7 @@ module Schema = struct
           on_update : referential_action;
         }
       | Primary_key of {
-          name : string option; [@compare fun _ _ -> 0]
+          name : string;
           columns : string list;
         }
     [@@deriving eq, ord, sexp_of]

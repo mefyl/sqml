@@ -794,7 +794,7 @@ end = struct
               Some
                 (Table.Schema.Constraint.Primary_key
                    {
-                     name = Some constraint_name;
+                     name = constraint_name;
                      columns = List.map ~f:get_column columns;
                    })
             | ( constraint_name,

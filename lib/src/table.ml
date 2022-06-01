@@ -128,7 +128,7 @@ module Schema = struct
       | primary ->
         Schema.Constraint.Primary_key
           {
-            name = None;
+            name = Fmt.(str "%s_pkey" T.Meta.name);
             columns =
               List.map ~f:(fun (Primary { column }) -> column.name) primary;
           }
@@ -212,11 +212,10 @@ module Query = struct
 
   let pp_constraint dialect f =
     let open Fmt in
-    let pp_constraint_name = option @@ fmt "CONSTRAINT %s " in
     function
     | Schema.Constraint.Primary_key { name; columns } ->
-      pf f "%aPRIMARY KEY (@[<h>%a@])" pp_constraint_name name
-        (list ~sep:comma string) columns
+      pf f "CONSTRAINT %s PRIMARY KEY (@[<h>%a@])" name (list ~sep:comma string)
+        columns
     | Foreign_key { name; table; source; target; on_delete; on_update } ->
       let on_delete =
         match on_delete with No_action -> None | action -> Some action

@@ -524,15 +524,9 @@ let diff (type tag) (module Dialect : Dialect.S)
             set expected.Table.Schema.constraints )
         and f = function
           | Either.First (Table.Schema.Constraint.Foreign_key { name; _ })
-          | Either.First
-              (Table.Schema.Constraint.Primary_key { name = Some name; _ }) ->
+          | Either.First (Table.Schema.Constraint.Primary_key { name; _ }) ->
             Either.first
               (Table.Query.Schema.drop_constraint effective.name name)
-          | Either.First _ ->
-            Either.second
-              (Fmt.str "drop unnamed constraint on %s"
-                 (Dialect.table_name ?schema:effective.name.schema
-                    effective.name.name))
           | Either.Second c ->
             Either.first [ Table.Query.Schema.add_constraint effective.name c ]
         in
