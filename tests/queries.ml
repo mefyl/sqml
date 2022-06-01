@@ -64,11 +64,12 @@ module Queries = struct
   description TEXT,
   id INTEGER NOT NULL,
   name TEXT NOT NULL,
-  PRIMARY KEY (id));
+  CONSTRAINT table1_pkey PRIMARY KEY (id));
 CREATE INDEX ids ON "table1" (id ASC, name DESC);
 CREATE TABLE "table2" (
   id INTEGER NOT NULL,
-  FOREIGN KEY (id) REFERENCES "table1"(id));|}
+  CONSTRAINT table2_id_fkey
+    FOREIGN KEY (id) REFERENCES "table1"(id));|}
     in
     Alcotest.(check string "creation queries" expected (Buffer.contents buffer))
 end

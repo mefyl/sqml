@@ -214,15 +214,16 @@ module Query = struct
     let open Fmt in
     function
     | Schema.Constraint.Primary_key { name; columns } ->
-      pf f "CONSTRAINT %s PRIMARY KEY (@[<h>%a@])" name (list ~sep:comma string)
-        columns
+      pf f "@[<b 2>CONSTRAINT %s@ @[PRIMARY KEY (@[<h>%a@])@]@]" name
+        (list ~sep:comma string) columns
     | Foreign_key { name; table; source; target; on_delete; on_update } ->
       let on_delete =
         match on_delete with No_action -> None | action -> Some action
       and on_update =
         match on_update with No_action -> None | action -> Some action
       in
-      pf f "CONSTRAINT %s FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a" name
+      pf f "@[<b 2>CONSTRAINT %s@ @[FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a@]@]"
+        name
         (hvbox @@ list ~sep:comma string)
         source (pp_table_name dialect) table
         (hbox @@ list ~sep:comma string)
