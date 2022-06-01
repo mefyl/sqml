@@ -815,7 +815,7 @@ end = struct
               Some
                 (Table.Schema.Constraint.Foreign_key
                    {
-                     name = Some constraint_name;
+                     name = constraint_name;
                      table = { schema = schema_of_name schema; name };
                      source = List.map ~f:get_source columns;
                      target = List.map ~f:get_target columns;

@@ -108,7 +108,18 @@ module Schema = struct
                 Schema.{ name = T.Meta.name; schema = T.Meta.schema }
             in
             Schema.Constraint.Foreign_key
-              { name = None; table; source; target; on_delete; on_update }
+              {
+                name =
+                  Fmt.(
+                    str "%s_%a_fkey" T.Meta.name
+                      (list ~sep:(const char '_') string)
+                      source);
+                table;
+                source;
+                target;
+                on_delete;
+                on_update;
+              }
         in
         List.map ~f T.constraints
       in
@@ -212,7 +223,7 @@ module Query = struct
       and on_update =
         match on_update with No_action -> None | action -> Some action
       in
-      pf f "%aFOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a" pp_constraint_name name
+      pf f "CONSTRAINT %s FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a" name
         (hvbox @@ list ~sep:comma string)
         source (pp_table_name dialect) table
         (hbox @@ list ~sep:comma string)
@@ -228,8 +239,8 @@ module Query = struct
     let open Fmt in
     function
     | Add_constraint (table, c) ->
-      pf f "@[<h>ALTER TABLE %a ADD CONSTRAINT %a@]" (pp_table_name dialect)
-        table (pp_constraint dialect) c
+      pf f "@[<h>ALTER TABLE %a ADD %a@]" (pp_table_name dialect) table
+        (pp_constraint dialect) c
     | Alter_column_nullable (table, column, nullable) ->
       pf f "@[<h>ALTER TABLE %a ALTER COLUMN %s SET %s@]"
         (pp_table_name dialect) table column

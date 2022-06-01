@@ -180,7 +180,7 @@ module Schema = struct
   module Constraint = struct
     type t =
       | Foreign_key of {
-          name : string option; [@compare fun _ _ -> 0]
+          name : string;
           table : name;
           source : string list;
           target : string list;

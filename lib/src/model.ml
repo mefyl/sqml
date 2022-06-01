@@ -523,8 +523,7 @@ let diff (type tag) (module Dialect : Dialect.S)
           ( set effective.Table.Schema.constraints,
             set expected.Table.Schema.constraints )
         and f = function
-          | Either.First
-              (Table.Schema.Constraint.Foreign_key { name = Some name; _ })
+          | Either.First (Table.Schema.Constraint.Foreign_key { name; _ })
           | Either.First
               (Table.Schema.Constraint.Primary_key { name = Some name; _ }) ->
             Either.first
