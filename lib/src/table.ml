@@ -162,6 +162,7 @@ end
 
 module Query = struct
   type t =
+    | Add_column of Schema.name * Schema.column
     | Add_constraint of Schema.name * Schema.Constraint.t
     | Alter_column_nullable of Schema.name * string * bool
     | Alter_column_type of
@@ -177,6 +178,7 @@ module Query = struct
 
   module Schema_ = struct
     let add_constraint table c = Add_constraint (table, c)
+    let add_column table c = Add_column (table, c)
 
     let alter_column_nullable table c nullable =
       Alter_column_nullable (table, c, nullable)
@@ -238,6 +240,10 @@ module Query = struct
   let pp ((module Dialect : Dialect.S) as dialect) f =
     let open Fmt in
     function
+    | Add_column (table, { name; type_ = Type type_ }) ->
+      pf f "@[<h c>ALTER TABLE %a@ @[ADD COLUMN %s@ %s@]@]"
+        (pp_table_name dialect) table name
+        (Dialect.string_of_type type_)
     | Add_constraint (table, c) ->
       pf f "@[<h>ALTER TABLE %a ADD %a@]" (pp_table_name dialect) table
         (pp_constraint dialect) c

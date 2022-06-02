@@ -70,6 +70,7 @@ module Query : sig
   val pp : Dialect.t -> t Fmt.t
 
   module Schema : sig
+    val add_column : Schema.name -> Schema.column -> t
     val add_constraint : Schema.name -> Schema.Constraint.t -> t
     val alter_column_nullable : Schema.name -> string -> bool -> t
 

@@ -485,11 +485,8 @@ let diff (type tag) (module Dialect : Dialect.S)
         and f = function
           | _, `Left c ->
             Either.first (Table.Query.Schema.drop_column effective.name c)
-          | _, `Right (c : Table.Schema.column) ->
-            Either.second
-              (Fmt.str "add column %s to %s" c.name
-                 (Dialect.table_name ?schema:effective.name.schema
-                    effective.name.name))
+          | _, `Right c ->
+            Either.first [ Table.Query.Schema.add_column effective.name c ]
           | ( _,
               `Unequal
                 ( Table.Schema.{ name; type_ = l; _ },
