@@ -241,9 +241,8 @@ module Query = struct
     let open Fmt in
     function
     | Add_column (table, { name; type_ = Type type_ }) ->
-      pf f "@[<h c>ALTER TABLE %a@ @[ADD COLUMN %s@ %s@]@]"
-        (pp_table_name dialect) table name
-        (Dialect.string_of_type type_)
+      pf f "@[<h c>ALTER TABLE %a@ @[ADD COLUMN %s@ %a@]@]"
+        (pp_table_name dialect) table name Dialect.pp_type type_
     | Add_constraint (table, c) ->
       pf f "@[<h>ALTER TABLE %a ADD %a@]" (pp_table_name dialect) table
         (pp_constraint dialect) c
@@ -268,8 +267,7 @@ module Query = struct
       let columns =
         Set.to_list columns
         |> List.map ~f:(fun Schema.{ name; type_ = Type type_ } ->
-               Either.First
-                 (Fmt.str "%s %s" name (Dialect.string_of_type type_)))
+               Either.First (Fmt.str "%s %a" name Dialect.pp_type type_))
       and constraints = List.map ~f:Either.second constraints in
       pf f "@[<hv 2>CREATE TABLE %a (@,%a)@]" (pp_table_name dialect) name
         (list ~sep:comma (box @@ pp_either string (pp_constraint dialect)))

@@ -4,6 +4,8 @@ module type S = sig
 
   val string_of_type :
     ?include_nullable:bool -> _ Expression.Column.Type.t -> string
+
+  val pp_type : _ Expression.Column.Type.t Fmt.t
 end
 
 type t = (module S)
