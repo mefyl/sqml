@@ -4,10 +4,9 @@ module Make (Meta : sig
   val version : Semver.t
 end) : S
 
-val create : 'tag. (module S with type tag = 'tag) -> Table.Query.t list
+val create : (module S with type tag = 'tag) -> Table.Query.t list
 
 val diff :
-  'tag.
   Dialect.t ->
   (module S with type tag = 'tag) ->
   Table.Schema.t list ->
