@@ -471,8 +471,8 @@ let diff (type tag) (module Dialect : Dialect.S)
              Table.Schema.of_table t ))
     |> Map.of_alist_exn (module String)
   and f = function
-    | _, `Left t -> [ Either.First (Table.Query.Schema.drop t) ]
-    | _, `Right t -> [ Either.First (Table.Query.Schema.create t) ]
+    | _, `Left t -> [ Table.Query.Schema.drop t ]
+    | _, `Right t -> [ Table.Query.Schema.create t ]
     | _, `Unequal (effective, expected) ->
       let columns_diff =
         let effective_columns, expected_columns =
@@ -483,10 +483,8 @@ let diff (type tag) (module Dialect : Dialect.S)
           in
           (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
         and f = function
-          | _, `Left c ->
-            Either.first (Table.Query.Schema.drop_column effective.name c)
-          | _, `Right c ->
-            Either.first [ Table.Query.Schema.add_column effective.name c ]
+          | _, `Left c -> Table.Query.Schema.drop_column effective.name c
+          | _, `Right c -> [ Table.Query.Schema.add_column effective.name c ]
           | ( _,
               `Unequal
                 ( Table.Schema.{ name; type_ = l; _ },
@@ -509,7 +507,7 @@ let diff (type tag) (module Dialect : Dialect.S)
                 [ Table.Query.Schema.alter_column_type effective.name name l r ]
               | _ -> []
             in
-            f (l, r) |> Either.first
+            f (l, r)
         in
         Map.symmetric_diff ~data_equal:Table.Schema.equal_column
           effective_columns expected_columns
@@ -522,10 +520,9 @@ let diff (type tag) (module Dialect : Dialect.S)
         and f = function
           | Either.First (Table.Schema.Constraint.Foreign_key { name; _ })
           | Either.First (Table.Schema.Constraint.Primary_key { name; _ }) ->
-            Either.first
-              (Table.Query.Schema.drop_constraint effective.name name)
+            Table.Query.Schema.drop_constraint effective.name name
           | Either.Second c ->
-            Either.first [ Table.Query.Schema.add_constraint effective.name c ]
+            [ Table.Query.Schema.add_constraint effective.name c ]
         in
         Set.symmetric_diff effective_constraints expected_constraints
         |> Seq.map ~f
@@ -534,4 +531,4 @@ let diff (type tag) (module Dialect : Dialect.S)
       |> Seq.concat |> Seq.to_list
   in
   Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected
-  |> Seq.map ~f |> Seq.to_list |> List.concat
+  |> Seq.map ~f |> Seq.to_list |> List.concat |> List.concat
