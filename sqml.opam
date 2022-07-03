@@ -9,7 +9,7 @@ homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
   "dune" {>= "2.8"}
-  "acid" {>= "0.7.0" & < "0.8.0"}
+  "acid" {>= "0.8.0" & < "0.9.0"}
   "alcotest-lwt" {>= "1.1.0" & with-test}
   "ezjsonm"
   "fmt" {>= "0.8.8"}
@@ -18,7 +18,7 @@ depends: [
   "ppx_sexp_conv"
   "ptime" {>= "0.8.5"}
   "semver2"
-  "timmy" {>= "0.12.1" & < "0.13.0"}
+  "timmy" {>= "0.13.0" & < "0.14.0"}
   "odoc" {with-doc}
 ]
 build: [
