@@ -21,8 +21,8 @@
  (depends
   (acid
    (and
-    (>= 0.8.0)
-    (< 0.9.0)))
+    (>= 0.9.0)
+    (< 0.10.0)))
   (alcotest-lwt
    (and
     (>= 1.1.0)
@@ -39,8 +39,8 @@
   semver2
   (timmy
    (and
-    (>= 0.13.0)
-    (< 0.14.0)))))
+    (>= 0.14.0)
+    (< 0.15.0)))))
 
 (package
  (name sqml-caqti)
