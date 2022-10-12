@@ -690,7 +690,7 @@ end = struct
       (pool
         : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t
         :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
-    |> Lwt_result.map_err unmap
+    |> Lwt_result.map_error unmap
 
   let schema t =
     let schema_of_name = function "public" -> None | name -> Some name in
