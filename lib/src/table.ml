@@ -241,7 +241,7 @@ module Query = struct
     let open Fmt in
     function
     | Add_column (table, { name; type_ = Type type_ }) ->
-      pf f "@[<h c>ALTER TABLE %a@ @[ADD COLUMN %s@ %a@]@]"
+      pf f "@[<h>ALTER TABLE %a@ @[ADD COLUMN %s@ %a@]@]"
         (pp_table_name dialect) table name Dialect.pp_type type_
     | Add_constraint (table, c) ->
       pf f "@[<h>ALTER TABLE %a ADD %a@]" (pp_table_name dialect) table
