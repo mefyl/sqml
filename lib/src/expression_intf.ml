@@ -2,23 +2,38 @@ open Utils
 
 module Column = struct
   module Type = struct
-    type 'a t =
-      | Bigint : Int64.t t
-      | Bool : bool t
+    type 'a atomic =
+      | Bigint : Int64.t atomic
+      | Bool : bool atomic
       | Custom : {
-          repr : 'repr t;
+          repr : 'repr atomic;
           encode : 'a -> 'repr;
           decode : 'repr -> ('a, string) Result.t;
         }
+          -> 'a atomic
+      | Date : Timmy.Date.t atomic
+      | Float : float atomic
+      | Int : int atomic
+      | Json : Ezjsonm.value atomic
+      | Nullable : 't atomic -> 't option atomic
+      | Text : string atomic
+      | Time : Timmy.Time.t atomic
+      | Varchar : int -> string atomic
+
+    type any_atomic = Type : _ atomic -> any_atomic
+
+    module List = Hlist.Make (struct
+      type nonrec 't t = string * 't atomic
+    end)
+
+    type 'a t =
+      | Atomic : 'a atomic -> 'a t
+      | Composite : {
+          decode : 'l Hlist.t -> 'a;
+          encode : 'a -> 'l Hlist.t;
+          columns : 'l List.t;
+        }
           -> 'a t
-      | Date : Timmy.Date.t t
-      | Float : float t
-      | Int : int t
-      | Json : Ezjsonm.value t
-      | Nullable : 't t -> 't option t
-      | Text : string t
-      | Time : Timmy.Time.t t
-      | Varchar : int -> string t
 
     type any = Type : _ t -> any
   end

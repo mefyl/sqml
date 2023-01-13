@@ -477,12 +477,19 @@ let diff (type tag) (module Dialect : Dialect.S)
       let columns_diff =
         let effective_columns, expected_columns =
           let map columns =
-            let f (({ name; _ } : Table.Schema.column) as c) = (name, c) in
+            let f (({ name; _ } : Table.Schema.column_atomic) as c) =
+              (name, c)
+            in
             columns |> Set.to_list |> List.map ~f
             |> Map.of_alist_exn (module String)
           in
           (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
-        and f = function
+        in
+        let diff =
+          Map.symmetric_diff ~data_equal:Table.Schema.equal_column_atomic
+            effective_columns expected_columns
+        in
+        Seq.map diff ~f:(function
           | _, `Left c -> Table.Query.Schema.drop_column effective.name c
           | _, `Right c -> [ Table.Query.Schema.add_column effective.name c ]
           | ( _,
@@ -490,8 +497,8 @@ let diff (type tag) (module Dialect : Dialect.S)
                 ( Table.Schema.{ name; type_ = l; _ },
                   Table.Schema.{ type_ = r; _ } ) ) ->
             let rec f = function
-              | ( Expression.Column.Type.Type (Nullable l),
-                  Expression.Column.Type.Type (Nullable r) ) ->
+              | ( (Type (Nullable l) : Expression.Column.Type.any_atomic),
+                  (Type (Nullable r) : Expression.Column.Type.any_atomic) ) ->
                 f (Type l, Type r)
               | ( Expression.Column.Type.Type (Nullable l),
                   Expression.Column.Type.Type r ) ->
@@ -503,15 +510,11 @@ let diff (type tag) (module Dialect : Dialect.S)
                 Table.Query.Schema.alter_column_nullable effective.name name
                   true
                 :: f (Type l, Type r)
-              | l, r when not (Expression.Column.Type.equal_any l r) ->
+              | l, r when not (Expression.Column.Type.equal_any_atomic l r) ->
                 [ Table.Query.Schema.alter_column_type effective.name name l r ]
               | _ -> []
             in
-            f (l, r)
-        in
-        Map.symmetric_diff ~data_equal:Table.Schema.equal_column
-          effective_columns expected_columns
-        |> Seq.map ~f
+            f (l, r))
       and constraints_diff =
         let effective_constraints, expected_constraints =
           let set = Set.of_list (module Table.Schema.Constraint) in

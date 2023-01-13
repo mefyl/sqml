@@ -1,13 +1,13 @@
 include Dialect_intf
 
-let nullable : type t. t Expression.Column.Type.t -> bool = function
+let nullable : type t. t Expression.Column.Type.atomic -> bool = function
   | Nullable _ -> true
   | _ -> false
 
 module Make (D : sig
   val table_name : ?schema:string -> string -> string
   val index_name : ?schema:string -> string -> string
-  val string_of_type : _ Expression.Column.Type.t -> string
+  val string_of_type : _ Expression.Column.Type.atomic -> string
 end) =
 struct
   include D
@@ -29,7 +29,7 @@ module Postgresql : S = Make (struct
   let index_name ?schema:_ name = name
 
   let string_of_type t =
-    let rec f : type t. t Expression.Column.Type.t -> string = function
+    let rec f : type t. t Expression.Column.Type.atomic -> string = function
       | Bigint -> "BIGINT"
       | Bool -> "BOOLEAN"
       | Custom { repr; _ } -> f repr
@@ -58,7 +58,7 @@ module Sqlite : S = Make (struct
   let index_name = table_name
 
   let string_of_type t =
-    let rec f : type t. t Expression.Column.Type.t -> string = function
+    let rec f : type t. t Expression.Column.Type.atomic -> string = function
       | Custom { repr; _ } -> f repr
       | Date | Time -> "TEXT"
       | t -> string_of_type t

@@ -25,16 +25,14 @@ let pp_ordering f =
 module Column = struct
   include Column
 
-  let make ?primary ?(foreign_keys = []) name type_ =
+  let make_composite ?primary ?(foreign_keys = []) name type_ =
     { name; type_; primary = Option.value ~default:false primary; foreign_keys }
 
+  let make ?primary ?(foreign_keys = []) name type_ =
+    make_composite ?primary ~foreign_keys name (Atomic type_)
+
   let make_nullable ?primary ?(foreign_keys = []) name type_ =
-    {
-      name;
-      type_ = Nullable type_;
-      primary = Option.value ~default:false primary;
-      foreign_keys;
-    }
+    make ?primary ~foreign_keys name (Nullable type_)
 
   module Foreign_key = struct
     include Foreign_key
@@ -83,10 +81,26 @@ struct
 end
 
 module Schema = struct
+  let unroll_column ({ name; type_ } : Schema.column) :
+      Schema.column_atomic list =
+    match type_ with
+    | Type (Atomic t) -> [ { name; type_ = Type t } ]
+    | Type (Composite { columns; _ }) ->
+      let rec of_types :
+          type t. t Column.Type.List.t -> Schema.column_atomic list = function
+        | Column.Type.List.[] -> []
+        | (field, t) :: tl ->
+          { name = name ^ "_" ^ field; type_ = Type t } :: of_types tl
+      in
+      of_types columns
+
   let of_table (type tag) (module T : S with type tag = tag) =
     let columns =
-      let f Column.{ name; type_; _ } = Schema.{ name; type_ = Type type_ } in
+      let f Column.{ name; type_; _ } =
+        Schema.{ name; type_ = Type type_ } |> unroll_column
+      in
       Column.List.map ~f:{ f } T.Meta.columns
+      |> List.concat
       |> Set.of_list (module Schema.Column_by_name)
     and constraints =
       let foreign =
@@ -162,17 +176,17 @@ end
 
 module Query = struct
   type t =
-    | Add_column of Schema.name * Schema.column
+    | Add_column of Schema.name * Schema.column_atomic
     | Add_constraint of Schema.name * Schema.Constraint.t
     | Alter_column_nullable of Schema.name * string * bool
     | Alter_column_type of
         Schema.name
         * string
-        * Expression.Column.Type.any
-        * Expression.Column.Type.any
+        * Expression.Column.Type.any_atomic
+        * Expression.Column.Type.any_atomic
     | Create_index of Schema.name * Schema.index
     | Create_table of Schema.t
-    | Drop_column of Schema.name * Schema.column
+    | Drop_column of Schema.name * Schema.column_atomic
     | Drop_constraint of Schema.name * string
     | Drop_table of Schema.t
 
@@ -204,8 +218,10 @@ module Query = struct
   let drop_column (table : (module S with type tag = 'tag))
       ({ name; type_; _ } : ('t, 'tag) Expression.Column.t) =
     let table = Schema.of_table table
-    and column : Schema.column = { name; type_ = Column.Type.Type type_ } in
-    [ Drop_column (table.name, column) ]
+    and columns : Schema.column_atomic list =
+      Schema.unroll_column { name; type_ = Type type_ }
+    in
+    List.map columns ~f:(fun column -> Drop_column (table.name, column))
 
   let pp_either l r f = function Either.First v -> l f v | Second v -> r f v
 
@@ -266,7 +282,8 @@ module Query = struct
     | Create_table { columns; constraints; name; _ } ->
       let columns =
         Set.to_list columns
-        |> List.map ~f:(fun Schema.{ name; type_ = Type type_ } ->
+        |> List.map
+             ~f:(fun ({ name; type_ = Type type_ } : Schema.column_atomic) ->
                Either.First (Fmt.str "%s %a" name Dialect.pp_type type_))
       and constraints = List.map ~f:Either.second constraints in
       pf f "@[<hv 2>CREATE TABLE %a (@,%a)@]" (pp_table_name dialect) name

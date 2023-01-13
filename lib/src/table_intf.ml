@@ -158,6 +158,12 @@ module Schema = struct
   }
   [@@deriving eq, ord, sexp_of]
 
+  type column_atomic = {
+    name : string;
+    type_ : Column.Type.any_atomic;
+  }
+  [@@deriving eq]
+
   type column = {
     name : string;
     type_ : Column.Type.any;
@@ -165,10 +171,10 @@ module Schema = struct
   [@@deriving eq]
 
   module Column_by_name = struct
-    type t = column
+    type t = column_atomic
 
     include Base.Comparable.Make (struct
-      type t = column
+      type t = column_atomic
 
       let compare ({ name = l; _ } : t) ({ name = r; _ } : t) =
         String.compare l r
@@ -201,7 +207,7 @@ module Schema = struct
   [@@deriving eq]
 
   type t = {
-    columns : (column, Column_by_name.comparator_witness) Set.t;
+    columns : (column_atomic, Column_by_name.comparator_witness) Set.t;
         [@equal Set.equal]
     constraints : Constraint.t list;
     indexes : index list;

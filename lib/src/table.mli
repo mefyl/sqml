@@ -11,15 +11,22 @@ module Column : sig
     ?primary:bool ->
     ?foreign_keys:'a Foreign_key.t list ->
     string ->
-    'a Type.t ->
+    'a Type.atomic ->
     'a t
 
   val make_nullable :
     ?primary:bool ->
     ?foreign_keys:'a option Foreign_key.t list ->
     string ->
-    'a Type.t ->
+    'a Type.atomic ->
     'a option t
+
+  val make_composite :
+    ?primary:bool ->
+    ?foreign_keys:'a Foreign_key.t list ->
+    string ->
+    'a Type.t ->
+    'a t
 
   module Foreign_key : sig
     include module type of Foreign_key
@@ -54,6 +61,7 @@ module Schema : sig
     include Base.Comparable.S with type t := t
   end
 
+  val unroll_column : column -> column_atomic list
   val equal_column : column -> column -> bool
   val of_table : (module S with type tag = 'tag) -> t
 end
@@ -70,20 +78,20 @@ module Query : sig
   val pp : Dialect.t -> t Fmt.t
 
   module Schema : sig
-    val add_column : Schema.name -> Schema.column -> t
+    val add_column : Schema.name -> Schema.column_atomic -> t
     val add_constraint : Schema.name -> Schema.Constraint.t -> t
     val alter_column_nullable : Schema.name -> string -> bool -> t
 
     val alter_column_type :
       Schema.name ->
       string ->
-      Expression.Column.Type.any ->
-      Expression.Column.Type.any ->
+      Expression.Column.Type.any_atomic ->
+      Expression.Column.Type.any_atomic ->
       t
 
     val create : Schema.t -> t list
     val drop : Schema.t -> t list
-    val drop_column : Schema.name -> Schema.column -> t list
+    val drop_column : Schema.name -> Schema.column_atomic -> t list
     val drop_constraint : Schema.name -> string -> t list
   end
 end

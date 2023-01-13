@@ -696,15 +696,17 @@ end = struct
     let schema_of_name = function "public" -> None | name -> Some name in
     let type_of_info column char_length nullable data_type =
       let open Let.Syntax2 (Result) in
-      let nullable (Column.Type.Type t as type_) =
-        if String.(nullable = "YES") then Column.Type.Type (Nullable t)
+      let nullable ((Column.Type.Type t : Column.Type.any_atomic) as type_) =
+        if String.(nullable = "YES") then
+          (Type (Nullable t) : Column.Type.any_atomic)
         else type_
       in
       let+ type_ =
         match (data_type, char_length) with
-        | "boolean", _ -> Result.return (Column.Type.Type Bool)
+        | "boolean", _ ->
+          Result.return (Column.Type.Type Bool : Column.Type.any_atomic)
         | "character varying", Some l ->
-          Result.return (Column.Type.Type (Varchar l))
+          Result.return (Column.Type.Type (Varchar l) : Column.Type.any_atomic)
         | "character varying", None ->
           Result.fail
             (`Sqml_engine
@@ -712,12 +714,16 @@ end = struct
                  "missing character_maximum_length in information_schema for \
                   column %s"
                  column))
-        | "date", _ -> Result.return (Column.Type.Type Date)
-        | "integer", _ -> Result.return (Column.Type.Type Int)
-        | "jsonb", _ -> Result.return (Column.Type.Type Json)
-        | "text", _ -> Result.return (Column.Type.Type Text)
+        | "date", _ ->
+          Result.return (Column.Type.Type Date : Column.Type.any_atomic)
+        | "integer", _ ->
+          Result.return (Column.Type.Type Int : Column.Type.any_atomic)
+        | "jsonb", _ ->
+          Result.return (Column.Type.Type Json : Column.Type.any_atomic)
+        | "text", _ ->
+          Result.return (Column.Type.Type Text : Column.Type.any_atomic)
         | ("timestamp" | "timestamp without time zone"), _ ->
-          Result.return (Column.Type.Type Time)
+          Result.return (Column.Type.Type Time : Column.Type.any_atomic)
         | _ ->
           Result.fail
             (`Sqml_engine
@@ -757,7 +763,7 @@ end = struct
           let f (char_length, name, data_type, nullable) =
             let open Let.Syntax2 (Result) in
             let+ type_ = type_of_info name char_length nullable data_type in
-            { Table.Schema.name; type_ }
+            ({ Table.Schema.name; type_ } : Table.Schema.column_atomic)
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in

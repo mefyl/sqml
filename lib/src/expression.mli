@@ -9,6 +9,7 @@ module Column : sig
 
     val equal : 'a t -> 'b t -> bool
     val equal_any : any -> any -> bool
+    val equal_any_atomic : any_atomic -> any_atomic -> bool
   end
 
   type ('t, 'tag) t = private {

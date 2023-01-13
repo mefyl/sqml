@@ -7,7 +7,7 @@ module Column = struct
   module Type = struct
     include Type
 
-    let rec equal : type l r. l t -> r t -> bool =
+    let rec equal_atomic : type l r. l atomic -> r atomic -> bool =
      fun l r ->
       match (l, r) with
       | Bigint, Bigint
@@ -19,13 +19,29 @@ module Column = struct
       | Text, Text
       | Time, Time ->
         true
-      | Custom { repr; _ }, r -> equal repr r
-      | l, Custom { repr; _ } -> equal l repr
-      | Nullable l, Nullable r -> equal l r
+      | Custom { repr; _ }, r -> equal_atomic repr r
+      | l, Custom { repr; _ } -> equal_atomic l repr
       | Varchar l, Varchar r -> l = r
       | _ -> false
 
+    let rec equal : type l r. l t -> r t -> bool =
+     fun l r ->
+      match (l, r) with
+      | Atomic l, Atomic r -> equal_atomic l r
+      | Composite { columns = l; _ }, Composite { columns = r; _ } ->
+        equal_list (l, r)
+      | _ -> false
+
+    and equal_list : type l r. l List.t * r List.t -> bool = function
+      | List.[], List.[] -> true
+      | (l, hd_l) :: tl_l, (r, hd_r) :: tl_r ->
+        String.(l = r) && equal_atomic hd_l hd_r && equal_list (tl_l, tl_r)
+      | _ -> false
+
     let equal_any (Type l) (Type r) = equal l r
+
+    let equal_any_atomic (Type l : any_atomic) (Type r : any_atomic) =
+      equal_atomic l r
   end
 
   type ('t, 'tag) t = {
@@ -42,20 +58,35 @@ end
 
 module Type = struct
   include Type
+  module Transduce_type = Column.Type.List.Transduce (Type.List)
 
-  let rec of_column_type : type a. a Column.Type.t -> a t = function
+  let rec of_atomic_column_type : type a. a Column.Type.atomic -> a t = function
     | Bigint -> Bigint
     | Bool -> Bool
     | Custom { encode; decode; repr } ->
-      Custom { encode; decode; repr = of_column_type repr }
+      Custom { encode; decode; repr = of_atomic_column_type repr }
     | Date -> Date
     | Float -> Float
     | Int -> Int
     | Json -> Json
-    | Nullable t -> Nullable (of_column_type t)
+    | Nullable t -> Nullable (of_atomic_column_type t)
     | Text -> String
     | Time -> Time
     | Varchar _ -> String
+
+  let of_column_type : type a. a Column.Type.t -> a t = function
+    | Atomic t -> of_atomic_column_type t
+    | Composite { columns; decode; encode } ->
+      let types =
+        Transduce_type.map columns
+          ~f:{ f = (fun (_, t) -> of_atomic_column_type t) }
+      in
+      let rec conv : type a. a Type.List.t -> a Hlist.t t = function
+        | [] -> []
+        | hd :: tl -> hd :: conv tl
+      in
+      Custom
+        { decode = Fn.compose Result.return decode; encode; repr = conv types }
 
   let rec pp : type a. a t Fmt.t =
     let open Fmt in
