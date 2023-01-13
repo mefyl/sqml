@@ -2,26 +2,10 @@ open Utils
 include Expression_intf
 
 module Column = struct
-  module Type = struct
-    type 'a t =
-      | Bigint : Int64.t t
-      | Bool : bool t
-      | Custom : {
-          repr : 'repr t;
-          encode : 'a -> 'repr;
-          decode : 'repr -> ('a, string) Result.t;
-        }
-          -> 'a t
-      | Date : Timmy.Date.t t
-      | Float : float t
-      | Int : int t
-      | Json : Ezjsonm.value t
-      | Nullable : 't t -> 't option t
-      | Text : string t
-      | Time : Timmy.Time.t t
-      | Varchar : int -> string t
+  include Column
 
-    type any = Type : _ t -> any
+  module Type = struct
+    include Type
 
     let rec equal : type l r. l t -> r t -> bool =
      fun l r ->
@@ -57,29 +41,7 @@ module Column = struct
 end
 
 module Type = struct
-  type 'a t =
-    | Bigint : Int64.t t
-    | Bool : bool t
-    | Date : Timmy.Date.t t
-    | Float : float t
-    | Int : int t
-    | Json : Ezjsonm.value t
-    | Null : _ option t
-    | Nullable : 't t -> 't option t
-    | String : string t
-    | Time : Timmy.Time.t t
-    | Custom : {
-        repr : 'repr t;
-        encode : 'a -> 'repr;
-        decode : 'repr -> ('a, string) Result.t;
-      }
-        -> 'a t
-    | [] : unit Hlist.t t
-    | ( :: ) : 'a t * 'b Hlist.t t -> ('a, 'b) Hlist.desc Hlist.t t
-
-  module List = Hlist.Make (struct
-    type nonrec 't t = 't t
-  end)
+  include Type
 
   let rec of_column_type : type a. a Column.Type.t -> a t = function
     | Bigint -> Bigint
@@ -116,58 +78,21 @@ module Type = struct
         pp f tl
 end
 
-type ast =
-  | Column : {
-      selectable : string;
-      name : string;
-    }
-      -> ast
-  | Const : {
-      type_ : 't Type.t;
-      value : 't;
-    }
-      -> ast
-  | Funcall : {
-      name : string;
-      args : ast list;
-    }
-      -> ast
-  | Infix : {
-      op : string;
-      lhs : ast;
-      rhs : ast;
-    }
-      -> ast
-  | Is_null : ast -> ast
-  | Is_not_null : ast -> ast
-  | List : ast list -> ast
-  | Null : ast
-  | Switch : {
-      cases : (ast * ast) list;
-      default : ast option;
-    }
-      -> ast
-  | Var : {
-      index : int;
-      size : int;
-    }
-      -> ast
-
 let traverse_ast ast ~f =
   let rec traverse_ast = function
     | (Column _ | Const _ | Null | Var _) as ast -> f ast
     | Funcall ({ args; _ } as pl) ->
-      Funcall { pl with args = List.map ~f:traverse_ast args }
+      Funcall { pl with args = Acid.List.map ~f:traverse_ast args }
     | Infix ({ lhs; rhs; _ } as pl) ->
       Infix { pl with lhs = traverse_ast lhs; rhs = traverse_ast rhs }
     | Is_null ast -> Is_null (traverse_ast ast)
     | Is_not_null ast -> Is_not_null (traverse_ast ast)
-    | List elts -> List (List.map ~f:traverse_ast elts)
+    | List elts -> List (Acid.List.map ~f:traverse_ast elts)
     | Switch { cases; default } ->
       Switch
         {
           cases =
-            List.map
+            Acid.List.map
               ~f:(fun (cond, v) -> (traverse_ast cond, traverse_ast v))
               cases;
           default = Option.map ~f:traverse_ast default;

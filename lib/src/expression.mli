@@ -1,5 +1,92 @@
+open Acid
 include module type of Expression_intf
-include Interface
+
+module Column : sig
+  include module type of Column
+
+  module Type : sig
+    include module type of Type
+
+    val equal : 'a t -> 'b t -> bool
+    val equal_any : any -> any -> bool
+  end
+
+  type ('t, 'tag) t = private {
+    name : string;
+    primary : bool;
+    selectable : string;
+    type_ : 't Type.t;
+  }
+
+  module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
+end
+
+module Type : sig
+  include module type of Type
+
+  val of_column_type : 't Column.Type.t -> 't t
+  val pp : 't t Fmt.t
+end
+
+type ('t, 'tag) t
+
+type ('t, 'tag) option =
+  | None : (unit, 'tag) option
+  | Some : ('t, 'tag) t -> ('t, 'tag) option
+
+type 'tag assignment
+
+module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
+
+val case :
+  ((bool, 'tag) t * ('t Option.t, 'tag) t) list -> ('t Option.t, 'tag) t
+
+val case_else :
+  ((bool, 'tag) t * ('t, 'tag) t) list -> ('t, 'tag) t -> ('t, 'tag) t
+
+val now : (Timmy.Time.t, 'tag) t
+val to_ast : ('t, 'tag) t -> ast
+val to_type : ('t, 'tag) t -> 't Type.t
+val of_list : ('l, 'tag) List.t -> ('l Hlist.t, 'tag) t
+val to_list : ('l Hlist.t, 'tag) t -> ('l, 'tag) List.t
+val coalesce : ('t Option.t, 'tag) t list -> ('t Option.t, 'tag) t
+
+val coalesce_default :
+  ('t Option.t, 'tag) t list -> ('t, 'tag) t -> ('t, 'tag) t
+
+val column : ('t, 'tag) Column.t -> ('t, 'tag) t
+val const : 't Type.t -> 't -> ('t, 'tag) t
+
+val map :
+  decode:('mapped -> ('t, string) Result.t) ->
+  encode:('t -> 'mapped) ->
+  ('mapped, 'tag) t ->
+  ('t, 'tag) t
+
+val null : (_ Option.t, 'tag) t
+val is_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
+val is_not_null : (_ Option.t, 'tag) t -> (bool, 'tag) t
+val some : ('t, 'tag) t -> ('t Option.t, 'tag) t
+
+(* FIXME: private *)
+val prepare : 'args Type.List.t -> ('args, 'free) List.t
+val assignment_to_ast : 'a assignment -> string * ast
+
+module Infix : sig
+  val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+  val ( := ) : ('t, 'tag) Column.t -> ('t, 'tag) t -> 'tag assignment
+  val ( < ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  val ( <= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  val ( = ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  val ( > ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  val ( >= ) : ('t, 'tag) t -> ('t, 'tag) t -> (bool, 'tag) t
+  val ( ^ ) : (string, 'tag) t -> (string, 'tag) t -> (string, 'tag) t
+  val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
+  val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
+  val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
+end
+
+include module type of Infix
 
 val traverse_ast : ast -> f:(ast -> ast) -> ast
 
