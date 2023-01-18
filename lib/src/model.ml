@@ -446,7 +446,9 @@ struct
           Table.Primary { column = subminor };
         ]
 
-      let indexes _ = []
+      type indexes = unit
+
+      let indexes _ = Table.Index.List.[]
     end
 
     include BindTable (Meta_)

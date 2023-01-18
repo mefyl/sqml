@@ -93,17 +93,27 @@ type 'tag primary_column =
 
 type 'tag primary = 'tag primary_column list
 
-type 'tag index_column =
-  | Index : {
+module Index = struct
+  module Column = struct
+    type ('t, 'tag) t = {
       column : ('t, 'tag) Expression.Column.t;
       order : ordering;
     }
-      -> 'tag index_column
 
-type 'tag index = {
-  columns : 'tag index_column List_nonempty.t;
-  name : string;
-}
+    module List = Hlist.Make2 (struct
+      type nonrec ('a, 'b) t = ('a, 'b) t
+    end)
+  end
+
+  type ('columns, 'tag) t = {
+    columns : ('columns, 'tag) Column.List.t;
+    name : string;
+  }
+
+  module List = Hlist.Make2 (struct
+    type nonrec ('a, 'b) t = ('a, 'b) t
+  end)
+end
 
 module Column = struct
   module Type = Expression.Column.Type
@@ -137,7 +147,11 @@ module type META = sig
     (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
 
   val primary : (columns, 'tag) Expression.Column.List.t -> 'tag primary
-  val indexes : (columns, 'tag) Expression.Column.List.t -> 'tag index list
+
+  type indexes
+
+  val indexes :
+    (columns, 'tag) Expression.Column.List.t -> (indexes, 'tag) Index.List.t
 end
 
 module type S = sig
@@ -146,7 +160,7 @@ module type S = sig
 
   val constraints : tag constraint_ list
   val primary : tag primary
-  val indexes : tag index list
+  val indexes : (Meta.indexes, tag) Index.List.t
 end
 
 type 'tag t = (module S with type tag = 'tag)

@@ -77,7 +77,9 @@ struct
         }
       columns
 
-  let indexes _ = []
+  type indexes = unit
+
+  let indexes _ = Index.List.[]
 end
 
 module Schema = struct
@@ -148,15 +150,19 @@ module Schema = struct
           }
         :: foreign
     and indexes =
-      let f { columns; name } =
-        let f = function Index { column; order } -> (column.name, order) in
+      let f { Index.columns; name } =
+        let f = function
+          | { Index.Column.column; order } -> (column.name, order)
+        in
         Schema.
           {
             name = { name; schema = None };
-            columns = List_nonempty.map ~f columns;
+            columns =
+              Index.Column.List.map ~f:{ f } columns
+              |> List_nonempty.of_list_exn;
           }
       in
-      List.map ~f T.indexes
+      Index.List.map ~f:{ f } T.indexes
     in
     Schema.
       {

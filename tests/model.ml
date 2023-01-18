@@ -25,18 +25,20 @@ module T1_meta = struct
   let primary Expression.Column.List.[ id; _name; _desc ] =
     [ Sqml.Table.Primary { column = id } ]
 
+  type indexes = (int * (string * unit)) * unit
+
   let indexes Expression.Column.List.[ id; _name; _desc ] =
-    [
-      Sqml.Table.
+    Sqml.Table.Index.List.
+      [
         {
           columns =
             [
-              Index { column = id; order = Ascending };
-              Index { column = _name; order = Descending };
+              { column = id; order = Ascending };
+              { column = _name; order = Descending };
             ];
           name = "ids";
         };
-    ]
+      ]
 end
 
 module T1 = struct
