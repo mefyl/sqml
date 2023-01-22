@@ -58,7 +58,7 @@ module Type = struct
       }
         -> 'a t
     | [] : unit Hlist.t t
-    | ( :: ) : 'a t * 'b Hlist.t t -> ('a, 'b) Hlist.desc Hlist.t t
+    | ( :: ) : 'a t * 'b Hlist.t t -> ('a -> 'b) Hlist.t t
 
   module List = Hlist.Make (struct
     type nonrec 't t = 't t

@@ -4,6 +4,66 @@ module Array = Array.Monadic2 (Lwt_result)
 open Let.Syntax2 (Lwt_result)
 open Let.Syntax' (Lwt)
 
+let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
+  function
+  | Bigint -> Caqti_type.int64
+  | Bool -> Caqti_type.bool
+  | Date ->
+    let encode d =
+      Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
+      |> Timmy.Time.to_ptime |> Result.return
+    and decode t =
+      Timmy.Time.of_ptime t
+      |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
+      |> Result.return
+    in
+    Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
+  | Float -> Caqti_type.float
+  | Int -> Caqti_type.int
+  | Json ->
+    let encode json = Result.return (Ezjsonm.value_to_string ~minify:true json)
+    and decode string =
+      try Result.return (Ezjsonm.value_from_string string)
+      with Ezjsonm.Parse_error (_, error) -> Result.fail error
+    in
+    Caqti_type.(custom ~encode ~decode string)
+  | Null -> failwith "FIXME"
+  | Nullable t -> Caqti_type.option (caqti_of_type t)
+  | String -> Caqti_type.string
+  | Time ->
+    let encode t = Result.return @@ Timmy.Time.to_ptime t
+    and decode t = Result.return @@ Timmy.Time.of_ptime t in
+    Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
+  | Custom { encode; decode; repr } ->
+    Caqti_type.custom ~decode ~encode:(fun v -> Result.return @@ encode v)
+    @@ caqti_of_type repr
+  | [] ->
+    let encode Hlist.[] = Result.return ()
+    and decode () = Result.return Hlist.[] in
+    Caqti_type.custom ~decode ~encode @@ Caqti_type.unit
+  | l :: r ->
+    let encode Hlist.(hd :: tl) = Result.return @@ (hd, tl)
+    and decode (hd, tl) = Result.return @@ Hlist.(hd :: tl) in
+    Caqti_type.custom ~decode ~encode
+    @@ Caqti_type.tup2 (caqti_of_type l) (caqti_of_type r)
+
+let rec caqti_of_types :
+    type l. l Sqml.Expression.Type.List.t -> l Hlist.t Caqti_type.t =
+  let open Caqti_type in
+  function
+  | hd :: tl ->
+    custom
+      ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
+      ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
+    @@ tup2 (caqti_of_type hd) (caqti_of_types tl)
+  | [] ->
+    custom
+      ~decode:(fun () -> Result.Ok Hlist.[])
+      ~encode:(fun Hlist.[] -> Result.Ok ())
+    @@ unit
+
+let type_of_expr e = Sqml.Expression.to_type e |> caqti_of_type
+
 module Make (Model : Model.S) : sig
   include Engine.S with module Model = Model
 
@@ -246,57 +306,6 @@ end = struct
   let close { pool; _ } = Caqti_lwt.Pool.drain pool
 
   module Model = Model
-
-  let rec type_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
-    function
-    | Bigint -> Caqti_type.int64
-    | Bool -> Caqti_type.bool
-    | Date ->
-      let encode d =
-        Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
-        |> Timmy.Time.to_ptime |> Result.return
-      and decode t =
-        Timmy.Time.of_ptime t
-        |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
-        |> Result.return
-      in
-      Caqti_type.custom ~decode ~encode @@ Caqti_type.pdate
-    | Float -> Caqti_type.float
-    | Int -> Caqti_type.int
-    | Json ->
-      let encode json =
-        Result.return (Ezjsonm.value_to_string ~minify:true json)
-      and decode string =
-        try Result.return (Ezjsonm.value_from_string string)
-        with Ezjsonm.Parse_error (_, error) -> Result.fail error
-      in
-      Caqti_type.(custom ~encode ~decode string)
-    | Null -> failwith "FIXME"
-    | Nullable t -> Caqti_type.option (type_of_type t)
-    | String -> Caqti_type.string
-    | Time ->
-      let encode t = Result.return @@ Timmy.Time.to_ptime t
-      and decode t = Result.return @@ Timmy.Time.of_ptime t in
-      Caqti_type.custom ~decode ~encode @@ Caqti_type.ptime
-    | Custom { encode; decode; repr } ->
-      Caqti_type.custom ~decode ~encode:(fun v -> Result.return @@ encode v)
-      @@ type_of_type repr
-    | [] ->
-      let encode Hlist.[] = Result.return ()
-      and decode () = Result.return Hlist.[] in
-      Caqti_type.custom ~decode ~encode @@ Caqti_type.unit
-    | l :: r ->
-      let encode Hlist.(hd :: tl) = Result.return @@ (hd, tl)
-      and decode (hd, tl) = Result.return @@ Hlist.(hd :: tl) in
-      Caqti_type.custom ~decode ~encode
-      @@ Caqti_type.tup2 (type_of_type l) (type_of_type r)
-
-  let rec type_of_types :
-      type l. l Sqml.Expression.Type.List.t -> l Caqti_type.t = function
-    | hd :: tl -> Caqti_type.tup2 (type_of_type hd) (type_of_types tl)
-    | [] -> Caqti_type.unit
-
-  let type_of_expr e = Sqml.Expression.to_type e |> type_of_type
 
   let query_type : type t arity. (t, arity) Model.Query.t -> t Caqti_type.t =
     function
@@ -568,7 +577,7 @@ end = struct
 
   type ('args, 'tag, 'res, 'arity) prepared = {
     query : ('res, 'arity) Model.Query.t;
-    prepared : ('args, 'res, 'arity) prepared_query;
+    prepared : ('args Hlist.t, 'res, 'arity) prepared_query;
     types : 'args Expression.Type.List.t;
   }
 
@@ -587,7 +596,7 @@ end = struct
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       (args, _, res, arity) prepared =
     let query = query @@ Sqml.Expression.prepare types
-    and args = type_of_types types in
+    and args = caqti_of_types types in
     let prepare_str tag =
       let query_str dialect =
         let q = Fmt.str "%a" (pp_query dialect) query in
@@ -633,7 +642,7 @@ end = struct
     | Zero prepared ->
       let+ () =
         let f (module C : Caqti_lwt.CONNECTION) =
-          C.exec prepared (Hlist.to_pairs values) |> error
+          C.exec prepared values |> error
         in
         Lwt_guarded.acquire ~f transaction
       in
@@ -642,7 +651,7 @@ end = struct
     | One prepared ->
       let+ res =
         let f (module C : Caqti_lwt.CONNECTION) =
-          C.find prepared (Hlist.to_pairs values) |> error
+          C.find prepared values |> error
         in
         Lwt_guarded.acquire ~f transaction
       in
@@ -659,7 +668,7 @@ end = struct
             and init = C.Response.to_stream response in
             Lwt_result.return @@ Sequence.unfold_step ~init ~f
           in
-          C.call ~f prepared (Hlist.to_pairs values) |> error
+          C.call ~f prepared values |> error
         in
         Lwt_guarded.acquire ~f transaction
       in
