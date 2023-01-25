@@ -46,7 +46,6 @@ module Column = struct
 
   type ('t, 'tag) t = {
     name : string;
-    primary : bool;
     selectable : string;
     type_ : 't Type.t;
   }
@@ -234,9 +233,7 @@ let case_else cases default =
   (type_, ast)
 
 let now = (Type.Time, Funcall { name = "NOW"; args = [] })
-
-let make_column ~name ~primary ~selectable type_ =
-  Column.{ name; primary; selectable; type_ }
+let make_column ~name ~selectable type_ = Column.{ name; selectable; type_ }
 
 let coalesce = function
   | [] -> null

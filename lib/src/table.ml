@@ -25,14 +25,14 @@ let pp_ordering f =
 module Column = struct
   include Column
 
-  let make_composite ?primary ?(foreign_keys = []) name type_ =
-    { name; type_; primary = Option.value ~default:false primary; foreign_keys }
+  let make_composite ?(foreign_keys = []) name type_ =
+    { name; type_; foreign_keys }
 
-  let make ?primary ?(foreign_keys = []) name type_ =
-    make_composite ?primary ~foreign_keys name (Atomic type_)
+  let make ?(foreign_keys = []) name type_ =
+    make_composite ~foreign_keys name (Atomic type_)
 
-  let make_nullable ?primary ?(foreign_keys = []) name type_ =
-    make ?primary ~foreign_keys name (Nullable type_)
+  let make_nullable ?(foreign_keys = []) name type_ =
+    make ~foreign_keys name (Nullable type_)
 
   module Foreign_key = struct
     include Foreign_key
@@ -54,6 +54,12 @@ module Meta (Minimal : sig
   type columns
 
   val columns : columns Column.List.t
+
+  type primary
+
+  val primary :
+    (columns, 'tag) Expression.Column.List.t ->
+    (primary, 'tag) Expression.Column.List.t
 end) =
 struct
   let schema = None
@@ -69,13 +75,9 @@ struct
   let unmap v = v
   let constraints _ = []
 
-  let primary columns =
-    Expression.Column.List.filter_map
-      ~f:
-        {
-          f = (fun column -> Option.some_if column.primary (Primary { column }));
-        }
-      columns
+  type primary = Minimal.primary
+
+  let primary = Minimal.primary
 
   type indexes = unit
 
@@ -139,15 +141,16 @@ module Schema = struct
         in
         List.map ~f T.constraints
       in
-      match T.primary with
+      let (Unique { columns; _ }) = T.primary in
+      match
+        Index.Column.List.map
+          ~f:{ f = (fun { column = { name; _ }; _ } -> name) }
+          columns
+      with
       | [] -> foreign
-      | primary ->
+      | columns ->
         Schema.Constraint.Primary_key
-          {
-            name = Fmt.(str "%s_pkey" T.Meta.name);
-            columns =
-              List.map ~f:(fun (Primary { column }) -> column.name) primary;
-          }
+          { name = Fmt.(str "%s_pkey" T.Meta.name); columns }
         :: foreign
     and indexes =
       let f : type kind tag. (kind, tag) Index.t -> _ =

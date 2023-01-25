@@ -188,10 +188,6 @@ end = struct
     in
     map
 
-  let primary columns =
-    let f { Column.name; primary; _ } = if primary then Some name else None in
-    column_map { f } columns
-
   let make ?max_size uri =
     let open Caqti_request.Infix in
     let* pool =
@@ -365,6 +361,12 @@ end = struct
           ({ excluded } : tag Sqml.Model.excluded)
           (on_conflict : tag Sqml.Model.on_conflict option)
           (returning : (res, tag) Expression.option) value =
+        let primary =
+          let (Unique { columns; _ }) = T.primary in
+          Table.Index.Column.List.map
+            ~f:{ f = (fun { column = { name; _ }; _ } -> name) }
+            columns
+        in
         let conflict_sqlite, conflict_pg =
           let open Fmt in
           match (dialect, on_conflict) with
@@ -374,7 +376,7 @@ end = struct
           | (`Pgsql | `Other), Some (Set assignments) ->
             ( nop,
               const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) (primary T.Meta.columns)
+              ++ const (list ~sep:comma string) primary
               ++ const string ") DO UPDATE SET "
               ++ const
                    (list ~sep:comma pp_assignment)
@@ -385,7 +387,7 @@ end = struct
             in
             ( nop,
               const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) (primary T.Meta.columns)
+              ++ const (list ~sep:comma string) primary
               ++ const string ") DO UPDATE SET "
               ++ const (list ~sep:comma string)
                    (column_map { f } T.Meta.columns) )

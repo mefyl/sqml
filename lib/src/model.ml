@@ -31,10 +31,9 @@ struct
             l Table.Column.List.t ->
             (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
           function
-          | Table.Column.List.({ foreign_keys; name; primary; type_; _ } :: tl)
-            ->
+          | Table.Column.List.({ foreign_keys; name; type_; _ } :: tl) ->
             let column =
-              Expression.make_column ~name ~primary ~selectable:Meta.name type_
+              Expression.make_column ~name ~selectable:Meta.name type_
             in
             let constraints =
               List.map
@@ -134,7 +133,23 @@ struct
 
       let to_ast () = Selectable.Selectable { alias = None; name }
       let constraints = Column.constraints @ Meta.constraints Column.columns
-      let primary = Meta.primary Column.columns
+
+      module Index_of_columns =
+        Expression.Column.List.Transduce2 (Table.Index.Column.List)
+
+      let primary =
+        let columns =
+          Index_of_columns.map
+            (Meta.primary Column.columns)
+            ~f:
+              {
+                f =
+                  (fun column ->
+                    { Table.Index.Column.column; order = Ascending });
+              }
+        in
+        Table.Index.Unique { columns; name = "pkey" }
+
       let indexes = Meta.indexes Column.columns
     end
 
@@ -467,12 +482,10 @@ struct
 
       let constraints _ = []
 
+      type primary = int -> int -> int -> unit
+
       let primary Expression.Column.List.[ major; minor; subminor; _ ] =
-        [
-          Table.Primary { column = major };
-          Table.Primary { column = minor };
-          Table.Primary { column = subminor };
-        ]
+        Expression.Column.List.[ major; minor; subminor ]
 
       type indexes = unit
 

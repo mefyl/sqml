@@ -88,11 +88,6 @@ type ordering =
   | Descending
 [@@deriving eq]
 
-type 'tag primary_column =
-  | Primary : { column : ('t, 'tag) Expression.Column.t } -> 'tag primary_column
-
-type 'tag primary = 'tag primary_column list
-
 module Index = struct
   module Column = struct
     type ('t, 'tag) t = {
@@ -146,7 +141,6 @@ module Column = struct
   type 't t = {
     name : string;
     type_ : 't Expression.Column.Type.t;
-    primary : bool;
     foreign_keys : 't Foreign_key.t list;
   }
 
@@ -163,7 +157,11 @@ module type META = sig
   val constraints :
     (columns, 'tag) Expression.Column.List.t -> 'tag constraint_ list
 
-  val primary : (columns, 'tag) Expression.Column.List.t -> 'tag primary
+  type primary
+
+  val primary :
+    (columns, 'tag) Expression.Column.List.t ->
+    (primary, 'tag) Expression.Column.List.t
 
   type indexes
 
@@ -176,7 +174,7 @@ module type S = sig
   include S' with module Meta := Meta
 
   val constraints : tag constraint_ list
-  val primary : tag primary
+  val primary : (Meta.primary Index.unique, tag) Index.t
   val indexes : (Meta.indexes, tag) Index.List.t
 end
 

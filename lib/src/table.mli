@@ -8,25 +8,16 @@ module Column : sig
   include module type of Column
 
   val make :
-    ?primary:bool ->
-    ?foreign_keys:'a Foreign_key.t list ->
-    string ->
-    'a Type.atomic ->
-    'a t
+    ?foreign_keys:'a Foreign_key.t list -> string -> 'a Type.atomic -> 'a t
 
   val make_nullable :
-    ?primary:bool ->
     ?foreign_keys:'a option Foreign_key.t list ->
     string ->
     'a Type.atomic ->
     'a option t
 
   val make_composite :
-    ?primary:bool ->
-    ?foreign_keys:'a Foreign_key.t list ->
-    string ->
-    'a Type.t ->
-    'a t
+    ?foreign_keys:'a Foreign_key.t list -> string -> 'a Type.t -> 'a t
 
   module Foreign_key : sig
     include module type of Foreign_key
@@ -51,6 +42,12 @@ module Meta (Minimal : sig
   type columns
 
   val columns : columns Column.List.t
+
+  type primary
+
+  val primary :
+    (columns, 'tag) Expression.Column.List.t ->
+    (primary, 'tag) Expression.Column.List.t
 end) : META with type columns = Minimal.columns
 
 module Schema : sig

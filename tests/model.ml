@@ -8,7 +8,7 @@ end)
 module T1_meta = struct
   let schema = None
   let name = "table1"
-  let id = Column.(make ~primary:true "id" Type.Int)
+  let id = Column.(make "id" Type.Int)
   let name_ = Column.(make "name" Type.Text)
   let description = Column.(make_nullable "description" Type.Text)
 
@@ -22,8 +22,10 @@ module T1_meta = struct
   let unmap (id, name, desc) = Hlist.[ id; name; desc ]
   let constraints Expression.Column.List.[ _id; _name; _description ] = []
 
-  let primary Expression.Column.List.[ id; _name; _desc ] =
-    [ Sqml.Table.Primary { column = id } ]
+  type primary = int -> unit
+
+  let primary Expression.Column.List.[ id; _; _ ] =
+    Expression.Column.List.[ id ]
 
   type indexes = (int -> string -> unit) Sqml.Table.Index.unique -> unit
 
@@ -79,6 +81,10 @@ module T2 = struct
       type columns = int -> unit
 
       let columns = Column.List.[ id ]
+
+      type primary = unit
+
+      let primary _ = Expression.Column.List.[]
     end)
 
     type mapped = t
@@ -107,6 +113,10 @@ module Ts = struct
       type columns = Timmy.Time.t -> unit
 
       let columns = Column.List.[ time ]
+
+      type primary = unit
+
+      let primary _ = Expression.Column.List.[]
     end)
 
     type mapped = Timmy.Time.t
@@ -142,6 +152,11 @@ module Configs = struct
       type columns = string -> Ezjsonm.value -> unit
 
       let columns = Column.List.[ id; config ]
+
+      type primary = string -> unit
+
+      let primary Expression.Column.List.[ id; _ ] =
+        Expression.Column.List.[ id ]
     end)
 
     type mapped = t

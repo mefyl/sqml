@@ -71,7 +71,9 @@ CREATE TABLE "table2" (
   CONSTRAINT table2_id_fkey
     FOREIGN KEY (id) REFERENCES "table1"(id));|}
     in
-    Alcotest.(check string "creation queries" expected (Buffer.contents buffer))
+    Alcotest.(
+      check ~here:[%here] string "creation queries" expected
+        (Buffer.contents buffer))
 end
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
@@ -109,7 +111,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+ all = Sequence.to_list all in
 
     Alcotest.(
-      check (list t1) "ids" expected
+      check ~here:[%here] (list t1) "ids" expected
       @@ List.sort ~compare:(fun (l, _, _) (r, _, _) -> Int.compare l r) all)
 
   let check_t1s_ids db expected =
@@ -117,7 +119,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db @@ Model.select ~from:(module Model.T1) Model.T1.id
     in
     let+ all = Sequence.to_list all in
-    Alcotest.(check (list int) "ids" expected all)
+    Alcotest.(check ~here:[%here] (list int) "ids" expected all)
 
   let select db =
     let q = Model.select ~from:(module Model.T1) Model.T1.id
@@ -125,19 +127,21 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let* () =
       let* (Many res) = Engine.query db q in
       let* res = Sequence.to_list res in
-      Alcotest.(check (list int) "selected" [] res) |> Lwt_result.return
+      Alcotest.(check ~here:[%here] (list int) "selected" [] res)
+      |> Lwt_result.return
     in
     let* () =
       let* (Many res) = Engine.query db q_all in
       let* res = Sequence.to_list res in
-      Alcotest.(check (list t1) "selected" [] res) |> Lwt_result.return
+      Alcotest.(check ~here:[%here] (list t1) "selected" [] res)
+      |> Lwt_result.return
     in
     let* () = populate db in
     let* () =
       let* (Many res) = Engine.query db q in
       let* res = Sequence.to_list res in
       Alcotest.(
-        check (list int) "selected ids" [ 0; 1; 2 ]
+        check ~here:[%here] (list int) "selected ids" [ 0; 1; 2 ]
           (List.sort ~compare:Int.compare res))
       |> Lwt_result.return
     in
@@ -145,7 +149,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let* (Many res) = Engine.query db q_all in
       let* res = Sequence.to_list res in
       Alcotest.(
-        check (list t1) "selected t1s" default_t1s
+        check ~here:[%here] (list t1) "selected t1s" default_t1s
         @@ List.sort ~compare:(fun (l, _, _) (r, _, _) -> Int.compare l r) res)
       |> Lwt_result.return
     in
@@ -163,7 +167,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* res = Sequence.to_list res in
-    Alcotest.(check (list int) "inserted ids" [ 0 ] res) |> Lwt_result.return
+    Alcotest.(check ~here:[%here] (list int) "inserted ids" [ 0 ] res)
+    |> Lwt_result.return
 
   let delete db =
     let delete where =
@@ -190,14 +195,19 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* () = populate db in
     let* res = delete (Some Sqml.Expression.(Model.T1.id = const Int 1)) in
-    let () = Alcotest.(check (list string) "deleted rows" [ "one" ] res) in
+    let () =
+      Alcotest.(check ~here:[%here] (list string) "deleted rows" [ "one" ] res)
+    in
     let* () = check_t1s_ids db [ 0; 2 ] in
     let* res = delete (Some Sqml.Expression.(Model.T1.id = const Int 3)) in
-    let () = Alcotest.(check (list string) "deleted rows" [] res) in
+    let () =
+      Alcotest.(check ~here:[%here] (list string) "deleted rows" [] res)
+    in
     let* () = check_t1s_ids db [ 0; 2 ] in
     let* res = delete None in
     let () =
-      Alcotest.(check (list string) "deleted rows" [ "zero"; "two" ] res)
+      Alcotest.(
+        check ~here:[%here] (list string) "deleted rows" [ "zero"; "two" ] res)
     in
     check_t1s_ids db []
 
@@ -229,7 +239,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         Sqml.Expression.
           [ Model.T1.Column.description := const (Nullable String) @@ Some "0" ]
     in
-    Alcotest.(check (list string) "updated names" [ "four"; "four" ] ids);
+    Alcotest.(
+      check ~here:[%here] (list string) "updated names" [ "four"; "four" ] ids);
     check_t1s db
       [ (0, "four", Some "0"); (1, "four", Some "0"); (2, "four", Some "2") ]
 
@@ -252,7 +263,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let () =
       Alcotest.(
-        check (list string) "retrieved descriptions" [ "one"; "two" ] res)
+        check ~here:[%here] (list string) "retrieved descriptions"
+          [ "one"; "two" ] res)
     in
     let* res =
       let open Sqml.Expression in
@@ -266,7 +278,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let () =
       Alcotest.(
-        check (list string) "retrieved descriptions" [ "zero"; "one" ] res)
+        check ~here:[%here] (list string) "retrieved descriptions"
+          [ "zero"; "one" ] res)
     in
     Lwt_result.return ()
 
@@ -293,7 +306,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         let* (Many res) = Engine.query db q in
         let* res = Sequence.to_list res in
         Lwt_result.return
-        @@ Alcotest.(check (list time) "inserted timestamps" [ now; later ] res))
+        @@ Alcotest.(
+             check ~here:[%here] (list time) "inserted timestamps"
+               [ now; later ] res))
 
   let config = Alcotest.(testable Model.Configs.pp Model.Configs.equal)
 
@@ -320,7 +335,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let+ configs = Sequence.to_list configs in
     Alcotest.(
-      check (list config) "configurations"
+      check ~here:[%here] (list config) "configurations"
         [ ("empty", `O []); ("filled", `O [ ("one", `Float 1.) ]) ]
         configs)
 
@@ -343,7 +358,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* res = Sequence.to_list res in
-    let () = Alcotest.(check (list string) "untouched row" [ "zero" ] res) in
+    let () =
+      Alcotest.(
+        check ~here:[%here] (list string) "untouched row" [ "zero" ] res)
+    in
     let* Zero =
       let q =
         Model.insert ~into:(module Model.T1) ~on_conflict:Update
@@ -356,7 +374,9 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       Engine.query db q
     in
     let* res = Sequence.to_list res in
-    let () = Alcotest.(check (list string) "updated row" [ "two" ] res) in
+    let () =
+      Alcotest.(check ~here:[%here] (list string) "updated row" [ "two" ] res)
+    in
     let* () =
       let open Sqml.Expression in
       if psql then
@@ -386,10 +406,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         in
         Sequence.to_list res >>| function
         | [ Hlist.[ name; description ] ] ->
-          Alcotest.(check string "updated row name" "two'" name);
+          Alcotest.(check ~here:[%here] string "updated row name" "two'" name);
           Alcotest.(
-            check (option string) "updated row description" (Some "3")
-              description)
+            check ~here:[%here] (option string) "updated row description"
+              (Some "3") description)
         | _ -> Alcotest.fail "wrong number of lines"
       else Lwt_result.return ()
     in
@@ -412,7 +432,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let () =
       Alcotest.(
-        check
+        check ~here:[%here]
           (list (pair bool bool))
           "null values"
           [ (true, false); (false, true); (false, true) ]
@@ -443,17 +463,18 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let* (Many res) = Engine.run get db Hlist.[ 271 ] in
     let* res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected" [ "prepared" ] res);
+    Alcotest.(check ~here:[%here] (list string) "selected" [ "prepared" ] res);
     let* Zero =
       Engine.run put db Hlist.[ (272, "prepared'", Some "prepared'") ]
     in
     let* (Many res) = Engine.run get db Hlist.[ 272 ] in
     let* res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected'" [ "prepared'" ] res);
+    Alcotest.(check ~here:[%here] (list string) "selected'" [ "prepared'" ] res);
     let* Zero = Engine.run update db Hlist.[ 272; "prepared''" ] in
     let* (Many res) = Engine.run get db Hlist.[ 272 ] in
     let+ res = Sequence.to_list res in
-    Alcotest.(check (list string) "selected'" [ "prepared''" ] res)
+    Alcotest.(
+      check ~here:[%here] (list string) "selected'" [ "prepared''" ] res)
 
   let join db =
     let check expected =
@@ -469,7 +490,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         |> Sequence.map ~f:(fun Hlist.[ t1; t2 ] -> (t1, t2))
         |> Sequence.to_list
       in
-      Alcotest.(check (list (pair t1 t2)) "selected" expected v)
+      Alcotest.(check ~here:[%here] (list (pair t1 t2)) "selected" expected v)
     and insert_t2 t2 =
       let+ Zero =
         Engine.query db
@@ -513,7 +534,8 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         List.sort v ~compare:(fun ((l, _, _), _) ((r, _, _), _) ->
             Int.compare l r)
       in
-      Alcotest.(check (list (pair t1 (option t2))) "selected" expected v)
+      Alcotest.(
+        check ~here:[%here] (list (pair t1 (option t2))) "selected" expected v)
     in
     check
       [
@@ -539,7 +561,9 @@ let () =
   let test_case name f =
     let f switch () =
       Lwt.map
-        ~f:Alcotest.(check (result unit error) "result" (Result.Ok ()))
+        ~f:
+          Alcotest.(
+            check ~here:[%here] (result unit error) "result" (Result.Ok ()))
         (f switch ())
     in
     test_case name `Slow f

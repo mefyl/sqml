@@ -14,7 +14,6 @@ module Column : sig
 
   type ('t, 'tag) t = private {
     name : string;
-    primary : bool;
     selectable : string;
     type_ : 't Type.t;
   }
@@ -92,11 +91,7 @@ include module type of Infix
 val traverse_ast : ast -> f:(ast -> ast) -> ast
 
 val make_column :
-  name:string ->
-  primary:bool ->
-  selectable:string ->
-  't Column.Type.t ->
-  ('t, 'tag) Column.t
+  name:string -> selectable:string -> 't Column.Type.t -> ('t, 'tag) Column.t
 
 val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
 val coerce : ('t, _) t -> ('t, _) t
