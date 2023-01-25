@@ -65,7 +65,7 @@ module Queries = struct
   id INTEGER NOT NULL,
   name TEXT NOT NULL,
   CONSTRAINT table1_pkey PRIMARY KEY (id));
-CREATE INDEX ids ON "table1" (id ASC, name DESC);
+CREATE UNIQUE INDEX ids ON "table1" (id ASC, name DESC);
 CREATE TABLE "table2" (
   id INTEGER NOT NULL,
   CONSTRAINT table2_id_fkey

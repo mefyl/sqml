@@ -105,10 +105,24 @@ module Index = struct
     end)
   end
 
-  type ('columns, 'tag) t = {
-    columns : ('columns, 'tag) Column.List.t;
-    name : string;
-  }
+  type non_unique = Non_unique
+  type unique = Unique
+
+  type ('a, 'unique) kind =
+    | Non_unique : ('a, non_unique) kind
+    | Unique : ('a, unique) kind
+
+  type ('columns, 'tag) t =
+    | Non_unique : {
+        columns : ('columns, 'tag) Column.List.t;
+        name : string;
+      }
+        -> (('columns, non_unique) kind, 'tag) t
+    | Unique : {
+        columns : ('columns, 'tag) Column.List.t;
+        name : string;
+      }
+        -> (('columns, unique) kind, 'tag) t
 
   module List = Hlist.Make2 (struct
     type nonrec ('a, 'b) t = ('a, 'b) t
@@ -215,8 +229,9 @@ module Schema = struct
   end
 
   type index = {
-    name : name;
     columns : (string * ordering) List_nonempty.t;
+    name : name;
+    unique : bool;
   }
   [@@deriving eq]
 

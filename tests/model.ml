@@ -12,7 +12,7 @@ module T1_meta = struct
   let name_ = Column.(make "name" Type.Text)
   let description = Column.(make_nullable "description" Type.Text)
 
-  type columns = int * (string * (string option * unit))
+  type columns = int -> string -> string option -> unit
 
   let columns = Column.List.[ id; name_; description ]
 
@@ -25,19 +25,22 @@ module T1_meta = struct
   let primary Expression.Column.List.[ id; _name; _desc ] =
     [ Sqml.Table.Primary { column = id } ]
 
-  type indexes = (int * (string * unit)) * unit
+  type indexes =
+    (int -> string -> unit, Sqml.Table.Index.unique) Sqml.Table.Index.kind ->
+    unit
 
   let indexes Expression.Column.List.[ id; _name; _desc ] =
     Sqml.Table.Index.List.
       [
-        {
-          columns =
-            [
-              { column = id; order = Ascending };
-              { column = _name; order = Descending };
-            ];
-          name = "ids";
-        };
+        Unique
+          {
+            columns =
+              [
+                { column = id; order = Ascending };
+                { column = _name; order = Descending };
+              ];
+            name = "ids";
+          };
       ]
 end
 
@@ -75,7 +78,7 @@ module T2 = struct
               ]
             Type.Int)
 
-      type columns = int * unit
+      type columns = int -> unit
 
       let columns = Column.List.[ id ]
     end)
@@ -103,7 +106,7 @@ module Ts = struct
       let name = "ts"
       let time = Column.(make "time" Type.Time)
 
-      type columns = Timmy.Time.t * unit
+      type columns = Timmy.Time.t -> unit
 
       let columns = Column.List.[ time ]
     end)
@@ -138,7 +141,7 @@ module Configs = struct
       let id = Column.(make "id" Type.(Varchar 64))
       let config = Column.(make "config" Type.Json)
 
-      type columns = string * (Ezjsonm.value * unit)
+      type columns = string -> Ezjsonm.value -> unit
 
       let columns = Column.List.[ id; config ]
     end)

@@ -150,17 +150,28 @@ module Schema = struct
           }
         :: foreign
     and indexes =
-      let f { Index.columns; name } =
-        let f = function
-          | { Index.Column.column; order } -> (column.name, order)
+      let f : type kind tag. (kind, tag) Index.t -> _ =
+        let of_columns columns =
+          let f = function
+            | { Index.Column.column; order } -> (column.name, order)
+          in
+          Index.Column.List.map ~f:{ f } columns |> List_nonempty.of_list_exn
         in
-        Schema.
-          {
-            name = { name; schema = None };
-            columns =
-              Index.Column.List.map ~f:{ f } columns
-              |> List_nonempty.of_list_exn;
-          }
+        function
+        | Index.Non_unique { columns; name } ->
+          Schema.
+            {
+              columns = of_columns columns;
+              name = { name; schema = None };
+              unique = false;
+            }
+        | Index.Unique { columns; name } ->
+          Schema.
+            {
+              columns = of_columns columns;
+              name = { name; schema = None };
+              unique = true;
+            }
       in
       Index.List.map ~f:{ f } T.indexes
     in
@@ -277,8 +288,9 @@ module Query = struct
         (pp_table_name dialect) table column
         (Dialect.string_of_type ~include_nullable:false to_)
         (Dialect.string_of_type ~include_nullable:false from)
-    | Create_index (table_name, { name = { name; schema }; columns }) ->
-      pf f "@[<2>CREATE INDEX %s@ ON %a@ (%a)@]"
+    | Create_index (table_name, { columns; name = { name; schema }; unique }) ->
+      pf f "@[<2>CREATE %sINDEX %s@ ON %a@ (%a)@]"
+        (if unique then "UNIQUE " else "")
         (Dialect.index_name ?schema name)
         (pp_table_name dialect) table_name
         (box
