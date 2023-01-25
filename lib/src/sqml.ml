@@ -1,9 +1,7 @@
 module Column = Table.Column
 module Dialect = Dialect
 module Engine = Engine
-
 module Expression = Expression
-
 module Log = Log
 module Model = Model
 module Selectable = Selectable

@@ -322,14 +322,8 @@ struct
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : {
-          for_ : for_ option;
-          from :
-            (module Selectable.S with type model = tag and type tag = 'tag);
-          what : ('t, 'tag) Expression.t;
-          where : (bool, 'tag) Expression.t option;
-        }
-          -> ('t, many) t
+      | Select : ('t, 'tag) select -> ('t, many) t
+      | Select_unique : ('t, 'tag) select -> ('t option, one) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -347,17 +341,51 @@ struct
         }
           -> ('t, many) t
 
+    and ('t, 'tag) select = {
+      for_ : for_ option;
+      from : (module Selectable.S with type model = tag and type tag = 'tag);
+      what : ('t, 'tag) Expression.t;
+      where : (bool, 'tag) Expression.t option;
+    }
+
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
       | Delete_returning _ -> Many
       | Insert _ -> Zero
       | Insert_returning _ -> One
       | Select _ -> Many
+      | Select_unique _ -> One
       | Update _ -> Zero
       | Update_returning _ -> Many
   end
 
   let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
+
+  module Indexed = Hlist.Zip2 (Table.Index.Column.List) (Expression.List)
+
+  let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
+      ?where ?for_ what =
+    let open Expression in
+    let where =
+      let indexed =
+        Indexed.zip index indexed
+        |> Indexed.map
+             ~f:
+               {
+                 f =
+                   (fun ({ Table.Index.Column.column = c; _ }, value) ->
+                     column c = value);
+               }
+      in
+      match indexed with
+      | [] -> where
+      | hd :: tl -> (
+        let filter = Base.List.fold ~init:hd ~f:(fun l r -> l && r) tl in
+        match where with
+        | None -> Some filter
+        | Some where -> Some (filter && where))
+    in
+    Query.Select_unique { for_; from; what; where }
 
   let insert ~into ?on_conflict value =
     Query.Insert

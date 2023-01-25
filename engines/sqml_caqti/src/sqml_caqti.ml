@@ -314,6 +314,7 @@ end = struct
     | Insert _ -> Caqti_type.unit
     | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
+    | Select_unique { what; _ } -> Caqti_type.option @@ type_of_expr what
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
 
@@ -343,6 +344,7 @@ end = struct
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
+      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
       let pp_assignment f assignment =
         let name, ast = Expression.assignment_to_ast assignment in
         Fmt.(const string name ++ sp ++ const char '=' ++ sp ++ pp_expression)
@@ -400,53 +402,8 @@ end = struct
                ~f:{ f = (fun { name; _ } -> name) }
                T.Meta.columns)
             pp_expression value conflict_pg () pp_returning returning)
-      and pp_update (type res tag from)
-          (module T : Table.S with type model = Model.tag and type tag = tag)
-          (what : tag Expression.assignment list)
-          (from :
-            (module Selectable.S with type model = Model.tag and type tag = from)
-            option) (where : (bool, tag) Expression.t option)
-          (returning : (res, tag) Expression.option) =
-        let from =
-          match from with
-          | None -> None
-          | Some (module From) -> Some (From.to_ast ())
-        in
-        (box
-        @@ const string "UPDATE" ++ sp
-           ++ const pp_selectable (T.to_ast ())
-           ++ sp ++ const string "SET" ++ sp
-           ++ const (list ~sep:comma pp_assignment) what
-           ++ const
-                (option (sp ++ const string "FROM" ++ sp ++ pp_selectable))
-                from
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                Expression.(Option.map ~f:to_ast where)
-           ++ const pp_returning returning)
-          f ()
-      in
-      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
-      function
-      | Delete { from; where } ->
-        let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" pp_selectable (Table.to_ast ())
-          (option (pp_clause "WHERE"))
-          Expression.(Option.map ~f:to_ast where)
-      | Delete_returning { from; returning; where } ->
-        let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
-          (option (pp_clause "WHERE"))
-          Expression.(Option.map ~f:to_ast where)
-          (pp_clause "RETURNING")
-          Expression.(to_ast returning)
-      | Insert { excluded; into; on_conflict; value } ->
-        pp_insert into { excluded } on_conflict Expression.None
-          Expression.(to_ast value)
-      | Insert_returning { excluded; into; on_conflict; returning; value } ->
-        pp_insert into { excluded } on_conflict (Some returning)
-          Expression.(to_ast value)
-      | Select { for_; from; what; where } ->
+      and pp_select (type t tag)
+          ({ for_; from; what; where } : (t, tag) Model.Query.select) =
         let pp_for f =
           let forable =
             let rec forable =
@@ -490,6 +447,53 @@ end = struct
                 Expression.(Option.map ~f:to_ast where)
            ++ const (option (sp ++ pp_for)) for_)
           f ()
+      and pp_update (type res tag from)
+          (module T : Table.S with type model = Model.tag and type tag = tag)
+          (what : tag Expression.assignment list)
+          (from :
+            (module Selectable.S with type model = Model.tag and type tag = from)
+            option) (where : (bool, tag) Expression.t option)
+          (returning : (res, tag) Expression.option) =
+        let from =
+          match from with
+          | None -> None
+          | Some (module From) -> Some (From.to_ast ())
+        in
+        (box
+        @@ const string "UPDATE" ++ sp
+           ++ const pp_selectable (T.to_ast ())
+           ++ sp ++ const string "SET" ++ sp
+           ++ const (list ~sep:comma pp_assignment) what
+           ++ const
+                (option (sp ++ const string "FROM" ++ sp ++ pp_selectable))
+                from
+           ++ const
+                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
+                Expression.(Option.map ~f:to_ast where)
+           ++ const pp_returning returning)
+          f ()
+      in
+      function
+      | Delete { from; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a" pp_selectable (Table.to_ast ())
+          (option (pp_clause "WHERE"))
+          Expression.(Option.map ~f:to_ast where)
+      | Delete_returning { from; returning; where } ->
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
+          (option (pp_clause "WHERE"))
+          Expression.(Option.map ~f:to_ast where)
+          (pp_clause "RETURNING")
+          Expression.(to_ast returning)
+      | Insert { excluded; into; on_conflict; value } ->
+        pp_insert into { excluded } on_conflict Expression.None
+          Expression.(to_ast value)
+      | Insert_returning { excluded; into; on_conflict; returning; value } ->
+        pp_insert into { excluded } on_conflict (Some returning)
+          Expression.(to_ast value)
+      | Select_unique select -> pp_select select
+      | Select select -> pp_select select
       | Update { into; what; where } ->
         pp_update into what None where Expression.None
       | Update_returning { from; into; returning; where; what } ->
@@ -532,6 +536,10 @@ end = struct
         | Select { what; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query
+        | Select_unique { what; _ } ->
+          let query = (Caqti_type.unit ->? type_of_expr what) query_str in
+          let+ res = C.find_opt query () in
+          Sqml.Model.One res
         | Insert _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+ () = C.exec query () in

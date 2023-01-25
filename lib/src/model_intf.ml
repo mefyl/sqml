@@ -134,14 +134,8 @@ module type S = sig
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : {
-          for_ : for_ option;
-          from :
-            (module Selectable.S with type model = tag and type tag = 'tag);
-          what : ('t, 'tag) Expression.t;
-          where : (bool, 'tag) Expression.t option;
-        }
-          -> ('t, many) t
+      | Select : ('t, 'tag) select -> ('t, many) t
+      | Select_unique : ('t, 'tag) select -> ('t option, one) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -158,6 +152,13 @@ module type S = sig
           returning : ('t, 'tag) Expression.t;
         }
           -> ('t, many) t
+
+    and ('t, 'tag) select = {
+      for_ : for_ option;
+      from : (module Selectable.S with type model = tag and type tag = 'tag);
+      what : ('t, 'tag) Expression.t;
+      where : (bool, 'tag) Expression.t option;
+    }
 
     val arity : (_, 'arity) t -> 'arity arity
   end
@@ -201,6 +202,15 @@ module type S = sig
     ?for_:for_ ->
     ('t, 'tag) Expression.t ->
     ('t, many) Query.t
+
+  val select_unique :
+    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
+    (('indexed, Table.Index.unique) Table.Index.kind, 'tag) Table.Index.t ->
+    ('indexed, 'tag) Expression.List.t ->
+    ?where:(bool, 'tag) Expression.t ->
+    ?for_:for_ ->
+    ('t, 'tag) Expression.t ->
+    ('t option, one) Query.t
 
   val update :
     (module Table.S with type model = tag and type tag = 'tag) ->
