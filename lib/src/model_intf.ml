@@ -205,7 +205,7 @@ module type S = sig
 
   val select_unique :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    (('indexed, Table.Index.unique) Table.Index.kind, 'tag) Table.Index.t ->
+    ('indexed Table.Index.unique, 'tag) Table.Index.t ->
     ('indexed, 'tag) Expression.List.t ->
     ?where:(bool, 'tag) Expression.t ->
     ?for_:for_ ->

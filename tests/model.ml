@@ -25,9 +25,7 @@ module T1_meta = struct
   let primary Expression.Column.List.[ id; _name; _desc ] =
     [ Sqml.Table.Primary { column = id } ]
 
-  type indexes =
-    (int -> string -> unit, Sqml.Table.Index.unique) Sqml.Table.Index.kind ->
-    unit
+  type indexes = (int -> string -> unit) Sqml.Table.Index.unique -> unit
 
   let indexes Expression.Column.List.[ id; _name; _desc ] =
     Sqml.Table.Index.List.
