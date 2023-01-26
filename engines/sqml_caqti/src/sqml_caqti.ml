@@ -307,6 +307,8 @@ end = struct
     function
     | Delete _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
+    | Delete_unique { returning; _ } ->
+      Caqti_type.option @@ type_of_expr returning
     | Insert _ -> Caqti_type.unit
     | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
@@ -353,7 +355,18 @@ end = struct
             (sp ++ const string "RETURNING" ++ sp ++ box pp_expression)
               f (Expression.to_ast e))
       in
-      let pp_insert (type mapped res tag)
+      let pp_delete (type t tag)
+          (from :
+            (module Table.S with type model = Model.tag and type tag = tag))
+          (where : (bool, tag) Expression.t option)
+          (returning : (t, tag) Expression.t option) =
+        let module Table = (val from) in
+        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
+          (option (pp_clause "WHERE"))
+          (Option.map ~f:Expression.to_ast where)
+          (option (pp_clause "RETURNING"))
+          (Option.map ~f:Expression.to_ast returning)
+      and pp_insert (type mapped res tag)
           (module T : Table.S
             with type model = Model.tag
              and type tag = tag
@@ -482,12 +495,9 @@ end = struct
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
-        let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
-          (option (pp_clause "WHERE"))
-          Expression.(Option.map ~f:to_ast where)
-          (pp_clause "RETURNING")
-          Expression.(to_ast returning)
+        pp_delete from where (Some returning)
+      | Delete_unique { from; returning; where } ->
+        pp_delete from where (Some returning)
       | Insert { excluded; into; on_conflict; value } ->
         pp_insert into { excluded } on_conflict Expression.None
           Expression.(to_ast value)
@@ -535,6 +545,10 @@ end = struct
         | Delete_returning { returning; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
+        | Delete_unique { returning; _ } ->
+          let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
+          let+ res = C.find_opt query () in
+          Sqml.Model.One res
         | Select { what; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query

@@ -99,18 +99,27 @@ module type S = sig
   end
 
   module Query : sig
+    type ('t, 'tag) delete = {
+      from : (module Table.S with type model = tag and type tag = 'tag);
+      where : (bool, 'tag) Expression.t option;
+      returning : ('t, 'tag) Expression.t;
+    }
+
+    type ('t, 'tag) select = {
+      for_ : for_ option;
+      from : (module Selectable.S with type model = tag and type tag = 'tag);
+      what : ('t, 'tag) Expression.t;
+      where : (bool, 'tag) Expression.t option;
+    }
+
     type ('t, 'arity) t = private
       | Delete : {
           from : (module Table.S with type model = tag);
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
-      | Delete_returning : {
-          from : (module Table.S with type model = tag);
-          where : (bool, 'tag) Expression.t option;
-          returning : ('t, 'tag) Expression.t;
-        }
-          -> ('t, many) t
+      | Delete_returning : ('t, 'tag) delete -> ('t, many) t
+      | Delete_unique : ('t, 'tag) delete -> ('t option, one) t
       | Insert : {
           excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
@@ -153,13 +162,6 @@ module type S = sig
         }
           -> ('t, many) t
 
-    and ('t, 'tag) select = {
-      for_ : for_ option;
-      from : (module Selectable.S with type model = tag and type tag = 'tag);
-      what : ('t, 'tag) Expression.t;
-      where : (bool, 'tag) Expression.t option;
-    }
-
     val arity : (_, 'arity) t -> 'arity arity
   end
 
@@ -169,8 +171,16 @@ module type S = sig
     unit ->
     (unit, zero) Query.t
 
+  val delete_unique :
+    from:(module Table.S with type model = tag and type tag = 'tag) ->
+    ('indexed Table.Index.unique, 'tag) Table.Index.t ->
+    ('indexed, 'tag) Expression.List.t ->
+    ?where:(bool, 'tag) Expression.t ->
+    ('res, 'tag) Expression.t ->
+    ('res option, one) Query.t
+
   val delete_returning :
-    from:(module Table.S with type model = tag) ->
+    from:(module Table.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     ('res, 'tag) Expression.t ->
     ('res, many) Query.t

@@ -48,7 +48,8 @@ module Meta (Minimal : sig
   val primary :
     (columns, 'tag) Expression.Column.List.t ->
     (primary, 'tag) Expression.Column.List.t
-end) : META with type columns = Minimal.columns
+end) :
+  META with type columns = Minimal.columns and type primary = Minimal.primary
 
 module Schema : sig
   include module type of Schema

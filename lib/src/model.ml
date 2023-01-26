@@ -302,18 +302,27 @@ struct
   end
 
   module Query = struct
+    type ('t, 'tag) delete = {
+      from : (module Table.S with type model = tag and type tag = 'tag);
+      where : (bool, 'tag) Expression.t option;
+      returning : ('t, 'tag) Expression.t;
+    }
+
+    type ('t, 'tag) select = {
+      for_ : for_ option;
+      from : (module Selectable.S with type model = tag and type tag = 'tag);
+      what : ('t, 'tag) Expression.t;
+      where : (bool, 'tag) Expression.t option;
+    }
+
     type ('t, 'arity) t =
       | Delete : {
           from : (module Table.S with type model = tag);
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
-      | Delete_returning : {
-          from : (module Table.S with type model = tag);
-          where : (bool, 'tag) Expression.t option;
-          returning : ('t, 'tag) Expression.t;
-        }
-          -> ('t, many) t
+      | Delete_returning : ('t, 'tag) delete -> ('t, many) t
+      | Delete_unique : ('t, 'tag) delete -> ('t option, one) t
       | Insert : {
           excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
@@ -356,16 +365,10 @@ struct
         }
           -> ('t, many) t
 
-    and ('t, 'tag) select = {
-      for_ : for_ option;
-      from : (module Selectable.S with type model = tag and type tag = 'tag);
-      what : ('t, 'tag) Expression.t;
-      where : (bool, 'tag) Expression.t option;
-    }
-
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
       | Delete_returning _ -> Many
+      | Delete_unique _ -> One
       | Insert _ -> Zero
       | Insert_returning _ -> One
       | Select _ -> Many
@@ -378,28 +381,33 @@ struct
 
   module Indexed = Hlist.Zip2 (Table.Index.Column.List) (Expression.List)
 
+  let unique (type columns tag)
+      (index : (columns, tag) Table.Index.Column.List.t)
+      (indexed : (columns, tag) Expression.List.t)
+      (where : (bool, tag) Expression.t option) :
+      (bool, tag) Expression.t option =
+    let open Expression in
+    let indexed =
+      Indexed.zip index indexed
+      |> Indexed.map
+           ~f:
+             {
+               f =
+                 (fun ({ Table.Index.Column.column = c; _ }, value) ->
+                   column c = value);
+             }
+    in
+    match indexed with
+    | [] -> where
+    | hd :: tl -> (
+      let filter = Base.List.fold ~init:hd ~f:(fun l r -> l && r) tl in
+      match where with
+      | None -> Some filter
+      | Some where -> Some (filter && where))
+
   let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
       ?where ?for_ what =
-    let open Expression in
-    let where =
-      let indexed =
-        Indexed.zip index indexed
-        |> Indexed.map
-             ~f:
-               {
-                 f =
-                   (fun ({ Table.Index.Column.column = c; _ }, value) ->
-                     column c = value);
-               }
-      in
-      match indexed with
-      | [] -> where
-      | hd :: tl -> (
-        let filter = Base.List.fold ~init:hd ~f:(fun l r -> l && r) tl in
-        match where with
-        | None -> Some filter
-        | Some where -> Some (filter && where))
-    in
+    let where = unique index indexed where in
     Query.Select_unique { for_; from; what; where }
 
   let insert ~into ?on_conflict value =
@@ -425,6 +433,11 @@ struct
 
   let delete_returning ~from ?where returning =
     Query.Delete_returning { from; returning; where }
+
+  let delete_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
+      ?where returning =
+    let where = unique index indexed where in
+    Query.Delete_unique { from; returning; where }
 
   let update into ?where what = Query.Update { into; where; what }
 
