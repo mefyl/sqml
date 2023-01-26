@@ -112,6 +112,15 @@ module type S = sig
       where : (bool, 'tag) Expression.t option;
     }
 
+    type ('t, 'tag, 'from) update = {
+      into : (module Table.S with type model = tag and type tag = 'tag);
+      from :
+        (module Selectable.S with type model = tag and type tag = 'from) option;
+      what : 'tag Expression.assignment list;
+      where : (bool, 'tag) Expression.t option;
+      returning : ('t, 'tag) Expression.t;
+    }
+
     type ('t, 'arity) t = private
       | Delete : {
           from : (module Table.S with type model = tag);
@@ -151,16 +160,8 @@ module type S = sig
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
-      | Update_returning : {
-          into : (module Table.S with type model = tag and type tag = 'tag);
-          from :
-            (module Selectable.S with type model = tag and type tag = 'from)
-            option;
-          what : 'tag Expression.assignment list;
-          where : (bool, 'tag) Expression.t option;
-          returning : ('t, 'tag) Expression.t;
-        }
-          -> ('t, many) t
+      | Update_returning : ('t, 'tag, 'from) update -> ('t, many) t
+      | Update_unique : ('t, 'tag, 'from) update -> ('t option, one) t
 
     val arity : (_, 'arity) t -> 'arity arity
   end
@@ -234,6 +235,15 @@ module type S = sig
     returning:('t, 'tag) Expression.t ->
     'tag Expression.assignment list ->
     ('t, many) Query.t
+
+  val update_unique :
+    (module Table.S with type model = tag and type tag = 'tag) ->
+    ('indexed Table.Index.unique, 'tag) Table.Index.t ->
+    ('indexed, 'tag) Expression.List.t ->
+    ?where:(bool, 'tag) Expression.t ->
+    returning:('t, 'tag) Expression.t ->
+    'tag Expression.assignment list ->
+    ('t option, one) Query.t
 
   val update_from_returning :
     (module Table.S with type model = tag and type tag = 'tag) ->

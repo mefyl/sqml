@@ -315,6 +315,15 @@ struct
       where : (bool, 'tag) Expression.t option;
     }
 
+    type ('t, 'tag, 'from) update = {
+      into : (module Table.S with type model = tag and type tag = 'tag);
+      from :
+        (module Selectable.S with type model = tag and type tag = 'from) option;
+      what : 'tag Expression.assignment list;
+      where : (bool, 'tag) Expression.t option;
+      returning : ('t, 'tag) Expression.t;
+    }
+
     type ('t, 'arity) t =
       | Delete : {
           from : (module Table.S with type model = tag);
@@ -354,16 +363,8 @@ struct
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
-      | Update_returning : {
-          into : (module Table.S with type model = tag and type tag = 'tag);
-          from :
-            (module Selectable.S with type model = tag and type tag = 'from)
-            option;
-          what : 'tag Expression.assignment list;
-          where : (bool, 'tag) Expression.t option;
-          returning : ('t, 'tag) Expression.t;
-        }
-          -> ('t, many) t
+      | Update_returning : ('t, 'tag, 'from) update -> ('t, many) t
+      | Update_unique : ('t, 'tag, 'from) update -> ('t option, one) t
 
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
@@ -375,6 +376,7 @@ struct
       | Select_unique _ -> One
       | Update _ -> Zero
       | Update_returning _ -> Many
+      | Update_unique _ -> One
   end
 
   let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
@@ -443,6 +445,11 @@ struct
 
   let update_returning into ?where ~returning what =
     Query.Update_returning { from = None; into; returning; what; where }
+
+  let update_unique into (Table.Index.Unique { columns = index; _ }) indexed
+      ?where ~returning what =
+    let where = unique index indexed where in
+    Query.Update_unique { from = None; into; returning; what; where }
 
   let update_from_returning (type from) into
       ~from:

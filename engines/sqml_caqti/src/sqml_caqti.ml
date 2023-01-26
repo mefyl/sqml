@@ -315,6 +315,8 @@ end = struct
     | Select_unique { what; _ } -> Caqti_type.option @@ type_of_expr what
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
+    | Update_unique { returning; _ } ->
+      Caqti_type.option @@ type_of_expr returning
 
   let rec pp_selectable f =
     let open Fmt in
@@ -510,6 +512,8 @@ end = struct
         pp_update into what None where Expression.None
       | Update_returning { from; into; returning; where; what } ->
         pp_update into what from where Expression.(Some returning)
+      | Update_unique { from; into; returning; where; what } ->
+        pp_update into what from where Expression.(Some returning)
     in
     pp
 
@@ -571,6 +575,10 @@ end = struct
         | Update_returning { returning; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
+        | Update_unique { returning; _ } ->
+          let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
+          let+ res = C.find_opt query () in
+          Sqml.Model.One res
       in
       res |> error
     in
