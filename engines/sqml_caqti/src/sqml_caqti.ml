@@ -307,16 +307,14 @@ end = struct
     function
     | Delete _ -> Caqti_type.unit
     | Delete_returning { returning; _ } -> type_of_expr returning
-    | Delete_unique { returning; _ } ->
-      Caqti_type.option @@ type_of_expr returning
+    | Delete_unique { returning; _ } -> type_of_expr returning
     | Insert _ -> Caqti_type.unit
     | Insert_returning { returning; _ } -> type_of_expr returning
     | Select { what; _ } -> type_of_expr what
-    | Select_unique { what; _ } -> Caqti_type.option @@ type_of_expr what
+    | Select_unique { what; _ } -> type_of_expr what
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
-    | Update_unique { returning; _ } ->
-      Caqti_type.option @@ type_of_expr returning
+    | Update_unique { returning; _ } -> type_of_expr returning
 
   let rec pp_selectable f =
     let open Fmt in
@@ -552,14 +550,14 @@ end = struct
         | Delete_unique { returning; _ } ->
           let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
           let+ res = C.find_opt query () in
-          Sqml.Model.One res
+          Sqml.Model.One_maybe res
         | Select { what; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query
         | Select_unique { what; _ } ->
           let query = (Caqti_type.unit ->? type_of_expr what) query_str in
           let+ res = C.find_opt query () in
-          Sqml.Model.One res
+          Sqml.Model.One_maybe res
         | Insert _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+ () = C.exec query () in
@@ -578,7 +576,7 @@ end = struct
         | Update_unique { returning; _ } ->
           let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
           let+ res = C.find_opt query () in
-          Sqml.Model.One res
+          Sqml.Model.One_maybe res
       in
       res |> error
     in
@@ -620,6 +618,9 @@ end = struct
     | One :
         ('args, 'res, [ `One ]) Caqti_request.t
         -> ('args, 'res, Sqml.Model.one) prepared_query
+    | One_maybe :
+        ('args, 'res, [ `One | `Zero ]) Caqti_request.t
+        -> ('args, 'res, Sqml.Model.one_maybe) prepared_query
     | Many :
         ('args, 'res, [ `Many | `One | `Zero ]) Caqti_request.t
         -> ('args, 'res, Sqml.Model.many) prepared_query
@@ -656,6 +657,9 @@ end = struct
     | One ->
       let prepared = (args -->! query_type query) @@:- prepare_str in
       { query; prepared = One prepared; types }
+    | One_maybe ->
+      let prepared = (args -->? query_type query) @@:- prepare_str in
+      { query; prepared = One_maybe prepared; types }
     | Many ->
       let prepared = (args -->* query_type query) @@:- prepare_str in
       { query; prepared = Many prepared; types }
@@ -688,6 +692,14 @@ end = struct
         Lwt_guarded.acquire ~f transaction
       in
       Sqml.Model.One res
+    | One_maybe prepared ->
+      let+ res =
+        let f (module C : Caqti_lwt.CONNECTION) =
+          C.find_opt prepared values |> error
+        in
+        Lwt_guarded.acquire ~f transaction
+      in
+      Sqml.Model.One_maybe res
     | Many prepared ->
       let+ res =
         let f (module C : Caqti_lwt.CONNECTION) =

@@ -2,16 +2,19 @@ open Utils
 
 type many = Many
 type one = One
+type one_maybe = One_or_zero
 type zero = Zero
 
 type _ arity =
   | Many : many arity
   | One : one arity
+  | One_maybe : one_maybe arity
   | Zero : zero arity
 
 type ('t, 'arity, 'error) result =
   | Many : ('t, 'error) Sequence.t -> ('t, many, 'error) result
   | One : 't -> ('t, one, 'error) result
+  | One_maybe : 't option -> ('t, one_maybe, 'error) result
   | Zero : ('t, zero, 'error) result
 
 type 'tag excluded = {
@@ -128,7 +131,7 @@ module type S = sig
         }
           -> (unit, zero) t
       | Delete_returning : ('t, 'tag) delete -> ('t, many) t
-      | Delete_unique : ('t, 'tag) delete -> ('t option, one) t
+      | Delete_unique : ('t, 'tag) delete -> ('t, one_maybe) t
       | Insert : {
           excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
@@ -153,7 +156,7 @@ module type S = sig
         }
           -> ('t, one) t
       | Select : ('t, 'tag) select -> ('t, many) t
-      | Select_unique : ('t, 'tag) select -> ('t option, one) t
+      | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -161,7 +164,7 @@ module type S = sig
         }
           -> (unit, zero) t
       | Update_returning : ('t, 'tag, 'from) update -> ('t, many) t
-      | Update_unique : ('t, 'tag, 'from) update -> ('t option, one) t
+      | Update_unique : ('t, 'tag, 'from) update -> ('t, one_maybe) t
 
     val arity : (_, 'arity) t -> 'arity arity
   end
@@ -178,7 +181,7 @@ module type S = sig
     ('indexed, 'tag) Expression.List.t ->
     ?where:(bool, 'tag) Expression.t ->
     ('res, 'tag) Expression.t ->
-    ('res option, one) Query.t
+    ('res, one_maybe) Query.t
 
   val delete_returning :
     from:(module Table.S with type model = tag and type tag = 'tag) ->
@@ -221,7 +224,7 @@ module type S = sig
     ?where:(bool, 'tag) Expression.t ->
     ?for_:for_ ->
     ('t, 'tag) Expression.t ->
-    ('t option, one) Query.t
+    ('t, one_maybe) Query.t
 
   val update :
     (module Table.S with type model = tag and type tag = 'tag) ->
@@ -243,7 +246,7 @@ module type S = sig
     ?where:(bool, 'tag) Expression.t ->
     returning:('t, 'tag) Expression.t ->
     'tag Expression.assignment list ->
-    ('t option, one) Query.t
+    ('t, one_maybe) Query.t
 
   val update_from_returning :
     (module Table.S with type model = tag and type tag = 'tag) ->

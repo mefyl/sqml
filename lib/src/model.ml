@@ -331,7 +331,7 @@ struct
         }
           -> (unit, zero) t
       | Delete_returning : ('t, 'tag) delete -> ('t, many) t
-      | Delete_unique : ('t, 'tag) delete -> ('t option, one) t
+      | Delete_unique : ('t, 'tag) delete -> ('t, one_maybe) t
       | Insert : {
           excluded : 't. ('t, 'tag) Expression.t -> ('t, 'tag) Expression.t;
           into :
@@ -356,7 +356,7 @@ struct
         }
           -> ('t, one) t
       | Select : ('t, 'tag) select -> ('t, many) t
-      | Select_unique : ('t, 'tag) select -> ('t option, one) t
+      | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -364,19 +364,19 @@ struct
         }
           -> (unit, zero) t
       | Update_returning : ('t, 'tag, 'from) update -> ('t, many) t
-      | Update_unique : ('t, 'tag, 'from) update -> ('t option, one) t
+      | Update_unique : ('t, 'tag, 'from) update -> ('t, one_maybe) t
 
     let arity : type a tag. (tag, a) t -> a arity = function
       | Delete _ -> Zero
       | Delete_returning _ -> Many
-      | Delete_unique _ -> One
+      | Delete_unique _ -> One_maybe
       | Insert _ -> Zero
       | Insert_returning _ -> One
       | Select _ -> Many
-      | Select_unique _ -> One
+      | Select_unique _ -> One_maybe
       | Update _ -> Zero
       | Update_returning _ -> Many
-      | Update_unique _ -> One
+      | Update_unique _ -> One_maybe
   end
 
   let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
