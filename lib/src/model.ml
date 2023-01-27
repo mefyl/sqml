@@ -592,8 +592,29 @@ let diff (type tag) (module Dialect : Dialect.S)
         in
         Set.symmetric_diff effective_constraints expected_constraints
         |> Seq.map ~f
+      and indexes_diff =
+        let effective_indexes, expected_indexes =
+          let set = Set.of_list (module Table.Schema.Index) in
+          (set effective.Table.Schema.indexes, set expected.Table.Schema.indexes)
+        and f = function
+          | Either.First { Table.Schema.Index.name; _ } -> (
+            match
+              List.find expected.constraints ~f:(function
+                | Primary_key { name = constraint_name; _ } ->
+                  String.(constraint_name = name.name)
+                | _ -> false)
+            with
+            | None -> Table.Query.Schema.drop_index name
+            | Some _ ->
+              (* Primary keys underlying indexes are handled by adding the
+                 constraint. *)
+              [])
+          | Either.Second index ->
+            Table.Query.Schema.create_index effective.name index
+        in
+        Set.symmetric_diff effective_indexes expected_indexes |> Seq.map ~f
       in
-      Seq.of_list [ columns_diff; constraints_diff ]
+      Seq.of_list [ columns_diff; constraints_diff; indexes_diff ]
       |> Seq.concat |> Seq.to_list
   in
   Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected

@@ -59,6 +59,11 @@ module Schema : sig
     include Base.Comparable.S with type t := t
   end
 
+  module Index : sig
+    include module type of Index
+    include Base.Comparable.S with type t := t
+  end
+
   val unroll_column : column -> column_atomic list
   val equal_column : column -> column -> bool
   val of_table : (module S with type tag = 'tag) -> t
@@ -88,8 +93,10 @@ module Query : sig
       t
 
     val create : Schema.t -> t list
+    val create_index : Schema.name -> Schema.Index.t -> t list
     val drop : Schema.t -> t list
     val drop_column : Schema.name -> Schema.column_atomic -> t list
     val drop_constraint : Schema.name -> string -> t list
+    val drop_index : Schema.name -> t list
   end
 end

@@ -162,12 +162,11 @@ module Schema = struct
         in
         function
         | Index.Non_unique { columns; name } ->
-          Schema.
-            {
-              columns = of_columns columns;
-              name = { name; schema = None };
-              unique = false;
-            }
+          {
+            Schema.Index.columns = of_columns columns;
+            name = { name; schema = None };
+            unique = false;
+          }
         | Index.Unique { columns; name } ->
           Schema.
             {
@@ -192,6 +191,11 @@ module Schema = struct
     include Constraint
     include Base.Comparable.Make (Constraint)
   end
+
+  module Index = struct
+    include Index
+    include Base.Comparable.Make (Index)
+  end
 end
 
 module Query = struct
@@ -204,10 +208,11 @@ module Query = struct
         * string
         * Expression.Column.Type.any_atomic
         * Expression.Column.Type.any_atomic
-    | Create_index of Schema.name * Schema.index
+    | Create_index of Schema.name * Schema.Index.t
     | Create_table of Schema.t
     | Drop_column of Schema.name * Schema.column_atomic
     | Drop_constraint of Schema.name * string
+    | Drop_index of Schema.name
     | Drop_table of Schema.t
 
   module Schema_ = struct
@@ -227,9 +232,11 @@ module Query = struct
       in
       Create_table schema :: indexes
 
+    let create_index table index = [ Create_index (table, index) ]
     let drop schema = [ Drop_table schema ]
     let drop_constraint table name = [ Drop_constraint (table, name) ]
     let drop_column table column = [ Drop_column (table, column) ]
+    let drop_index name = [ Drop_index name ]
   end
 
   let create t = Schema.of_table t |> Schema_.create
@@ -316,6 +323,8 @@ module Query = struct
     | Drop_constraint (table, name) ->
       pf f "@[<h>ALTER TABLE %a DROP CONSTRAINT %s@]" (pp_table_name dialect)
         table name
+    | Drop_index name ->
+      pf f "@[<h>DROP INDEX %a@]" (pp_table_name dialect) name
     | Drop_table { name; _ } ->
       pf f "@[<h> DROP TABLE %a@]" (pp_table_name dialect) name
 

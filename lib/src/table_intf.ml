@@ -86,7 +86,7 @@ type 'tag constraint_ =
 type ordering =
   | Ascending
   | Descending
-[@@deriving eq]
+[@@deriving eq, ord, sexp_of]
 
 module Index = struct
   module Column = struct
@@ -229,18 +229,20 @@ module Schema = struct
     [@@deriving eq, ord, sexp_of]
   end
 
-  type index = {
-    columns : (string * ordering) List_nonempty.t;
-    name : name;
-    unique : bool;
-  }
-  [@@deriving eq]
+  module Index = struct
+    type t = {
+      columns : ((string * ordering) List_nonempty.t[@sexp.opaque]);
+      name : name;
+      unique : bool;
+    }
+    [@@deriving eq, ord, sexp_of]
+  end
 
   type t = {
     columns : (column_atomic, Column_by_name.comparator_witness) Set.t;
         [@equal Set.equal]
     constraints : Constraint.t list;
-    indexes : index list;
+    indexes : Index.t list;
     name : name;
   }
   [@@deriving eq]

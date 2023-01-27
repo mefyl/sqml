@@ -745,7 +745,23 @@ end = struct
         :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
     |> Lwt_result.map_error unmap
 
+  let split_pattern pattern in_ =
+    let length = String.Search_pattern.pattern pattern |> String.length
+    and splits =
+      String.Search_pattern.index_all pattern ~may_overlap:false ~in_
+    in
+    let rest, split =
+      List.fold_right splits ~init:(in_, []) ~f:(fun i (s, split) ->
+          let pos = i + length in
+          ( String.sub s ~pos:0 ~len:i,
+            String.sub s ~pos ~len:(String.length s - pos) :: split ))
+    in
+    rest :: split
+
   let schema t =
+    let comma = String.Search_pattern.create ", "
+    and on = String.Search_pattern.create " ON "
+    and using = String.Search_pattern.create " USING btree " in
     let schema_of_name = function "public" -> None | name -> Some name in
     let type_of_info column char_length nullable data_type =
       let open Let.Syntax2 (Result) in
@@ -820,7 +836,7 @@ end = struct
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in
-        let+ constraints =
+        let* constraints =
           let query =
             (Caqti_type.(tup2 string string)
             ->* Caqti_type.(
@@ -888,13 +904,63 @@ end = struct
                  String.(left <> right))
           |> List.filter_map ~f
         in
-        {
-          constraints;
-          Sqml.Table.Schema.columns =
-            Set.of_list (module Table.Schema.Column_by_name) columns;
-          indexes = [ (* FIXME *) ];
-          name = { name; schema = schema_of_name schema };
-        }
+        let* indexes =
+          let query =
+            (Caqti_type.(tup2 string string) ->* Caqti_type.(tup2 string string))
+              {| SELECT indexname, indexdef
+                 FROM pg_indexes
+                 WHERE schemaname = $1 AND tablename = $2 |}
+          in
+          let* rows = C.collect_list query (schema, name) |> error in
+          let f (name, def) =
+            let open Let.Syntax2 (Result) in
+            let fail =
+              Result.fail
+                (`Sqml_engine
+                  (Fmt.str "unrecognized index definition for %s: %s" name def))
+            in
+            let* def, unique =
+              match
+                ( String.chop_prefix def ~prefix:"CREATE INDEX ",
+                  String.chop_prefix def ~prefix:"CREATE UNIQUE INDEX " )
+              with
+              | Some def, None -> Result.Ok (def, false)
+              | None, Some def -> Result.Ok (def, true)
+              | _ -> fail
+            in
+            match split_pattern on def with
+            | [ name; def ] -> (
+              match split_pattern using def with
+              | [ _; def ] ->
+                let def = String.sub def ~pos:1 ~len:(String.length def - 2) in
+                let* columns =
+                  match
+                    split_pattern comma def
+                    |> List.map ~f:(fun c ->
+                           (c, Sqml.Table.Ascending (* FIXME *)))
+                  with
+                  | head :: tail -> Result.Ok List_nonempty.(head :: tail)
+                  | _ -> fail
+                in
+                Result.Ok
+                  {
+                    Sqml.Table.Schema.Index.columns;
+                    name = { name; schema = schema_of_name schema };
+                    unique;
+                  }
+              | _ -> fail)
+            | _ -> fail
+          in
+          List.map ~f rows |> Result.all |> Lwt.return
+        in
+        Lwt_result.return
+          {
+            constraints;
+            Sqml.Table.Schema.columns =
+              Set.of_list (module Table.Schema.Column_by_name) columns;
+            indexes;
+            name = { name; schema = schema_of_name schema };
+          }
       in
       Sequence.of_list tables |> Sequence.Seq.map ~f |> Sequence.to_list
     in
