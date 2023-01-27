@@ -33,7 +33,7 @@ module ModelS :
 module J = Model.Join (Model.T1) (Model.T2)
 
 module T1_T2 =
-(val J.on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
+  (val J.on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
 
 let convert_error =
   let f e = `Sqml_engine (Caqti_error.show e) in
@@ -515,7 +515,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         ]
     in
     let module T1_T2 =
-    (val J.left_on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
+      (val J.left_on Sqml.Expression.(J.left Model.T1.id = J.right Model.T2.id))
     in
     let check expected =
       let* (Many v) =
