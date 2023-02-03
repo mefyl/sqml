@@ -393,11 +393,12 @@ struct
 
   let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
 
-  module Indexed = Hlist.Zip2 (Table.Index.Column.List) (Expression.List)
+  module Indexed =
+    Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)
 
   let unique (type columns tag)
       (index : (columns, tag) Table.Index.Column.List.t)
-      (indexed : (columns, tag) Expression.List.t)
+      (indexed : (columns, tag) Expression.List_nullable.t)
       (where : (bool, tag) Expression.t option) :
       (bool, tag) Expression.t option =
     let open Expression in
@@ -408,7 +409,7 @@ struct
              {
                f =
                  (fun ({ Table.Index.Column.column = c; _ }, value) ->
-                   column c = value);
+                   some (column c) = value);
              }
     in
     match indexed with

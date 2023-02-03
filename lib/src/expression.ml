@@ -180,6 +180,10 @@ module List = Hlist.Make2 (struct
   type nonrec ('t, 'tag) t = ('t, 'tag) t
 end)
 
+module List_nullable = Hlist.Make2 (struct
+  type nonrec ('t, 'tag) t = ('t Option.t, 'tag) t
+end)
+
 let of_list l =
   let type_ =
     let rec of_exps : type l tag. (l, tag) List.t -> l Hlist.t Type.t = function

@@ -38,6 +38,9 @@ type 'tag assignment
 
 module List : Hlist.S2 with type ('t, 'tag) value = ('t, 'tag) t
 
+module List_nullable :
+  Hlist.S2 with type ('t, 'tag) value = ('t Option.t, 'tag) t
+
 val case :
   ((bool, 'tag) t * ('t Option.t, 'tag) t) list -> ('t Option.t, 'tag) t
 

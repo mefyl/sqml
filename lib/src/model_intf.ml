@@ -174,7 +174,7 @@ module type S = sig
   val delete_unique :
     from:(module Table.S with type model = tag and type tag = 'tag) ->
     ('indexed Table.Index.unique, 'tag) Table.Index.t ->
-    ('indexed, 'tag) Expression.List.t ->
+    ('indexed, 'tag) Expression.List_nullable.t ->
     ?where:(bool, 'tag) Expression.t ->
     ('res, 'tag) Expression.t ->
     ('res, one_maybe) Query.t
@@ -216,7 +216,7 @@ module type S = sig
   val select_unique :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ('indexed Table.Index.unique, 'tag) Table.Index.t ->
-    ('indexed, 'tag) Expression.List.t ->
+    ('indexed, 'tag) Expression.List_nullable.t ->
     ?where:(bool, 'tag) Expression.t ->
     ?for_:Expression.for_ ->
     ('t, 'tag) Expression.t ->
@@ -238,7 +238,7 @@ module type S = sig
   val update_unique :
     (module Table.S with type model = tag and type tag = 'tag) ->
     ('indexed Table.Index.unique, 'tag) Table.Index.t ->
-    ('indexed, 'tag) Expression.List.t ->
+    ('indexed, 'tag) Expression.List_nullable.t ->
     ?where:(bool, 'tag) Expression.t ->
     returning:('t, 'tag) Expression.t ->
     'tag Expression.assignment list ->
