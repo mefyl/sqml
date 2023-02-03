@@ -108,27 +108,64 @@ module Type = struct
         pp f tl
 end
 
-let traverse_ast ast ~f =
-  let rec traverse_ast = function
-    | (Column _ | Const _ | Null | Var _) as ast -> f ast
-    | Funcall ({ args; _ } as pl) ->
-      Funcall { pl with args = Acid.List.map ~f:traverse_ast args }
-    | Infix ({ lhs; rhs; _ } as pl) ->
-      Infix { pl with lhs = traverse_ast lhs; rhs = traverse_ast rhs }
-    | Is_null ast -> Is_null (traverse_ast ast)
-    | Is_not_null ast -> Is_not_null (traverse_ast ast)
-    | List elts -> List (Acid.List.map ~f:traverse_ast elts)
-    | Switch { cases; default } ->
-      Switch
-        {
-          cases =
-            Acid.List.map
-              ~f:(fun (cond, v) -> (traverse_ast cond, traverse_ast v))
-              cases;
-          default = Option.map ~f:traverse_ast default;
-        }
-  in
-  traverse_ast ast
+module Traverse_ast (M : Monad.S2) = struct
+  open Let.Syntax2 (M)
+
+  let traverse_ast ast ~f =
+    let rec traverse_ast = function
+      | (Column _ | Const _ | Null | Selectable _ | Var _) as ast -> f ast
+      | Funcall ({ args; _ } as pl) ->
+        let+ args = Acid.List.map ~f:traverse_ast args |> M.all in
+        Funcall { pl with args }
+      | Infix ({ lhs; rhs; _ } as pl) ->
+        let+ lhs = traverse_ast lhs
+        and+ rhs = traverse_ast rhs in
+        Infix { pl with lhs; rhs }
+      | Is_null ast ->
+        let+ ast = traverse_ast ast in
+        Is_null ast
+      | Is_not_null ast ->
+        let+ ast = traverse_ast ast in
+        Is_not_null ast
+      | Join join ->
+        let* left = traverse_ast join.left
+        and* right = traverse_ast join.right in
+        let+?? on = Option.map ~f:traverse_ast join.on in
+        Join { join with left; right; on }
+      | List elts ->
+        let+ elts = Acid.List.map ~f:traverse_ast elts |> M.all in
+        List elts
+      | Select select ->
+        let* from = traverse_ast select.from
+        and* what = traverse_ast select.what in
+        let+?? where = Option.map ~f:traverse_ast select.where in
+        Select { select with from; what; where }
+      | Switch { cases; default } ->
+        let* cases =
+          let f (cond, v) =
+            let+ cond = traverse_ast cond
+            and+ v = traverse_ast v in
+            (cond, v)
+          in
+          Acid.List.map ~f cases |> M.all
+        in
+        let+?? default = Option.map ~f:traverse_ast default in
+        Switch { cases; default }
+    in
+    traverse_ast ast
+end
+
+include Traverse_ast (struct
+  type ('a, 'b) t = 'a
+
+  include Monad.Make2 (struct
+    type nonrec ('a, 'b) t = 'a
+
+    let bind a ~f = f a
+    let return a = a
+    let map = `Custom (fun a ~f -> f a)
+  end)
+end)
 
 let to_ast (_, ast) = ast
 let to_type (t, _) = t
@@ -287,5 +324,21 @@ module Infix = struct
 end
 
 include Infix
+
+let select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?for_
+    ?limit ?(skip_locked = false) ?where what =
+  Select
+    {
+      for_;
+      from = From.to_ast ();
+      limit;
+      skip_locked;
+      what = to_ast what;
+      where = Option.map ~f:to_ast where;
+    }
+
+let select_one ~from ?for_ ?skip_locked ?where what =
+  ( Type.Nullable (fst what),
+    select ~from ?for_ ~limit:1 ?skip_locked ?where what )
 
 let coerce = Fn.id

@@ -65,6 +65,10 @@ module Type = struct
   end)
 end
 
+type for_ =
+  | Share
+  | Update
+
 type ast =
   | Column : {
       selectable : string;
@@ -89,8 +93,27 @@ type ast =
       -> ast
   | Is_null : ast -> ast
   | Is_not_null : ast -> ast
+  | Join of {
+      left : ast;
+      right : ast;
+      on : ast option;
+      type_ : join_type;
+    }
   | List : ast list -> ast
   | Null : ast
+  | Select : {
+      for_ : for_ option;
+      from : ast;
+      limit : int option;
+      skip_locked : bool;
+      what : ast;
+      where : ast option;
+    }
+      -> ast
+  | Selectable of {
+      name : string;
+      alias : string option;
+    }
   | Switch : {
       cases : (ast * ast) list;
       default : ast Option.t;
@@ -101,3 +124,18 @@ type ast =
       size : int;
     }
       -> ast
+
+and join_type =
+  | Inner
+  | Outer
+  | Outer_left
+  | Outer_right
+
+module type SELECTABLE = sig
+  type model
+
+  (** Type identifier of columns that can be selected from this *)
+  type tag
+
+  val to_ast : unit -> ast
+end

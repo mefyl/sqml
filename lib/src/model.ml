@@ -131,7 +131,7 @@ struct
           ~decode:(fun v -> Result.return (Meta.map v))
           ~encode:Meta.unmap columns
 
-      let to_ast () = Selectable.Selectable { alias = None; name }
+      let to_ast () = Expression.Selectable { alias = None; name }
       let constraints = Column.constraints @ Meta.constraints Column.columns
 
       module Index_of_columns =
@@ -192,26 +192,38 @@ struct
     val right : ('t, R.tag) Expression.t -> ('t Option.t, tag) Expression.t
   end
 
-  let map_name f selectable =
-    let rec map_name = function
-      | Selectable.Selectable { name; alias } ->
+  module State_monad = struct
+    module Base = struct
+      type ('a, 'state) t = 'state -> 'a * 'state
+
+      let bind (v : ('a, 'state) t) ~(f : 'a -> ('b, 'state) t) : ('b, 'state) t
+          =
+       fun state ->
+        let v, state = v state in
+        f v state
+
+      let map = `Define_using_bind
+      let return v state = (v, state)
+    end
+
+    include Base
+    include Monad.Make2 (Base)
+  end
+
+  module Traverse = Expression.Traverse_ast (State_monad)
+
+  let map_name ast ~f =
+    let f ast mapped =
+      match ast with
+      | Expression.Column ({ selectable; _ } as pl)
+        when Set.mem mapped selectable ->
+        (Expression.Column { pl with selectable = f selectable }, mapped)
+      | Selectable { name; alias } ->
         let alias = Option.value ~default:name alias in
-        ( Selectable.Selectable { name; alias = Some (f alias) },
-          Set.of_list (module String) [ alias ] )
-      | Join ({ left; right; on; _ } as pl) ->
-        let left, left_mapped = map_name left
-        and right, right_mapped = map_name right in
-        let mapped = Set.union left_mapped right_mapped in
-        let on =
-          Option.map ~f:(Expression.traverse_ast ~f:(map_name_ast mapped)) on
-        in
-        (Join { pl with left; right; on }, mapped)
-    and map_name_ast mapped = function
-      | Column ({ selectable; _ } as pl) when Set.mem mapped selectable ->
-        Column { pl with selectable = f selectable }
-      | ast -> ast
+        (Selectable { name; alias = Some (f alias) }, Set.add mapped alias)
+      | ast -> (ast, mapped)
     in
-    map_name selectable |> fst
+    Traverse.traverse_ast ast ~f (Set.empty (module String)) |> fst
 
   module Join
       (L : Selectable.S with type model = tag)
@@ -243,10 +255,10 @@ struct
        fun e -> Expression.map_name (fun n -> "r_" ^ n) e
 
       let to_ast_ type_ on =
-        Selectable.Join
+        Expression.Join
           {
-            left = map_name (fun n -> "l_" ^ n) @@ L.to_ast ();
-            right = map_name (fun n -> "r_" ^ n) @@ R.to_ast ();
+            left = map_name ~f:(fun n -> "l_" ^ n) @@ L.to_ast ();
+            right = map_name ~f:(fun n -> "r_" ^ n) @@ R.to_ast ();
             on;
             type_;
           }
@@ -309,7 +321,7 @@ struct
     }
 
     type ('t, 'tag) select = {
-      for_ : for_ option;
+      for_ : Expression.for_ option;
       from : (module Selectable.S with type model = tag and type tag = 'tag);
       what : ('t, 'tag) Expression.t;
       where : (bool, 'tag) Expression.t option;
@@ -461,7 +473,7 @@ struct
       (module struct
         include From
 
-        let to_ast () = map_name rename (to_ast ())
+        let to_ast () = map_name ~f:rename (to_ast ())
       end : Selectable.S
         with type model = tag
          and type tag = from)

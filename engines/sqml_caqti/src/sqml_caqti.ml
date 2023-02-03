@@ -142,8 +142,31 @@ end = struct
         fmt f ()
       | Is_null ast -> (pp ++ sp ++ const string "IS NULL") f ast
       | Is_not_null ast -> (pp ++ sp ++ const string "IS NOT NULL") f ast
+      | Join { left; right; on; type_ } ->
+        let verb =
+          match type_ with
+          | Inner -> "INNER JOIN"
+          | Outer -> "OUTER JOIN"
+          | Outer_left -> "LEFT OUTER JOIN"
+          | Outer_right -> "RIGHT OUTER JOIN"
+        in
+        (const pp left ++ sp ++ const string verb ++ sp ++ const pp right ++ sp
+       ++ const string "ON" ++ sp
+        ++ const (option ~none:(const string "true") pp_expression) on)
+          f ()
       | List l -> list ~sep:comma pp f l
       | Null -> Fmt.string f "NULL"
+      | Select { for_; from; limit; skip_locked; what; where } ->
+        pf f "(SELECT %a FROM %a%a%a%s%a)" pp what pp from
+          (option (const string " WHERE " ++ pp))
+          where
+          (option (const string " FOR " ++ pp_for))
+          for_
+          (if skip_locked then " SKIP LOCKED" else "")
+          (option (const string " LIMIT " ++ int))
+          limit
+      | Selectable { name; alias } ->
+        (const string name ++ const (option (sp ++ string)) alias) f ()
       | Switch { cases; default } ->
         let pp_case f (cond, value) =
           (const string "WHEN" ++ sp ++ const pp cond ++ sp
@@ -159,6 +182,10 @@ end = struct
         (list ~sep:comma var) f @@ List.range index (index + size)
     in
     pp
+
+  and pp_for f = function
+    | Expression.Share -> Fmt.string f "SHARE"
+    | Update -> Fmt.string f "UPDATE"
 
   let table_name info schema name =
     match schema with
@@ -316,24 +343,6 @@ end = struct
     | Update_returning { returning; _ } -> type_of_expr returning
     | Update_unique { returning; _ } -> type_of_expr returning
 
-  let rec pp_selectable f =
-    let open Fmt in
-    function
-    | Selectable.Selectable { name; alias } ->
-      (const string name ++ const (option (sp ++ string)) alias) f ()
-    | Join { left; right; on; type_ } ->
-      let verb =
-        match type_ with
-        | Inner -> "INNER JOIN"
-        | Outer -> "OUTER JOIN"
-        | Outer_left -> "LEFT OUTER JOIN"
-        | Outer_right -> "RIGHT OUTER JOIN"
-      in
-      (const pp_selectable left ++ sp ++ const string verb ++ sp
-     ++ const pp_selectable right ++ sp ++ const string "ON" ++ sp
-      ++ const (option ~none:(const string "true") pp_expression) on)
-        f ()
-
   let dialect_of_dialect_tag = function
     | #Caqti_driver_info.sql_dialect_tag as t -> t
     | _ -> `Other
@@ -361,7 +370,7 @@ end = struct
           (where : (bool, tag) Expression.t option)
           (returning : (t, tag) Expression.t option) =
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" pp_selectable (Table.to_ast ())
+        Fmt.pf f "DELETE FROM@ %a%a%a" pp_expression (Table.to_ast ())
           (option (pp_clause "WHERE"))
           (Option.map ~f:Expression.to_ast where)
           (option (pp_clause "RETURNING"))
@@ -424,17 +433,18 @@ end = struct
             let rec forable =
               let outer (name, _) = (name, false) in
               function
-              | Selectable.Selectable { alias; name } ->
+              | Expression.Selectable { alias; name } ->
                 [ (Option.value ~default:name alias, true) ]
-              | Selectable.Join { left; right; type_ = Inner; _ } ->
+              | Join { left; right; type_ = Inner; _ } ->
                 forable left @ forable right
-              | Selectable.Join { left; right; type_ = Outer_left; _ } ->
+              | Join { left; right; type_ = Outer_left; _ } ->
                 forable left @ List.map ~f:outer @@ forable right
-              | Selectable.Join { left; right; type_ = Outer_right; _ } ->
+              | Join { left; right; type_ = Outer_right; _ } ->
                 (List.map ~f:outer @@ forable left) @ forable right
-              | Selectable.Join { left; right; type_ = Outer; _ } ->
+              | Join { left; right; type_ = Outer; _ } ->
                 (List.map ~f:outer @@ forable left)
                 @ List.map ~f:outer @@ forable right
+              | _ -> []
             in
             let module From = (val from) in
             forable (From.to_ast ())
@@ -447,7 +457,7 @@ end = struct
                    forable
           in
           function
-          | Sqml.Model.Share ->
+          | Sqml.Expression.Share ->
             Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
           | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
         in
@@ -456,7 +466,7 @@ end = struct
         @@ const string "SELECT" ++ sp
            ++ const pp_expression Expression.(to_ast what)
            ++ sp ++ const string "FROM" ++ sp
-           ++ const pp_selectable (Selectable.to_ast ())
+           ++ const pp_expression (Selectable.to_ast ())
            ++ const
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where)
@@ -476,11 +486,11 @@ end = struct
         in
         (box
         @@ const string "UPDATE" ++ sp
-           ++ const pp_selectable (T.to_ast ())
+           ++ const pp_expression (T.to_ast ())
            ++ sp ++ const string "SET" ++ sp
            ++ const (list ~sep:comma pp_assignment) what
            ++ const
-                (option (sp ++ const string "FROM" ++ sp ++ pp_selectable))
+                (option (sp ++ const string "FROM" ++ sp ++ pp_expression))
                 from
            ++ const
                 (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
@@ -491,7 +501,7 @@ end = struct
       function
       | Delete { from; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" pp_selectable (Table.to_ast ())
+        Fmt.pf f "DELETE FROM@ %a%a" pp_expression (Table.to_ast ())
           (option (pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->

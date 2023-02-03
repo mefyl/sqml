@@ -88,10 +88,23 @@ end
 
 include module type of Infix
 
+module Traverse_ast (M : Monad.S2) : sig
+  val traverse_ast : ast -> f:(ast -> (ast, 'b) M.t) -> (ast, 'b) M.t
+end
+
 val traverse_ast : ast -> f:(ast -> ast) -> ast
 
 val make_column :
   name:string -> selectable:string -> 't Column.Type.t -> ('t, 'tag) Column.t
 
 val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
+
+val select_one :
+  from:(module SELECTABLE with type tag = 'tag) ->
+  ?for_:for_ ->
+  ?skip_locked:bool ->
+  ?where:(bool, 'tag) t ->
+  ('what, 'tag) t ->
+  ('what Option.t, 'tag) t
+
 val coerce : ('t, _) t -> ('t, _) t
