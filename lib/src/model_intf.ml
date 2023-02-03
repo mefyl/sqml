@@ -126,7 +126,7 @@ module type S = sig
 
     type ('t, 'arity) t = private
       | Delete : {
-          from : (module Table.S with type model = tag);
+          from : (module Table.S with type model = tag and type tag = 'tag);
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
@@ -170,7 +170,7 @@ module type S = sig
   end
 
   val delete :
-    from:(module Table.S with type model = tag) ->
+    from:(module Table.S with type model = tag and type tag = 'tag) ->
     ?where:(bool, 'tag) Expression.t ->
     unit ->
     (unit, zero) Query.t

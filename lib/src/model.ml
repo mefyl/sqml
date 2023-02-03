@@ -326,7 +326,7 @@ struct
 
     type ('t, 'arity) t =
       | Delete : {
-          from : (module Table.S with type model = tag);
+          from : (module Table.S with type model = tag and type tag = 'tag);
           where : (bool, 'tag) Expression.t option;
         }
           -> (unit, zero) t
