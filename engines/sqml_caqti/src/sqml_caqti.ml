@@ -125,23 +125,31 @@ end = struct
     | [] -> nop
     | _ :: _ as l -> pp_values l
 
-  and pp_expression =
+  and pp_expression f ast =
     let open Fmt in
-    let var = Fmt.(const char '$' ++ using Int.succ int) in
-    let rec pp : Expression.ast Fmt.t =
+    let var = const char '$' ++ using Int.succ int in
+    let rec pp current_precedence : Expression.ast Fmt.t =
      fun f -> function
       | Column { selectable; name; _ } ->
         (const string selectable ++ const string "." ++ const string name) f ()
       | Const { type_; value } -> pp_from_type type_ f value
       | Funcall { name; args; _ } ->
-        (const string name ++ sp ++ const char '(' ++ list ~sep:comma pp
-       ++ const char ')')
+        (const string name ++ sp ++ const char '('
+        ++ list ~sep:comma (pp None)
+        ++ const char ')')
           f args
-      | Infix { op; lhs; rhs } ->
-        let fmt = const pp lhs ++ sp ++ const string op ++ sp ++ const pp rhs in
-        fmt f ()
-      | Is_null ast -> (pp ++ sp ++ const string "IS NULL") f ast
-      | Is_not_null ast -> (pp ++ sp ++ const string "IS NOT NULL") f ast
+      | Infix { op; lhs; rhs; precedence } -> (
+        let fmt =
+          const (pp (Some precedence)) lhs
+          ++ sp ++ const string op ++ sp
+          ++ const (pp (Some precedence)) rhs
+        in
+        match current_precedence with
+        | Some current_precedence when current_precedence > precedence ->
+          (const char '(' ++ fmt ++ const char ')') f ()
+        | _ -> fmt f ())
+      | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
+      | Is_not_null ast -> (pp None ++ sp ++ const string "IS NOT NULL") f ast
       | Join { left; right; on; type_ } ->
         let verb =
           match type_ with
@@ -150,15 +158,17 @@ end = struct
           | Outer_left -> "LEFT OUTER JOIN"
           | Outer_right -> "RIGHT OUTER JOIN"
         in
-        (const pp left ++ sp ++ const string verb ++ sp ++ const pp right ++ sp
-       ++ const string "ON" ++ sp
+        (const (pp None) left
+        ++ sp ++ const string verb ++ sp
+        ++ const (pp None) right
+        ++ sp ++ const string "ON" ++ sp
         ++ const (option ~none:(const string "true") pp_expression) on)
           f ()
-      | List l -> list ~sep:comma pp f l
+      | List l -> list ~sep:comma (pp None) f l
       | Null -> Fmt.string f "NULL"
       | Select { for_; from; limit; skip_locked; what; where } ->
-        pf f "(SELECT %a FROM %a%a%a%s%a)" pp what pp from
-          (option (const string " WHERE " ++ pp))
+        pf f "(SELECT %a FROM %a%a%a%s%a)" (pp None) what (pp None) from
+          (option (const string " WHERE " ++ pp None))
           where
           (option (const string " FOR " ++ pp_for))
           for_
@@ -169,19 +179,22 @@ end = struct
         (const string name ++ const (option (sp ++ string)) alias) f ()
       | Switch { cases; default } ->
         let pp_case f (cond, value) =
-          (const string "WHEN" ++ sp ++ const pp cond ++ sp
-         ++ const string "THEN" ++ sp ++ const pp value ++ sp)
+          (const string "WHEN" ++ sp
+          ++ const (pp None) cond
+          ++ sp ++ const string "THEN" ++ sp
+          ++ const (pp None) value
+          ++ sp)
             f ()
         in
         (const string "CASE" ++ sp
         ++ const (list pp_case) cases
-        ++ const (option (const string "ELSE" ++ sp ++ pp ++ sp)) default
+        ++ const (option (const string "ELSE" ++ sp ++ pp None ++ sp)) default
         ++ const string "END")
           f ()
       | Var { index; size } ->
         (list ~sep:comma var) f @@ List.range index (index + size)
     in
-    pp
+    pp None f ast
 
   and pp_for f = function
     | Expression.Share -> Fmt.string f "SHARE"

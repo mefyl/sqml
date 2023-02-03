@@ -89,6 +89,7 @@ type ast =
       op : string;
       lhs : ast;
       rhs : ast;
+      precedence : int;
     }
       -> ast
   | Is_null : ast -> ast

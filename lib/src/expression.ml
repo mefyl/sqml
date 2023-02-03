@@ -312,19 +312,26 @@ type 'tag assignment =
 let assignment_to_ast (Set { column; value = _, ast }) = (column.name, ast)
 
 module Infix = struct
-  let arithmetics op (_, lhs) (_, rhs) = (Type.Int, Infix { op; lhs; rhs })
-  let logic op (_, lhs) (_, rhs) = (Type.Bool, Infix { op; lhs; rhs })
-  let ( && ) lhs rhs = logic "AND" lhs rhs
+  let arithmetics precedence op (_, lhs) (_, rhs) =
+    (Type.Int, Infix { op; lhs; rhs; precedence })
+
+  let logic precedence op (_, lhs) (_, rhs) =
+    (Type.Bool, Infix { op; lhs; rhs; precedence })
+
+  let ( && ) lhs rhs = logic 1 "AND" lhs rhs
   let ( := ) column value = Set { column; value }
-  let ( < ) lhs rhs = logic "<" lhs rhs
-  let ( <= ) lhs rhs = logic "<=" lhs rhs
-  let ( = ) lhs rhs = logic "=" lhs rhs
-  let ( > ) lhs rhs = logic ">" lhs rhs
-  let ( >= ) lhs rhs = logic ">=" lhs rhs
-  let ( ^ ) (_, lhs) (_, rhs) = (Type.String, Infix { op = "||"; lhs; rhs })
-  let ( || ) = logic "OR"
-  let ( + ) lhs rhs = arithmetics "+" lhs rhs
-  let ( - ) lhs rhs = arithmetics "-" lhs rhs
+  let ( < ) lhs rhs = logic 2 "<" lhs rhs
+  let ( <= ) lhs rhs = logic 2 "<=" lhs rhs
+  let ( = ) lhs rhs = logic 2 "=" lhs rhs
+  let ( > ) lhs rhs = logic 2 ">" lhs rhs
+  let ( >= ) lhs rhs = logic 2 ">=" lhs rhs
+
+  let ( ^ ) (_, lhs) (_, rhs) =
+    (Type.String, Infix { op = "||"; lhs; rhs; precedence = 2 })
+
+  let ( || ) = logic 0 "OR"
+  let ( + ) lhs rhs = arithmetics 3 "+" lhs rhs
+  let ( - ) lhs rhs = arithmetics 3 "-" lhs rhs
 end
 
 include Infix
