@@ -251,6 +251,16 @@ module type S = sig
     returning:(('from, 'tag) mapper -> ('t, 'tag) Expression.t) ->
     (('from, 'tag) mapper -> 'tag Expression.assignment list) ->
     ('t, many) Query.t
+
+  val update_from_unique :
+    (module Table.S with type model = tag and type tag = 'tag) ->
+    ('indexed Table.Index.unique, 'tag) Table.Index.t ->
+    ('indexed, 'tag) Expression.List_nullable.t ->
+    from:(module Selectable.S with type model = tag and type tag = 'from) ->
+    ?where:(('from, 'tag) mapper -> (bool, 'tag) Expression.t) ->
+    returning:(('from, 'tag) mapper -> ('t, 'tag) Expression.t) ->
+    (('from, 'tag) mapper -> 'tag Expression.assignment list) ->
+    ('t, one_maybe) Query.t
 end
 
 type t = (module S)

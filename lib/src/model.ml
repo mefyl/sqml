@@ -495,6 +495,28 @@ struct
     and where = Option.map ~f:(fun where -> where { map }) where in
     Query.Update_returning { from = Some from; into; returning; what; where }
 
+  let update_from_unique (type from) into
+      (Table.Index.Unique { columns = index; _ }) indexed
+      ~from:
+        (module From : Selectable.S with type model = tag and type tag = from)
+      ?where ~returning what =
+    let rename name = "from_" ^ name in
+    let map e = Expression.map_name rename e in
+    let from =
+      (module struct
+        include From
+
+        let to_ast () = map_name ~f:rename (to_ast ())
+      end : Selectable.S
+        with type model = tag
+         and type tag = from)
+    and returning = returning { map }
+    and what = what { map }
+    and where =
+      unique index indexed (Option.map where ~f:(fun where -> where { map }))
+    in
+    Query.Update_unique { from = Some from; into; returning; what; where }
+
   (* Metadata *)
 
   module Metadata = struct
