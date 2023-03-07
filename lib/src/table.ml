@@ -10,6 +10,13 @@ let pp_referential_action f =
   | Set_null -> string f "SET NULL"
   | Set_default -> string f "SET DEFAULT"
 
+let pp_deferrability f =
+  let open Fmt in
+  function
+  | Deferrable -> string f "DEFERRABLE"
+  | Deferred_initially -> string f "DEFERRABLE INITIALLY DEFERRED"
+  | Not_deferrable -> string f "NOT DEFERRABLE"
+
 let referential_action_of_string = function
   | "NO ACTION" -> Some No_action
   | "RESTRICT" -> Some Restrict
@@ -37,12 +44,13 @@ module Column = struct
   module Foreign_key = struct
     include Foreign_key
 
-    let make ?(on_delete = No_action) ?(on_update = No_action) reference =
-      Reference { reference; on_delete; on_update }
+    let make ?(deferrability = Not_deferrable) ?(on_delete = No_action)
+        ?(on_update = No_action) reference =
+      Reference { deferrability; reference; on_delete; on_update }
 
-    let make_nullable ?(on_delete = No_action) ?(on_update = No_action)
-        reference =
-      Reference_opt { reference; on_delete; on_update }
+    let make_nullable ?(deferrability = Not_deferrable) ?(on_delete = No_action)
+        ?(on_update = No_action) reference =
+      Reference_opt { deferrability; reference; on_delete; on_update }
   end
 end
 
@@ -109,7 +117,7 @@ module Schema = struct
     and constraints =
       let foreign =
         let f = function
-          | Foreign_key { reference; on_delete; on_update } ->
+          | Foreign_key { deferrability; reference; on_delete; on_update } ->
             let f = function
               | Foreign_reference { target; column } ->
                 (column.name, target.column.name)
@@ -127,6 +135,7 @@ module Schema = struct
             in
             Schema.Constraint.Foreign_key
               {
+                deferrability;
                 name =
                   Fmt.(
                     str "%s_%a_fkey" T.Meta.name
@@ -261,13 +270,20 @@ module Query = struct
     | Schema.Constraint.Primary_key { name; columns } ->
       pf f "@[<b 2>CONSTRAINT %s@ @[PRIMARY KEY (@[<h>%a@])@]@]" name
         (list ~sep:comma string) columns
-    | Foreign_key { name; table; source; target; on_delete; on_update } ->
-      let on_delete =
+    | Foreign_key
+        { deferrability; name; table; source; target; on_delete; on_update } ->
+      let deferrability =
+        match deferrability with
+        | Not_deferrable -> None
+        | deferrability -> Some deferrability
+      and on_delete =
         match on_delete with No_action -> None | action -> Some action
       and on_update =
         match on_update with No_action -> None | action -> Some action
       in
-      pf f "@[<b 2>CONSTRAINT %s@ @[FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a@]@]"
+      pf f
+        "@[<b 2>CONSTRAINT %s@ @[FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a@ \
+         %a@]@]"
         name
         (hvbox @@ list ~sep:comma string)
         source (pp_table_name dialect) table
@@ -279,6 +295,8 @@ module Query = struct
         (hbox
         @@ option (sp ++ const string "ON UPDATE " ++ pp_referential_action))
         on_update
+        (hbox @@ option (sp ++ pp_deferrability))
+        deferrability
 
   let pp ((module Dialect : Dialect.S) as dialect) f =
     let open Fmt in

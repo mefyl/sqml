@@ -58,7 +58,14 @@ type referential_action =
   | Set_default
 [@@deriving eq, ord, sexp_of]
 
+type deferrability =
+  | Deferrable
+  | Deferred_initially
+  | Not_deferrable
+[@@deriving eq, ord, sexp_of]
+
 type ('ref, 'target) reference_with_actions = {
+  deferrability : deferrability; [@default Not_deferrable]
   reference : 'ref;
   on_delete : referential_action; [@default No_action]
   on_update : referential_action; [@default No_action]
@@ -215,6 +222,7 @@ module Schema = struct
   module Constraint = struct
     type t =
       | Foreign_key of {
+          deferrability : deferrability;
           name : string;
           table : name;
           source : string list;

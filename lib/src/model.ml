@@ -39,10 +39,16 @@ struct
               List.map
                 ~f:(function
                   | Table.Column.Foreign_key.Reference
-                      { reference = target; on_delete; on_update } ->
+                      {
+                        deferrability;
+                        reference = target;
+                        on_delete;
+                        on_update;
+                      } ->
                     Table.(
                       Foreign_key
                         {
+                          deferrability;
                           reference =
                             List_nonempty.
                               [ Foreign_reference { column; target } ];
@@ -50,10 +56,16 @@ struct
                           on_update;
                         })
                   | Table.Column.Foreign_key.Reference_opt
-                      { reference = target; on_delete; on_update } ->
+                      {
+                        deferrability;
+                        reference = target;
+                        on_delete;
+                        on_update;
+                      } ->
                     Table.(
                       Foreign_key
                         {
+                          deferrability;
                           reference =
                             List_nonempty.
                               [ Foreign_reference_opt { column; target } ];

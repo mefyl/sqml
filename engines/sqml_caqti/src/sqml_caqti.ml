@@ -864,7 +864,9 @@ end = struct
             (Caqti_type.(tup2 string string)
             ->* Caqti_type.(
                   tup4 string string string
-                    (option (tup4 (tup2 string string) string string string))))
+                    (option
+                       (tup3 (tup2 string string) string
+                          (tup4 string string string string)))))
               {| SELECT cons.constraint_name,
                         col.column_name,
                         cons.constraint_type,
@@ -872,7 +874,9 @@ end = struct
                         target.table_name AS target_table,
                         target_col.column_name AS target_column,
                         delete_rule,
-                        update_rule
+                        update_rule,
+                        cons.is_deferrable,
+                        cons.initially_deferred
                  FROM information_schema.table_constraints cons
                  LEFT JOIN information_schema.referential_constraints ref
                    ON cons.constraint_name = ref.constraint_name
@@ -898,21 +902,34 @@ end = struct
             | ( constraint_name,
                 _,
                 "FOREIGN KEY",
-                Some ((schema, name), _, delete, update) )
+                Some
+                  ( (schema, name),
+                    _,
+                    (delete, update, deferrable, initially_deferred) ) )
               :: _ as columns ->
               let action_of_string s =
                 Sqml.Table.referential_action_of_string s
                 |> Result.of_option
                      ~error:(Fmt.str "invalid referential action: %S" s)
                 |> Result.ok_or_failwith
+              and deferrability =
+                match (deferrable, initially_deferred) with
+                | "NO", "NO" -> Sqml.Table.Not_deferrable
+                | "YES", "NO" -> Sqml.Table.Deferrable
+                | "YES", "YES" -> Sqml.Table.Deferred_initially
+                | _ ->
+                  Fmt.failwith
+                    "invalid deferrable, initially deffered values: %S, %S"
+                    deferrable initially_deferred
               and get_source (_, c, _, _) = c
               and get_target = function
-                | _, _, _, Some (_, c, _, _) -> c
+                | _, _, _, Some (_, c, _) -> c
                 | _ -> failwith "missing target column in constraint"
               in
               Some
                 (Table.Schema.Constraint.Foreign_key
                    {
+                     deferrability;
                      name = constraint_name;
                      table = { schema = schema_of_name schema; name };
                      source = List.map ~f:get_source columns;

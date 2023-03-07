@@ -23,12 +23,14 @@ module Column : sig
     include module type of Foreign_key
 
     val make :
+      ?deferrability:deferrability ->
       ?on_delete:referential_action ->
       ?on_update:referential_action ->
       ('a, 'b) reference ->
       'a t
 
     val make_nullable :
+      ?deferrability:deferrability ->
       ?on_delete:referential_action ->
       ?on_update:referential_action ->
       ('a, 'b) reference ->
