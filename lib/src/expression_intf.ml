@@ -123,6 +123,7 @@ type ast =
   | Var : {
       index : int;
       size : int;
+      type_ : _ Type.t;
     }
       -> ast
 

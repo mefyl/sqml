@@ -216,7 +216,8 @@ let to_list = function
   | type_, Var { index; _ } ->
     let rec f : type a. int -> a Hlist.t Type.t -> (a, 'tag) List.t =
      fun i -> function
-      | hd :: tl -> (hd, Var { index = index + i; size = 1 }) :: f (i + 1) tl
+      | hd :: tl ->
+        (hd, Var { index = index + i; size = 1; type_ = hd }) :: f (i + 1) tl
       | [] -> []
       | _ -> failwith "unreachable C"
     in
@@ -239,7 +240,7 @@ let rec type_arity : type t. t Type.t -> int = function
 let prepare (type args) (types : args Type.List.t) : (args, 'free) List.t =
   let f index t =
     let size = type_arity t in
-    (index + size, (t, Var { index; size }))
+    (index + size, (t, Var { index; size; type_ = t }))
   in
   Transduce_exprs.folding_map ~f:{ f } 0 types
 

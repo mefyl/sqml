@@ -87,118 +87,22 @@ end = struct
     fmt f
       (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
 
-  let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
-    let open Fmt in
-    let pp_time fmt t =
-      char fmt '\'';
-      string fmt (Timmy.Time.to_rfc3339 t);
-      char fmt '\''
-    in
-    let rec pp_values :
-        type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
-      | [] -> nop
-      | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
-      | hd :: tl ->
-        fun f (hd_v :: tl_v) ->
-          pp_from_type hd f hd_v;
-          comma f ();
-          pp_values tl f tl_v
-      | Custom { repr; encode; _ } -> fun f v -> pp_from_type repr f @@ encode v
-      | Time ->
-        (* Timmy.Time.t being abstract, the typer cannot prove it's not
-           unifiable with [l Hlist.t], so we must handle it. *)
-        pp_time
-    in
-    function
-    | Bigint -> Fmt.int64
-    | Bool -> Fmt.bool
-    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
-    | Float -> Fmt.float
-    | Int -> Fmt.int
-    | Json -> using Ezjsonm.(value_to_string ~minify:true) pp_literal_string
-    | Null -> Fmt.(const string "NULL")
-    | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
-    | String -> pp_literal_string
-    | Time -> pp_time
-    | Custom { encode; repr; _ } ->
-      fun f value -> pp_from_type repr f @@ encode value
-    | [] -> nop
-    | _ :: _ as l -> pp_values l
-
-  and pp_expression f ast =
-    let open Fmt in
-    let var = const char '$' ++ using Int.succ int in
-    let rec pp current_precedence : Expression.ast Fmt.t =
-     fun f -> function
-      | Column { selectable; name; _ } ->
-        (const string selectable ++ const string "." ++ const string name) f ()
-      | Const { type_; value } -> pp_from_type type_ f value
-      | Funcall { name; args; _ } ->
-        (const string name ++ sp ++ const char '('
-        ++ list ~sep:comma (pp None)
-        ++ const char ')')
-          f args
-      | Infix { op; lhs; rhs; precedence } -> (
-        let fmt =
-          const (pp (Some precedence)) lhs
-          ++ sp ++ const string op ++ sp
-          ++ const (pp (Some precedence)) rhs
-        in
-        match current_precedence with
-        | Some current_precedence when current_precedence > precedence ->
-          (const char '(' ++ fmt ++ const char ')') f ()
-        | _ -> fmt f ())
-      | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
-      | Is_not_null ast -> (pp None ++ sp ++ const string "IS NOT NULL") f ast
-      | Join { left; right; on; type_ } ->
-        let verb =
-          match type_ with
-          | Inner -> "INNER JOIN"
-          | Outer -> "OUTER JOIN"
-          | Outer_left -> "LEFT OUTER JOIN"
-          | Outer_right -> "RIGHT OUTER JOIN"
-        in
-        (const (pp None) left
-        ++ sp ++ const string verb ++ sp
-        ++ const (pp None) right
-        ++ sp ++ const string "ON" ++ sp
-        ++ const (option ~none:(const string "true") pp_expression) on)
-          f ()
-      | List l -> list ~sep:comma (pp None) f l
-      | Null -> Fmt.string f "NULL"
-      | Select { for_; from; limit; skip_locked; what; where } ->
-        pf f "(SELECT %a FROM %a%a%a%s%a)" (pp None) what (pp None) from
-          (option (const string " WHERE " ++ pp None))
-          where
-          (option (const string " FOR " ++ pp_for))
-          for_
-          (if skip_locked then " SKIP LOCKED" else "")
-          (option (const string " LIMIT " ++ int))
-          limit
-      | Selectable { name; alias } ->
-        (const string name ++ const (option (sp ++ string)) alias) f ()
-      | Switch { cases; default } ->
-        let pp_case f (cond, value) =
-          (const string "WHEN" ++ sp
-          ++ const (pp None) cond
-          ++ sp ++ const string "THEN" ++ sp
-          ++ const (pp None) value
-          ++ sp)
-            f ()
-        in
-        (const string "CASE" ++ sp
-        ++ const (list pp_case) cases
-        ++ const (option (const string "ELSE" ++ sp ++ pp None ++ sp)) default
-        ++ const string "END")
-          f ()
-      | Var { index; size } ->
-        (list ~sep:comma var) f @@ List.range index (index + size)
-    in
-    pp None f ast
-
-  and pp_for f = function
-    | Expression.Share -> Fmt.string f "SHARE"
-    | Update -> Fmt.string f "UPDATE"
+  let rec column_type_of_expression_type :
+      type t.
+      t Sqml.Expression.Type.t -> Sqml.Expression.Column.Type.any_atomic option
+      = function
+    | Bigint -> Some (Type Sqml.Expression.Column.Type.Bigint)
+    | Bool -> Some (Type Bool)
+    | Date -> Some (Type Date)
+    | Float -> Some (Type Float)
+    | Int -> Some (Type Int)
+    | Json -> Some (Type Json)
+    | Null -> None
+    | Nullable t -> column_type_of_expression_type t
+    | String -> Some (Type Text)
+    | Time -> Some (Type Time)
+    | Custom { repr; _ } -> column_type_of_expression_type repr
+    | [] | _ :: _ -> None
 
   let table_name info schema name =
     match schema with
@@ -360,7 +264,129 @@ end = struct
     | #Caqti_driver_info.sql_dialect_tag as t -> t
     | _ -> `Other
 
+  let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
+    let open Fmt in
+    let pp_time fmt t =
+      char fmt '\'';
+      string fmt (Timmy.Time.to_rfc3339 t);
+      char fmt '\''
+    in
+    let rec pp_values :
+        type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
+      | [] -> nop
+      | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
+      | hd :: tl ->
+        fun f (hd_v :: tl_v) ->
+          pp_from_type hd f hd_v;
+          comma f ();
+          pp_values tl f tl_v
+      | Custom { repr; encode; _ } -> fun f v -> pp_from_type repr f @@ encode v
+      | Time ->
+        (* Timmy.Time.t being abstract, the typer cannot prove it's not
+           unifiable with [l Hlist.t], so we must handle it. *)
+        pp_time
+    in
+    function
+    | Bigint -> Fmt.int64
+    | Bool -> Fmt.bool
+    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
+    | Float -> Fmt.float
+    | Int -> Fmt.int
+    | Json -> using Ezjsonm.(value_to_string ~minify:true) pp_literal_string
+    | Null -> Fmt.(const string "NULL")
+    | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
+    | String -> pp_literal_string
+    | Time -> pp_time
+    | Custom { encode; repr; _ } ->
+      fun f value -> pp_from_type repr f @@ encode value
+    | [] -> nop
+    | _ :: _ as l -> pp_values l
+
   let pp_query dialect =
+    let rec pp_expression f ast =
+      let open Fmt in
+      let var (type t) (type_ : t Sqml.Expression.Type.t) =
+        const char '$' ++ using Int.succ int
+        ++ const
+             (option (const string "::" ++ string))
+             (Option.map (column_type_of_expression_type type_)
+                ~f:(fun (Type t : Sqml.Expression.Column.Type.any_atomic) ->
+                  Sqml.Dialect.Postgresql.string_of_type ~include_nullable:false
+                    t))
+      in
+
+      let rec pp current_precedence : Expression.ast Fmt.t =
+       fun f -> function
+        | Column { selectable; name; _ } ->
+          (const string selectable ++ const string "." ++ const string name)
+            f ()
+        | Const { type_; value } -> pp_from_type type_ f value
+        | Funcall { name; args; _ } ->
+          (const string name ++ sp ++ const char '('
+          ++ list ~sep:comma (pp None)
+          ++ const char ')')
+            f args
+        | Infix { op; lhs; rhs; precedence } -> (
+          let fmt =
+            const (pp (Some precedence)) lhs
+            ++ sp ++ const string op ++ sp
+            ++ const (pp (Some precedence)) rhs
+          in
+          match current_precedence with
+          | Some current_precedence when current_precedence > precedence ->
+            (const char '(' ++ fmt ++ const char ')') f ()
+          | _ -> fmt f ())
+        | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
+        | Is_not_null ast -> (pp None ++ sp ++ const string "IS NOT NULL") f ast
+        | Join { left; right; on; type_ } ->
+          let verb =
+            match type_ with
+            | Inner -> "INNER JOIN"
+            | Outer -> "OUTER JOIN"
+            | Outer_left -> "LEFT OUTER JOIN"
+            | Outer_right -> "RIGHT OUTER JOIN"
+          in
+          (const (pp None) left
+          ++ sp ++ const string verb ++ sp
+          ++ const (pp None) right
+          ++ sp ++ const string "ON" ++ sp
+          ++ const (option ~none:(const string "true") pp_expression) on)
+            f ()
+        | List l -> list ~sep:comma (pp None) f l
+        | Null -> Fmt.string f "NULL"
+        | Select { for_; from; limit; skip_locked; what; where } ->
+          pf f "(SELECT %a FROM %a%a%a%s%a)" (pp None) what (pp None) from
+            (option (const string " WHERE " ++ pp None))
+            where
+            (option (const string " FOR " ++ pp_for))
+            for_
+            (if skip_locked then " SKIP LOCKED" else "")
+            (option (const string " LIMIT " ++ int))
+            limit
+        | Selectable { name; alias } ->
+          (const string name ++ const (option (sp ++ string)) alias) f ()
+        | Switch { cases; default } ->
+          let pp_case f (cond, value) =
+            (const string "WHEN" ++ sp
+            ++ const (pp None) cond
+            ++ sp ++ const string "THEN" ++ sp
+            ++ const (pp None) value
+            ++ sp)
+              f ()
+          in
+          (const string "CASE" ++ sp
+          ++ const (list pp_case) cases
+          ++ const (option (const string "ELSE" ++ sp ++ pp None ++ sp)) default
+          ++ const string "END")
+            f ()
+        | Var { index; size; type_ } ->
+          (list ~sep:comma (var type_)) f @@ List.range index (index + size)
+      in
+      pp None f ast
+    and pp_for f = function
+      | Expression.Share -> Fmt.string f "SHARE"
+      | Update -> Fmt.string f "UPDATE"
+    in
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
