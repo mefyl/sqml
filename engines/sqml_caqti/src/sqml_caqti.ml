@@ -465,7 +465,8 @@ end = struct
                T.Meta.columns)
             pp_expression value conflict_pg () pp_returning returning)
       and pp_select (type t tag)
-          ({ for_; from; limit; what; where } : (t, tag) Model.Query.select) =
+          ({ for_; from; limit; skip_locked; what; where } :
+            (t, tag) Model.Query.select) =
         let pp_for f =
           let forable =
             let rec forable =
@@ -509,6 +510,7 @@ end = struct
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where)
            ++ const (option (sp ++ pp_for)) for_
+           ++ const string (if skip_locked then " SKIP LOCKED" else "")
            ++ const (option (sp ++ pp_limit)) limit)
           f ()
       and pp_update (type res tag from)
