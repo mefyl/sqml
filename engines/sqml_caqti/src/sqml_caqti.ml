@@ -314,7 +314,6 @@ end = struct
                   Sqml.Dialect.Postgresql.string_of_type ~include_nullable:false
                     t))
       in
-
       let rec pp current_precedence : Expression.ast Fmt.t =
        fun f -> function
         | Column { selectable; name; _ } ->
@@ -361,7 +360,7 @@ end = struct
             (option (const string " FOR " ++ pp_for))
             for_
             (if skip_locked then " SKIP LOCKED" else "")
-            (option (const string " LIMIT " ++ int))
+            (option (sp ++ pp_limit))
             limit
         | Selectable { name; alias } ->
           (const string name ++ const (option (sp ++ string)) alias) f ()
@@ -386,7 +385,7 @@ end = struct
     and pp_for f = function
       | Expression.Share -> Fmt.string f "SHARE"
       | Update -> Fmt.string f "UPDATE"
-    in
+    and pp_limit = Fmt.(const string "LIMIT " ++ int) in
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
@@ -466,7 +465,7 @@ end = struct
                T.Meta.columns)
             pp_expression value conflict_pg () pp_returning returning)
       and pp_select (type t tag)
-          ({ for_; from; what; where } : (t, tag) Model.Query.select) =
+          ({ for_; from; limit; what; where } : (t, tag) Model.Query.select) =
         let pp_for f =
           let forable =
             let rec forable =
@@ -509,7 +508,8 @@ end = struct
            ++ const
                 (option (pp_clause "WHERE"))
                 Expression.(Option.map ~f:to_ast where)
-           ++ const (option (sp ++ pp_for)) for_)
+           ++ const (option (sp ++ pp_for)) for_
+           ++ const (option (sp ++ pp_limit)) limit)
           f ()
       and pp_update (type res tag from)
           (module T : Table.S with type model = Model.tag and type tag = tag)

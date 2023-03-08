@@ -107,6 +107,7 @@ module type S = sig
     type ('t, 'tag) select = {
       for_ : Expression.for_ option;
       from : (module Selectable.S with type model = tag and type tag = 'tag);
+      limit : int option;
       what : ('t, 'tag) Expression.t;
       where : (bool, 'tag) Expression.t option;
     }
@@ -208,8 +209,9 @@ module type S = sig
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    ?where:(bool, 'tag) Expression.t ->
     ?for_:Expression.for_ ->
+    ?limit:int ->
+    ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
     ('t, many) Query.t
 
@@ -219,6 +221,13 @@ module type S = sig
     ('indexed, 'tag) Expression.List_nullable.t ->
     ?where:(bool, 'tag) Expression.t ->
     ?for_:Expression.for_ ->
+    ('t, 'tag) Expression.t ->
+    ('t, one_maybe) Query.t
+
+  val select_one :
+    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
+    ?for_:Expression.for_ ->
+    ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
     ('t, one_maybe) Query.t
 

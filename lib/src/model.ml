@@ -335,6 +335,7 @@ struct
     type ('t, 'tag) select = {
       for_ : Expression.for_ option;
       from : (module Selectable.S with type model = tag and type tag = 'tag);
+      limit : int option;
       what : ('t, 'tag) Expression.t;
       where : (bool, 'tag) Expression.t option;
     }
@@ -403,7 +404,8 @@ struct
       | Update_unique _ -> One_maybe
   end
 
-  let select ~from ?where ?for_ what = Query.Select { for_; from; what; where }
+  let select ~from ?for_ ?limit ?where what =
+    Query.Select { for_; from; limit; what; where }
 
   module Indexed =
     Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)
@@ -435,7 +437,10 @@ struct
   let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
       ?where ?for_ what =
     let where = unique index indexed where in
-    Query.Select_unique { for_; from; what; where }
+    Query.Select_unique { for_; from; limit = None; what; where }
+
+  let select_one ~from ?for_ ?where what =
+    Query.Select_unique { for_; from; limit = Some 1; what; where }
 
   let insert ~into ?on_conflict value =
     Query.Insert
