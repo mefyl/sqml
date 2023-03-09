@@ -400,10 +400,12 @@ end = struct
      fun f ->
       let open Fmt in
       let pp_clause keyword f e = Fmt.pf f "%s %a" keyword pp_expression e in
-      let pp_assignment f assignment =
-        let name, ast = Expression.assignment_to_ast assignment in
-        Fmt.(const string name ++ sp ++ const char '=' ++ sp ++ pp_expression)
-          f ast
+      let pp_assignment f =
+        Fmt.(
+          using Expression.assignment_to_asts
+          @@ list ~sep:comma
+          @@ pair ~sep:(sp ++ const char '=' ++ sp) string pp_expression)
+          f
       and pp_returning : type t tag. (t, tag) Expression.option Fmt.t =
        fun f -> function
         | Expression.None -> ()
@@ -453,15 +455,25 @@ end = struct
                    (list ~sep:comma pp_assignment)
                    (assignments { excluded }) )
           | (`Pgsql | `Other), Some Update ->
-            let f { Column.name; _ } =
-              Option.return @@ Fmt.str "%s = excluded.%s" name name
+            let f = function
+              | { Column.name; type_ = Atomic _; _ } ->
+                Option.return @@ [ Fmt.str "%s = excluded.%s" name name ]
+              | { name; type_ = Composite { columns; _ }; _ } ->
+                Option.return
+                @@ Column.Type.List.map columns
+                     ~f:
+                       {
+                         f =
+                           (fun (c, _) ->
+                             Fmt.str "%s_%s = excluded.%s_%s" name c name c);
+                       }
             in
             ( nop,
               const string " ON CONFLICT ("
               ++ const (list ~sep:comma string) primary
               ++ const string ") DO UPDATE SET "
               ++ const (list ~sep:comma string)
-                   (column_map { f } T.Meta.columns) )
+                   (column_map { f } T.Meta.columns |> List.concat) )
           | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
           | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
           | `Sqlite, Some (Set _) | `Mysql, _ -> failwith "dialect not handled"

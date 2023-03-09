@@ -315,7 +315,12 @@ type 'tag assignment =
     }
       -> 'tag assignment
 
-let assignment_to_ast (Set { column; value = _, ast }) = (column.name, ast)
+let assignment_to_asts (Set { column; value }) =
+  match column with
+  | { Column.name; type_ = Atomic _; _ } -> [ (name, snd value) ]
+  | { name; type_ = Composite { columns; _ }; _ } ->
+    Column.Type.List.map columns
+      ~f:{ f = (fun (c, _) -> (name ^ "_" ^ c, snd value)) }
 
 module Infix = struct
   let arithmetics precedence op (_, lhs) (_, rhs) =

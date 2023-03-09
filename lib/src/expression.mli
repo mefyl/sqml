@@ -73,7 +73,7 @@ val some : ('t, 'tag) t -> ('t Option.t, 'tag) t
 
 (* FIXME: private *)
 val prepare : 'args Type.List.t -> ('args, 'free) List.t
-val assignment_to_ast : 'a assignment -> string * ast
+val assignment_to_asts : 'a assignment -> (string * ast) list
 
 module Infix : sig
   val ( && ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
