@@ -202,7 +202,7 @@ end = struct
             (* let queries = Sqml.Model.table_schema dialect (module T) in *)
             let* () =
               Log.debug (fun m ->
-                  m "@[create table:@ %a@]"
+                  m "create table:@ %a"
                     Fmt.(
                       list
                         ~sep:(const char ';' ++ sp)
@@ -361,16 +361,19 @@ end = struct
         | List l -> list ~sep:comma (pp None) f l
         | Null -> Fmt.string f "NULL"
         | Select { for_; from; limit; skip_locked; what; where } ->
-          pf f "(SELECT %a FROM %a%a%a%s%a)" (pp None) what (pp None) from
-            (option (const string " WHERE " ++ pp None))
+          pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a)" (pp None) what
+            (pp None) from
+            (option (sp ++ box ~indent:2 (const string "WHERE " ++ pp None)))
             where
-            (option (const string " FOR " ++ pp_for))
+            (option (sp ++ const string "FOR " ++ pp_for))
             for_
-            (if skip_locked then " SKIP LOCKED" else "")
+            (option (sp ++ string))
+            (if skip_locked then Some "SKIP LOCKED" else None)
             (option (sp ++ pp_limit))
             limit
         | Selectable { name; alias } ->
-          (const string name ++ const (option (sp ++ string)) alias) f ()
+          (const string name ++ const (option (const char ' ' ++ string)) alias)
+            f ()
         | Switch { cases; default } ->
           let pp_case f (cond, value) =
             (const string "WHEN" ++ sp
@@ -396,7 +399,7 @@ end = struct
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
-      let pp_clause keyword f e = Fmt.pf f "@ %s %a" keyword pp_expression e in
+      let pp_clause keyword f e = Fmt.pf f "%s %a" keyword pp_expression e in
       let pp_assignment f assignment =
         let name, ast = Expression.assignment_to_ast assignment in
         Fmt.(const string name ++ sp ++ const char '=' ++ sp ++ pp_expression)
@@ -406,7 +409,8 @@ end = struct
         | Expression.None -> ()
         | Some e ->
           Fmt.(
-            (sp ++ const string "RETURNING" ++ sp ++ box pp_expression)
+            (sp
+            ++ box ~indent:2 (const string "RETURNING" ++ sp ++ pp_expression))
               f (Expression.to_ast e))
       in
       let pp_delete (type t tag)
@@ -415,10 +419,10 @@ end = struct
           (where : (bool, tag) Expression.t option)
           (returning : (t, tag) Expression.t option) =
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a%a" pp_expression (Table.to_ast ())
-          (option (pp_clause "WHERE"))
+        Fmt.pf f "@[<2>DELETE FROM@ %a@]%a%a" pp_expression (Table.to_ast ())
+          (option (sp ++ box ~indent:2 (pp_clause "WHERE")))
           (Option.map ~f:Expression.to_ast where)
-          (option (pp_clause "RETURNING"))
+          (option (sp ++ box ~indent:2 (pp_clause "RETURNING")))
           (Option.map ~f:Expression.to_ast returning)
       and pp_insert (type mapped res tag)
           (module T : Table.S
@@ -507,17 +511,21 @@ end = struct
           | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
         in
         let module Selectable = (val from) in
-        (box
-        @@ const string "SELECT" ++ sp
-           ++ const pp_expression Expression.(to_ast what)
-           ++ sp ++ const string "FROM" ++ sp
-           ++ const pp_expression (Selectable.to_ast ())
-           ++ const
-                (option (pp_clause "WHERE"))
-                Expression.(Option.map ~f:to_ast where)
-           ++ const (option (sp ++ pp_for)) for_
-           ++ const string (if skip_locked then " SKIP LOCKED" else "")
-           ++ const (option (sp ++ pp_limit)) limit)
+        (box ~indent:2
+           (const string "SELECT" ++ sp
+           ++ const pp_expression Expression.(to_ast what))
+        ++ sp
+        ++ box ~indent:2
+             (const string "FROM" ++ sp
+             ++ const pp_expression (Selectable.to_ast ()))
+        ++ const
+             (option (sp ++ box ~indent:2 (pp_clause "WHERE")))
+             Expression.(Option.map ~f:to_ast where)
+        ++ const (option (sp ++ pp_for)) for_
+        ++ const
+             (option (sp ++ string))
+             (if skip_locked then Some "SKIP LOCKED" else None)
+        ++ const (option (sp ++ pp_limit)) limit)
           f ()
       and pp_update (type res tag from)
           (module T : Table.S with type model = Model.tag and type tag = tag)
@@ -531,25 +539,31 @@ end = struct
           | None -> None
           | Some (module From) -> Some (From.to_ast ())
         in
-        (box
-        @@ const string "UPDATE" ++ sp
-           ++ const pp_expression (T.to_ast ())
-           ++ sp ++ const string "SET" ++ sp
-           ++ const (list ~sep:comma pp_assignment) what
-           ++ const
-                (option (sp ++ const string "FROM" ++ sp ++ pp_expression))
-                from
-           ++ const
-                (option (sp ++ const string "WHERE" ++ sp ++ pp_expression))
-                Expression.(Option.map ~f:to_ast where)
-           ++ const pp_returning returning)
+        (box ~indent:2
+           (const string "UPDATE" ++ sp ++ const pp_expression (T.to_ast ()))
+        ++ sp
+        ++ box ~indent:2
+             (const
+                (const string "SET" ++ sp ++ list ~sep:comma pp_assignment)
+                what)
+        ++ const
+             (option
+                (sp
+                ++ box ~indent:2 (const string "FROM" ++ sp ++ pp_expression)))
+             from
+        ++ const
+             (option
+                (sp
+                ++ box ~indent:2 (const string "WHERE" ++ sp ++ pp_expression)))
+             Expression.(Option.map ~f:to_ast where)
+        ++ const pp_returning returning)
           f ()
       in
       function
       | Delete { from; where } ->
         let module Table = (val from) in
         Fmt.pf f "DELETE FROM@ %a%a" pp_expression (Table.to_ast ())
-          (option (pp_clause "WHERE"))
+          (option (sp ++ pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
         pp_delete from where (Some returning)
@@ -588,13 +602,14 @@ end = struct
         in
         C.call ~f query ()
       in
-      let query_str =
-        Fmt.str "%a"
-          (pp_query @@ dialect_of_dialect_tag
-          @@ Caqti_driver_info.dialect_tag C.driver_info)
-          query
+      let dialect =
+        dialect_of_dialect_tag @@ Caqti_driver_info.dialect_tag C.driver_info
       in
-      let* () = Log.debug @@ fun m -> m "@[execute query:@ %s@]" query_str in
+      let query_str = Fmt.str "%a" (pp_query dialect) query in
+      let* () =
+        Log.debug @@ fun m ->
+        m "execute query:@ @[%a@]" (pp_query dialect) query
+      in
       let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
         match query with
         | Delete _ ->
@@ -660,7 +675,7 @@ end = struct
           Fmt.comma fmt ();
           tail fmt values
     in
-    const string "[" ++ sp ++ print printers ++ sp ++ const string "]"
+    const string "[" ++ sp ++ box (print printers) ++ const string " ]"
 
   type ('args, 'tag, 'res, 'arity) prepared = {
     query : ('res, 'arity) Model.Query.t;
@@ -690,7 +705,9 @@ end = struct
     let prepare_str tag =
       let query_str dialect =
         let q = Fmt.str "%a" (pp_query dialect) query in
-        let () = Logs.debug (fun m -> m "caqti: prepare query: %s" q)
+        let () =
+          Logs.debug (fun m ->
+              m "caqti: prepare query:@ @[%a@]" (pp_query dialect) query)
         and () =
           Expression.Type.List.iter
             ~f:
@@ -698,7 +715,7 @@ end = struct
                 f =
                   (fun t ->
                     Logs.debug (fun m ->
-                        m "caqti: arguments: %a" Sqml.Expression.Type.pp t));
+                        m "caqti: arguments:@ @[%a@]" Sqml.Expression.Type.pp t));
               }
             types
         in
@@ -726,10 +743,10 @@ end = struct
       transaction (values : args Hlist.t) =
     let* () =
       Log.debug (fun m ->
-          m "@[execute prepared query:@ %a@]" (pp_query `Pgsql) query)
+          m "execute prepared query:@ @[%a@]" (pp_query `Pgsql) query)
     and* () =
       let pp_values = pp_values_of_types types in
-      Log.debug (fun m -> m "@[values:@ %a@]" pp_values values)
+      Log.debug (fun m -> m "values:@ %a" pp_values values)
     in
     match prepared with
     | Zero prepared ->
