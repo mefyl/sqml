@@ -302,6 +302,12 @@ end = struct
     | [] -> nop
     | _ :: _ as l -> pp_values l
 
+  let atomic_columns = function
+    | { Sqml.Column.name; type_ = Atomic _; _ } -> [ name ]
+    | { name; type_ = Composite { columns; _ }; _ } ->
+      Table.Column.Type.List.map columns
+        ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
+
   let pp_query dialect =
     let rec pp_expression f ast =
       let open Fmt in
@@ -316,9 +322,10 @@ end = struct
       in
       let rec pp current_precedence : Expression.ast Fmt.t =
        fun f -> function
-        | Column { selectable; name; _ } ->
-          (const string selectable ++ const string "." ++ const string name)
-            f ()
+        | Column { selectable; names; _ } ->
+          Fmt.list ~sep:comma
+            (const string selectable ++ const string "." ++ string)
+            f names
         | Const { type_; value } -> pp_from_type type_ f value
         | Funcall { name; args; _ } ->
           (const string name ++ sp ++ const char '('
@@ -460,9 +467,8 @@ end = struct
         Fmt.(
           pf f "INSERT%a INTO %S (%a) VALUES(%a)%a%a" conflict_sqlite ()
             T.Meta.name (list ~sep:comma string)
-            (Table.Column.List.map
-               ~f:{ f = (fun { name; _ } -> name) }
-               T.Meta.columns)
+            (Table.Column.List.map ~f:{ f = atomic_columns } T.Meta.columns
+            |> List.concat)
             pp_expression value conflict_pg () pp_returning returning)
       and pp_select (type t tag)
           ({ for_; from; limit; skip_locked; what; where } :

@@ -72,7 +72,7 @@ type for_ =
 type ast =
   | Column : {
       selectable : string;
-      name : string;
+      names : string list;
     }
       -> ast
   | Const : {

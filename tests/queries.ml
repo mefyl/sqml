@@ -313,19 +313,25 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
   let config = Alcotest.(testable Model.Configs.pp Model.Configs.equal)
 
   let json db =
+    let baley =
+      { Model.Configs.first_name = "Elijah"; last_name = "Baley"; age = 40 }
+    and fastolfe =
+      { Model.Configs.first_name = "Han"; last_name = "Fastolfe"; age = 238 }
+    in
     let* () =
       let* Zero =
         Engine.query db
         @@ Model.insert
              ~into:(module Model.Configs)
-             Sqml.Expression.(const Model.Configs.type_ ("empty", `O []))
+             Sqml.Expression.(const Model.Configs.type_ ("empty", `O [], baley))
       in
       let+ Zero =
         Engine.query db
         @@ Model.insert
              ~into:(module Model.Configs)
              Sqml.Expression.(
-               const Model.Configs.type_ ("filled", `O [ ("one", `Float 1.) ]))
+               const Model.Configs.type_
+                 ("filled", `O [ ("one", `Float 1.) ], fastolfe))
       in
       ()
     in
@@ -336,7 +342,10 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+ configs = Sequence.to_list configs in
     Alcotest.(
       check ~here:[%here] (list config) "configurations"
-        [ ("empty", `O []); ("filled", `O [ ("one", `Float 1.) ]) ]
+        [
+          ("empty", `O [], baley);
+          ("filled", `O [ ("one", `Float 1.) ], fastolfe);
+        ]
         configs)
 
   let conflict psql db =

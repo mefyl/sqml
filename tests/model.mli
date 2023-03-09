@@ -46,12 +46,19 @@ module Ts : sig
 end
 
 module Configs : sig
-  type t = string * Ezjsonm.value
+  type owner = {
+    first_name : string;
+    last_name : string;
+    age : int;
+  }
+
+  and t = string * Ezjsonm.value * owner
 
   include Table.S with type model = tag and type Meta.mapped = t
 
   val id : string Expression.t
   val config : Ezjsonm.value Expression.t
+  val owner : owner Expression.t
   val equal : t -> t -> bool
   val pp : t Fmt.t
 end

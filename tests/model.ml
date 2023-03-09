@@ -141,7 +141,13 @@ type value =
 [@@deriving eq, show]
 
 module Configs = struct
-  type t = string * value [@@deriving eq, show]
+  type owner = {
+    first_name : string;
+    last_name : string;
+    age : int;
+  }
+
+  and t = string * value * owner [@@deriving eq, show]
 
   module Meta_ = struct
     include Table.Meta (struct
@@ -149,23 +155,44 @@ module Configs = struct
       let id = Column.(make "id" Type.(Varchar 64))
       let config = Column.(make "config" Type.Json)
 
-      type columns = string -> Ezjsonm.value -> unit
+      let owner =
+        Column.(
+          make_composite "owner"
+            (Type.Composite
+               {
+                 columns =
+                   [
+                     ("first_name", Varchar 64);
+                     ("last_name", Varchar 64);
+                     ("age", Int);
+                   ];
+                 decode =
+                   (function
+                   | [ first_name; last_name; age ] ->
+                     { first_name; last_name; age });
+                 encode =
+                   (function
+                   | { first_name; last_name; age } ->
+                     [ first_name; last_name; age ]);
+               }))
 
-      let columns = Column.List.[ id; config ]
+      type columns = string -> Ezjsonm.value -> owner -> unit
+
+      let columns = Column.List.[ id; config; owner ]
 
       type primary = string -> unit
 
-      let primary Expression.Column.List.[ id; _ ] =
+      let primary Expression.Column.List.[ id; _; _ ] =
         Expression.Column.List.[ id ]
     end)
 
     type mapped = t
 
-    let map Hlist.[ id; config ] = (id, config)
-    let unmap (id, config) = Hlist.[ id; config ]
+    let map Hlist.[ id; config; owner ] = (id, config, owner)
+    let unmap (id, config, owner) = Hlist.[ id; config; owner ]
   end
 
   include BindTable (Meta_)
 
-  let Sqml.Expression.List.[ id; config ] = Expression.columns
+  let Sqml.Expression.List.[ id; config; owner ] = Expression.columns
 end

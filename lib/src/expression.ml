@@ -287,8 +287,13 @@ let coalesce_default args default =
   let args = Base.List.map ~f:snd args in
   (to_type default, Funcall { args = args @ [ snd default ]; name = "COALESCE" })
 
-let column Column.{ name; selectable; type_; _ } =
-  (Type.of_column_type type_, Column { name; selectable })
+let atomic_columns = function
+  | { Column.name; type_ = Atomic _; _ } -> [ name ]
+  | { name; type_ = Composite { columns; _ }; _ } ->
+    Column.Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
+
+let column (Column.{ selectable; type_; _ } as c) =
+  (Type.of_column_type type_, Column { names = atomic_columns c; selectable })
 
 let map ~decode ~encode (type_, v) =
   let type_ = Type.Custom { decode; encode; repr = type_ } in
