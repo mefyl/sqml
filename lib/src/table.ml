@@ -282,8 +282,7 @@ module Query = struct
         match on_update with No_action -> None | action -> Some action
       in
       pf f
-        "@[<b 2>CONSTRAINT %s@ @[FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a@ \
-         %a@]@]"
+        "@[<b 2>CONSTRAINT %s@ @[FOREIGN KEY (%a)@ REFERENCES %a(%a)%a%a%a@]@]"
         name
         (hvbox @@ list ~sep:comma string)
         source (pp_table_name dialect) table
