@@ -350,6 +350,9 @@ end
 
 include Infix
 
+let in_ (_, value) (_, array) =
+  (Type.Bool, Infix { lhs = value; op = "IN"; rhs = array; precedence = 0 })
+
 let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag)
     ?for_ ?limit ?(skip_locked = false) ?where what =
   Select

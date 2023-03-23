@@ -101,6 +101,7 @@ val make_column :
   name:string -> selectable:string -> 't Column.Type.t -> ('t, 'tag) Column.t
 
 val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
+val in_ : ('what, 'tag) t -> ('what list, 'tag) t -> (bool, 'tag) t
 
 val select :
   from:(module SELECTABLE with type tag = 'tag) ->
