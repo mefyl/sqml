@@ -102,6 +102,15 @@ val make_column :
 
 val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
 
+val select :
+  from:(module SELECTABLE with type tag = 'tag) ->
+  ?for_:for_ ->
+  ?limit:int ->
+  ?skip_locked:bool ->
+  ?where:(bool, 'tag) t ->
+  ('what, 'tag) t ->
+  ('what list, 'tag) t
+
 val select_one :
   from:(module SELECTABLE with type tag = 'tag) ->
   ?for_:for_ ->

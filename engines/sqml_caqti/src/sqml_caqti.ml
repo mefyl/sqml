@@ -6,6 +6,7 @@ open Let.Syntax' (Lwt)
 
 let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
   function
+  | Array _ -> failwith "FIXME"
   | Bigint -> Caqti_type.int64
   | Bool -> Caqti_type.bool
   | Date ->
@@ -91,6 +92,7 @@ end = struct
       type t.
       t Sqml.Expression.Type.t -> Sqml.Expression.Column.Type.any_atomic option
       = function
+    | Array _ -> None
     | Bigint -> Some (Type Sqml.Expression.Column.Type.Bigint)
     | Bool -> Some (Type Bool)
     | Date -> Some (Type Date)
@@ -287,6 +289,10 @@ end = struct
         pp_time
     in
     function
+    | Array t ->
+      const string "ARRAY ["
+      ++ Fmt.list ~sep:comma (pp_from_type t)
+      ++ const string "]"
     | Bigint -> Fmt.int64
     | Bool -> Fmt.bool
     | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''

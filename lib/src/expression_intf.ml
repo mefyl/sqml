@@ -41,6 +41,7 @@ end
 
 module Type = struct
   type 'a t =
+    | Array : 't t -> 't list t
     | Bigint : Int64.t t
     | Bool : bool t
     | Date : Timmy.Date.t t

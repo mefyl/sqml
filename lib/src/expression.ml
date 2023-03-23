@@ -90,6 +90,7 @@ module Type = struct
   let rec pp : type a. a t Fmt.t =
     let open Fmt in
     fun f -> function
+      | Array t -> (const char '[' ++ pp ++ const char ']') f t
       | Bigint -> Fmt.string f "bigint"
       | Bool -> Fmt.string f "bool"
       | Custom { repr; _ } -> pp f repr
@@ -235,7 +236,9 @@ let rec type_arity : type t. t Type.t -> int = function
   | [] -> 0
   | hd :: tl -> type_arity hd + type_arity tl
   | Nullable t -> type_arity t
-  | Bigint | Bool | Date | Float | Int | Json | Null | String | Time -> 1
+  | Array _ | Bigint | Bool | Date | Float | Int | Json | Null | String | Time
+    ->
+    1
 
 let prepare (type args) (types : args Type.List.t) : (args, 'free) List.t =
   let f index t =
@@ -347,8 +350,8 @@ end
 
 include Infix
 
-let select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?for_
-    ?limit ?(skip_locked = false) ?where what =
+let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag)
+    ?for_ ?limit ?(skip_locked = false) ?where what =
   Select
     {
       for_;
@@ -359,8 +362,11 @@ let select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?for_
       where = Option.map ~f:to_ast where;
     }
 
+let select ~from ?for_ ?limit ?skip_locked ?where what =
+  (Type.Array (fst what), _select ~from ?for_ ?limit ?skip_locked ?where what)
+
 let select_one ~from ?for_ ?skip_locked ?where what =
   ( Type.Nullable (fst what),
-    select ~from ?for_ ~limit:1 ?skip_locked ?where what )
+    _select ~from ?for_ ~limit:1 ?skip_locked ?where what )
 
 let coerce = Fn.id
