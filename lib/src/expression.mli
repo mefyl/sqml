@@ -87,6 +87,7 @@ module Infix : sig
   val ( || ) : (bool, 'tag) t -> (bool, 'tag) t -> (bool, 'tag) t
   val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
+  val ( <-> ) : ('t, 'tag) t -> ('t, 'tag) t -> (float, 'tag) t
 end
 
 include module type of Infix

@@ -340,6 +340,9 @@ module Infix = struct
   let ( > ) lhs rhs = logic 2 ">" lhs rhs
   let ( >= ) lhs rhs = logic 2 ">=" lhs rhs
 
+  let ( <-> ) (_, lhs) (_, rhs) =
+    (Type.Float, Infix { op = "<->"; lhs; rhs; precedence = 2 })
+
   let ( ^ ) (_, lhs) (_, rhs) =
     (Type.String, Infix { op = "||"; lhs; rhs; precedence = 2 })
 
