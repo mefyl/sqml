@@ -169,8 +169,8 @@ end = struct
                   DESC LIMIT 1"
                  (table_name i (Some "sqml") "metadata")
                  (if Poly.(Caqti_driver_info.dialect_tag i = `Sqlite) then
-                  "datetime(migrated)"
-                 else "migrated"))
+                    "datetime(migrated)"
+                  else "migrated"))
           in
           let* major, minor, subminor, _ = C.find query () in
           let current = Semver.from_parts major minor subminor [] [] in
