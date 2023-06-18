@@ -381,7 +381,11 @@ struct
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : ('t, 'tag) select -> ('t, many) t
+      | Select : {
+          select : ('t, 'tag) select;
+          order_by : (_, 'tag) Expression.t option;
+        }
+          -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
@@ -405,8 +409,9 @@ struct
       | Update_unique _ -> One_maybe
   end
 
-  let select ~from ?for_ ?limit ?(skip_locked = false) ?where what =
-    Query.Select { for_; from; limit; skip_locked; what; where }
+  let select ~from ?for_ ?limit ?order_by ?(skip_locked = false) ?where what =
+    Query.Select
+      { select = { for_; from; limit; skip_locked; what; where }; order_by }
 
   module Indexed =
     Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)

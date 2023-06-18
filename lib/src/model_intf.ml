@@ -153,7 +153,11 @@ module type S = sig
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : ('t, 'tag) select -> ('t, many) t
+      | Select : {
+          select : ('t, 'tag) select;
+          order_by : (_, 'tag) Expression.t option;
+        }
+          -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
@@ -212,6 +216,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?for_:Expression.for_ ->
     ?limit:int ->
+    ?order_by:(_, 'tag) Expression.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
