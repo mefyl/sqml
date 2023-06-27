@@ -2,7 +2,7 @@
 
 (name sqml)
 
-(version 0.10.3)
+(version 0.10.4)
 
 (generate_opam_files true)
 
@@ -39,8 +39,8 @@
   semver2
   (timmy
    (and
-    (>= 0.16.0)
-    (< 0.17.0)))))
+    (>= 1.0.1)
+    (< 1.1.0)))))
 
 (package
  (name sqml-caqti)
