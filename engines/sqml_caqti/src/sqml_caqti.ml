@@ -1064,7 +1064,13 @@ end = struct
               | _ -> fail)
             | _ -> fail
           in
-          List.map ~f rows |> Result.all |> Lwt.return
+          List.map ~f rows
+          |> List.filter_map ~f:(function
+               | Result.Ok res -> Some res
+               | Result.Error (`Sqml_engine error) ->
+                 let () = Logs.warn (fun m -> m "ignoring index: %s" error) in
+                 None)
+          |> Lwt_result.return
         in
         Lwt_result.return
           {
