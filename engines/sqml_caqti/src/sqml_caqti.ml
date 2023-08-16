@@ -860,7 +860,7 @@ end = struct
     and on = String.Search_pattern.create " ON "
     and using = String.Search_pattern.create " USING btree " in
     let schema_of_name = function "public" -> None | name -> Some name in
-    let type_of_info column char_length nullable data_type =
+    let type_of_info ~table:_ _column char_length nullable data_type =
       let open Let.Syntax2 (Result) in
       let nullable ((Column.Type.Type t : Column.Type.any_atomic) as type_) =
         if String.(nullable = "YES") then
@@ -878,8 +878,8 @@ end = struct
             (`Sqml_engine
               (Fmt.str
                  "missing character_maximum_length in information_schema for \
-                  column %s"
-                 column))
+                  column %s of %s"
+                 column table))
         | "date", _ ->
           Result.return (Column.Type.Type Date : Column.Type.any_atomic)
         | "integer", _ ->
@@ -926,10 +926,14 @@ end = struct
             in
             C.collect_list query (schema, name) |> error
           in
-          let f (char_length, name, data_type, nullable) =
+          let f (char_length, column_name, data_type, nullable) =
             let open Let.Syntax2 (Result) in
-            let+ type_ = type_of_info name char_length nullable data_type in
-            ({ Table.Schema.name; type_ } : Table.Schema.column_atomic)
+            let+ type_ =
+              type_of_info ~table:name column_name char_length nullable
+                data_type
+            in
+            ({ Table.Schema.name = column_name; type_ }
+              : Table.Schema.column_atomic)
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in
