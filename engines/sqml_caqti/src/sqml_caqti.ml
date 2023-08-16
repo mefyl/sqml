@@ -874,12 +874,7 @@ end = struct
         | "character varying", Some l ->
           Result.return (Column.Type.Type (Varchar l) : Column.Type.any_atomic)
         | "character varying", None ->
-          Result.fail
-            (`Sqml_engine
-              (Fmt.str
-                 "missing character_maximum_length in information_schema for \
-                  column %s of %s"
-                 column table))
+          Result.return (Column.Type.Type Text : Column.Type.any_atomic)
         | "date", _ ->
           Result.return (Column.Type.Type Date : Column.Type.any_atomic)
         | "integer", _ ->
