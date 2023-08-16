@@ -383,7 +383,7 @@ struct
           -> ('t, one) t
       | Select : {
           select : ('t, 'tag) select;
-          order_by : (_, 'tag) Expression.t option;
+          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
         }
           -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t

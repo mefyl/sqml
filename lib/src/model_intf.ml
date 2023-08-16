@@ -155,7 +155,7 @@ module type S = sig
           -> ('t, one) t
       | Select : {
           select : ('t, 'tag) select;
-          order_by : (_, 'tag) Expression.t option;
+          order_by : ((_, 'tag) Expression.t * Table.ordering) option;
         }
           -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
@@ -216,7 +216,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?for_:Expression.for_ ->
     ?limit:int ->
-    ?order_by:(_, 'tag) Expression.t ->
+    ?order_by:(_, 'tag) Expression.t * Table.ordering ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->

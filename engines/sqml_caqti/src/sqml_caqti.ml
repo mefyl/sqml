@@ -529,8 +529,10 @@ end = struct
           | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
         and pp_order_by =
           Fmt.(
-            using Expression.to_ast
-            @@ (const string "ORDER BY " ++ pp_expression))
+            pair
+              (using Expression.to_ast
+              @@ (const string "ORDER BY " ++ pp_expression))
+              Table.pp_ordering)
         in
         let module Selectable = (val from) in
         (box ~indent:2
