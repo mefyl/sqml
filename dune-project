@@ -40,7 +40,7 @@
   (timmy
    (and
     (>= 1.0.1)
-    (< 1.1.0)))))
+    (< 2.0.0)))))
 
 (package
  (name sqml-caqti)
