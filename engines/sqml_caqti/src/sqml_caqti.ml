@@ -844,6 +844,11 @@ end = struct
         :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
     |> Lwt_result.map_error unmap
 
+  let commit transaction =
+    Lwt_guarded.acquire transaction ~f:(fun (module C : Caqti_lwt.CONNECTION) ->
+        C.commit ())
+    |> Lwt_result.map_error (fun e -> `Sqml_engine (Caqti_error.show e))
+
   let split_pattern pattern in_ =
     let length = String.Search_pattern.pattern pattern |> String.length
     and splits =
