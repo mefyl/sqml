@@ -4,7 +4,7 @@
    (progn (cat %{opam})
     (echo
      "url { src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml}\" }")))))
-(rule (alias default) (target sqml-ios.opam)
+(rule (target sqml-ios.opam)
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input
@@ -31,7 +31,7 @@
    (progn (cat %{opam})
     (echo
      "url { src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml-caqti}\" }")))))
-(rule (alias default) (target sqml-caqti-ios.opam)
+(rule (target sqml-caqti-ios.opam)
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input

@@ -3,4 +3,13 @@
 (library
  (name sqml_caqti)
  (public_name sqml-caqti)
- (libraries base caqti caqti-lwt logs logs.lwt lwt semver2 sqml))
+ (libraries
+  base
+  caqti
+  caqti-lwt
+  caqti-lwt.unix
+  logs
+  logs.lwt
+  lwt
+  semver2
+  sqml))

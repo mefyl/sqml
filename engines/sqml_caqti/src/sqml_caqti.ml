@@ -46,7 +46,7 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     let encode Hlist.(hd :: tl) = Result.return @@ (hd, tl)
     and decode (hd, tl) = Result.return @@ Hlist.(hd :: tl) in
     Caqti_type.custom ~decode ~encode
-    @@ Caqti_type.tup2 (caqti_of_type l) (caqti_of_type r)
+    @@ Caqti_type.t2 (caqti_of_type l) (caqti_of_type r)
 
 let rec caqti_of_types :
     type l. l Sqml.Expression.Type.List.t -> l Hlist.t Caqti_type.t =
@@ -56,7 +56,7 @@ let rec caqti_of_types :
     custom
       ~decode:(fun (hd, tl) -> Result.Ok Hlist.(hd :: tl))
       ~encode:(fun Hlist.(hd :: tl) -> Result.Ok (hd, tl))
-    @@ tup2 (caqti_of_type hd) (caqti_of_types tl)
+    @@ t2 (caqti_of_type hd) (caqti_of_types tl)
   | [] ->
     custom
       ~decode:(fun () -> Result.Ok Hlist.[])
@@ -73,7 +73,7 @@ module Make (Model : Model.S) : sig
 end = struct
   type t = {
     dialect : Sqml.Dialect.t;
-    pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t;
+    pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t;
   }
 
   let dialect { dialect; _ } = dialect
@@ -115,8 +115,7 @@ end = struct
       | `Pgsql -> Fmt.str "%S.%S" schema name
       | _ -> failwith "dialect not handled")
 
-  let fail fmt =
-    Caml.Format.ksprintf (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
+  let fail fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
   let convert_error =
     let f e = `Sqml_engine (Caqti_error.show e) in
@@ -137,7 +136,8 @@ end = struct
   let make ?max_size uri =
     let open Caqti_request.Infix in
     let* pool =
-      Caqti_lwt.connect_pool ?max_size (Uri.of_string uri)
+      let config = Caqti_pool_config.create ?max_size () in
+      Caqti_lwt_unix.connect_pool ~pool_config:config (Uri.of_string uri)
       |> Lwt.return |> error
     in
     let create (module C : Caqti_lwt.CONNECTION) =
@@ -160,7 +160,7 @@ end = struct
         Lwt_result.return (None, dialect)
       else
         let* found = C.find found_query () in
-        let caqti_metadata_type = Caqti_type.(tup4 int int int ptime) in
+        let caqti_metadata_type = Caqti_type.(t4 int int int ptime) in
         if found then
           let query =
             (Caqti_type.unit ->! caqti_metadata_type)
@@ -236,7 +236,7 @@ end = struct
           in
           Lwt_result.return (Some Model.version, dialect)
     in
-    Caqti_lwt.Pool.use create pool |> error >>= function
+    Caqti_lwt_unix.Pool.use create pool |> error >>= function
     | Some current, dialect ->
       if Poly.(current <> Model.version) then
         fail "model version mismatch: code at %s, data at %s"
@@ -245,7 +245,7 @@ end = struct
       else Lwt_result.return { dialect; pool }
     | None, _ -> fail "backend does not support transactions"
 
-  let close { pool; _ } = Caqti_lwt.Pool.drain pool
+  let close { pool; _ } = Caqti_lwt_unix.Pool.drain pool
 
   module Model = Model
 
@@ -838,10 +838,10 @@ end = struct
       | `Shitty_api e -> e
       | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
     in
-    Caqti_lwt.Pool.use f
+    Caqti_lwt_unix.Pool.use f
       (pool
-        : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt.Pool.t
-        :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt.Pool.t)
+        : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t
+        :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt_unix.Pool.t)
     |> Lwt_result.map_error unmap
 
   let commit transaction =
@@ -904,7 +904,7 @@ end = struct
       let open Caqti_request.Infix in
       let* tables =
         let query =
-          (Caqti_type.unit ->* Caqti_type.(tup2 string string))
+          (Caqti_type.unit ->* Caqti_type.(t2 string string))
             ~oneshot:true
             {| SELECT schemaname, tablename FROM pg_catalog.pg_tables
                WHERE schemaname != 'pg_catalog'
@@ -916,8 +916,8 @@ end = struct
         let* columns =
           let* columns =
             let query =
-              (Caqti_type.(tup2 string string)
-              ->* Caqti_type.(tup4 (option int) string string string))
+              (Caqti_type.(t2 string string)
+              ->* Caqti_type.(t4 (option int) string string string))
                 {| SELECT character_maximum_length,
                         column_name,
                         data_type,
@@ -941,12 +941,12 @@ end = struct
         in
         let* constraints =
           let query =
-            (Caqti_type.(tup2 string string)
+            (Caqti_type.(t2 string string)
             ->* Caqti_type.(
-                  tup4 string string string
+                  t4 string string string
                     (option
-                       (tup3 (tup2 string string) string
-                          (tup4 string string string string)))))
+                       (t3 (t2 string string) string
+                          (t4 string string string string)))))
               {| SELECT cons.constraint_name,
                         col.column_name,
                         cons.constraint_type,
@@ -1026,7 +1026,7 @@ end = struct
         in
         let* indexes =
           let query =
-            (Caqti_type.(tup2 string string) ->* Caqti_type.(tup2 string string))
+            (Caqti_type.(t2 string string) ->* Caqti_type.(t2 string string))
               {| SELECT indexname, indexdef
                  FROM pg_indexes
                  WHERE schemaname = $1 AND tablename = $2 |}
