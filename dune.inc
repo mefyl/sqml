@@ -8,8 +8,8 @@
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input
-    %{dep:sqml.opam} --cross sqml,sqml-caqti,acid,hlist,timmy --cross-both ""
-    --cross-exclude ""))))
+    %{dep:sqml.opam} --cross sqml,sqml-caqti,acid,hlist,metaversion,timmy
+    --cross-both "" --cross-exclude ""))))
 (rule (target sqml-ios.%{version:sqml}.opam) (deps (:opam sqml-ios.opam))
  (action
   (with-stdout-to %{target}
@@ -23,7 +23,8 @@
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite --input
-    %{dep:sqml.opam.locked} --local sqml,sqml-caqti,acid,hlist,timmy))))
+    %{dep:sqml.opam.locked} --local
+    sqml,sqml-caqti,acid,hlist,metaversion,timmy))))
 (rule (target sqml-caqti.%{version:sqml-caqti}.opam)
  (deps (:opam sqml-caqti.opam))
  (action
@@ -35,8 +36,9 @@
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input
-    %{dep:sqml-caqti.opam} --cross sqml,sqml-caqti,acid,hlist,timmy
-    --cross-both "" --cross-exclude ""))))
+    %{dep:sqml-caqti.opam} --cross
+    sqml,sqml-caqti,acid,hlist,metaversion,timmy --cross-both ""
+    --cross-exclude ""))))
 (rule (target sqml-caqti-ios.%{version:sqml-caqti}.opam)
  (deps (:opam sqml-caqti-ios.opam))
  (action
@@ -51,4 +53,5 @@
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite --input
-    %{dep:sqml-caqti.opam.locked} --local sqml,sqml-caqti,acid,hlist,timmy))))
+    %{dep:sqml-caqti.opam.locked} --local
+    sqml,sqml-caqti,acid,hlist,metaversion,timmy))))

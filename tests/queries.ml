@@ -47,7 +47,7 @@ module Queries = struct
     let buffer = Buffer.create 0 in
     let output =
       let fmt = Fmt.with_buffer buffer in
-      let () = Caml.Format.pp_set_margin fmt 60 in
+      let () = Stdlib.Format.pp_set_margin fmt 60 in
       fmt
     in
     let () =
@@ -625,7 +625,7 @@ let () =
                Sys.getenv "PG_HOST" |> Option.value ~default:"localhost"
              in
              let* c =
-               Caqti_lwt.connect
+               Caqti_lwt_unix.connect
                  (Uri.of_string @@ "postgres://postgres@" ^ pg_host)
                |> Lwt.map ~f:convert_error
              in

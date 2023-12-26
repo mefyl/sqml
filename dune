@@ -19,6 +19,6 @@
     %{dep:.logistic/dune/extdeps/extdeps.exe}
     generate
     --local
-    acid,hlist,timmy))))
+    acid,hlist,metaversion,timmy))))
 
 (include dune.inc)
