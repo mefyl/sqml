@@ -4,9 +4,63 @@ module Array = Array.Monadic2 (Lwt_result)
 open Let.Syntax2 (Lwt_result)
 open Let.Syntax' (Lwt)
 
+let rec json_of_sqml : type t. t Sqml.Expression.Type.t -> t -> Ezjsonm.value =
+  function
+  | Array elements ->
+    let json_of_element = json_of_sqml elements in
+    fun list -> `A (List.map ~f:json_of_element list)
+  | Bool -> fun bool -> `Bool bool
+  | Custom { repr; encode; _ } ->
+    let json_of_repr = json_of_sqml repr in
+    fun value -> json_of_repr (encode value)
+  | Int -> fun int -> `Float (Float.of_int int)
+  | String -> fun string -> `String string
+  | _ -> failwith "fixme json"
+
+let rec sqml_of_json :
+    type t. t Sqml.Expression.Type.t -> Ezjsonm.value -> (t, string) Result.t =
+ fun type' ->
+  let fail value =
+    Result.fail
+    @@ Fmt.str "not a valid %a: %s" Sqml.Expression.Type.pp type'
+    @@ Ezjsonm.value_to_string value
+  in
+  match type' with
+  | Array elements -> (
+    let element_of_json = sqml_of_json elements in
+    function
+    | `A list -> List.map ~f:element_of_json list |> Result.all
+    | value -> fail value)
+  | Bool -> ( function `Bool bool -> Result.Ok bool | value -> fail value)
+  | Custom { repr; decode; _ } ->
+    let open Let.Syntax2 (Result) in
+    let repr_of_json = sqml_of_json repr in
+    fun json ->
+      let* repr = repr_of_json json in
+      decode repr
+  | Int -> (
+    function
+    | `Float float -> Result.Ok (Float.to_int float) | value -> fail value)
+  | String -> (
+    function `String string -> Result.Ok string | value -> fail value)
+  | _ -> failwith "fixme json"
+
 let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
   function
-  | Array _ -> failwith "FIXME"
+  | Array _ as t ->
+    let to_json = json_of_sqml t
+    and of_json = sqml_of_json t in
+    let encode value =
+      Result.return (Ezjsonm.value_to_string ~minify:true @@ to_json value)
+    and decode string =
+      let open Let.Syntax2 (Result) in
+      let* json =
+        try Result.return (Ezjsonm.value_from_string string)
+        with Ezjsonm.Parse_error (_, error) -> Result.fail error
+      in
+      of_json json
+    in
+    Caqti_type.(custom ~encode ~decode string)
   | Bigint -> Caqti_type.int64
   | Bool -> Caqti_type.bool
   | Date ->
@@ -266,47 +320,75 @@ end = struct
     | #Caqti_driver_info.sql_dialect_tag as t -> t
     | _ -> `Other
 
-  let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
-    let open Fmt in
-    let pp_time fmt t =
-      char fmt '\'';
-      string fmt (Timmy.Time.to_rfc3339 t);
-      char fmt '\''
-    in
-    let rec pp_values :
-        type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
+  let pp_array (type element) dialect (element : element Sqml.Expression.Type.t)
+      pp =
+    match dialect with
+    | `Pgsql ->
+      let rec element_type :
+          type element. element Sqml.Expression.Type.t -> (_, _, _, _) format4 =
+        function
+        | Custom { repr; _ } -> element_type repr
+        | Int -> "::int"
+        | String -> ""
+        | type' ->
+          Fmt.failwith "unsupported array elements: %a" Sqml.Expression.Type.pp
+            type'
+      in
+      fun f ->
+        Fmt.fmt
+          Stdlib.(
+            "(ARRAY (SELECT value" ^^ element_type element
+            ^^ " FROM json_array_elements_text(%a) AS value))")
+          f pp
+    | `Sqlite -> fun f -> Fmt.fmt "json('%a')" f pp
+    | `Mysql | `Other -> failwith "array not supported yet"
+
+  let pp_from_type dialect =
+    let rec pp_from_type : type t. t Sqml.Expression.Type.t -> t Fmt.t =
+      let open Fmt in
+      let pp_time fmt t =
+        char fmt '\'';
+        string fmt (Timmy.Time.to_rfc3339 t);
+        char fmt '\''
+      in
+      let rec pp_values :
+          type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
+        | [] -> nop
+        | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
+        | hd :: tl ->
+          fun f (hd_v :: tl_v) ->
+            pp_from_type hd f hd_v;
+            comma f ();
+            pp_values tl f tl_v
+        | Custom { repr; encode; _ } ->
+          fun f v -> pp_from_type repr f @@ encode v
+        | Time ->
+          (* Timmy.Time.t being abstract, the typer cannot prove it's not
+             unifiable with [l Hlist.t], so we must handle it. *)
+          pp_time
+      in
+      function
+      | Array element ->
+        Fmt.using
+          (Fn.compose Ezjsonm.value_to_string @@ json_of_sqml (Array element))
+        @@ pp_array dialect element
+             (const char '\'' ++ string ++ const char '\'')
+      | Bigint -> Fmt.int64
+      | Bool -> Fmt.bool
+      | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
+      | Float -> Fmt.float
+      | Int -> Fmt.int
+      | Json -> using Ezjsonm.(value_to_string ~minify:true) pp_literal_string
+      | Null -> Fmt.(const string "NULL")
+      | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
+      | String -> pp_literal_string
+      | Time -> pp_time
+      | Custom { encode; repr; _ } ->
+        fun f value -> pp_from_type repr f @@ encode value
       | [] -> nop
-      | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
-      | hd :: tl ->
-        fun f (hd_v :: tl_v) ->
-          pp_from_type hd f hd_v;
-          comma f ();
-          pp_values tl f tl_v
-      | Custom { repr; encode; _ } -> fun f v -> pp_from_type repr f @@ encode v
-      | Time ->
-        (* Timmy.Time.t being abstract, the typer cannot prove it's not
-           unifiable with [l Hlist.t], so we must handle it. *)
-        pp_time
+      | _ :: _ as l -> pp_values l
     in
-    function
-    | Array t ->
-      const string "ARRAY ["
-      ++ Fmt.list ~sep:comma (pp_from_type t)
-      ++ const string "]"
-    | Bigint -> Fmt.int64
-    | Bool -> Fmt.bool
-    | Date -> const char '\'' ++ Timmy.Date.pp ++ const char '\''
-    | Float -> Fmt.float
-    | Int -> Fmt.int
-    | Json -> using Ezjsonm.(value_to_string ~minify:true) pp_literal_string
-    | Null -> Fmt.(const string "NULL")
-    | Nullable t -> Fmt.(option ~none:(const string "NULL") @@ pp_from_type t)
-    | String -> pp_literal_string
-    | Time -> pp_time
-    | Custom { encode; repr; _ } ->
-      fun f value -> pp_from_type repr f @@ encode value
-    | [] -> nop
-    | _ :: _ as l -> pp_values l
+    pp_from_type
 
   let atomic_columns = function
     | { Sqml.Column.name; type_ = Atomic _; _ } -> [ name ]
@@ -318,13 +400,17 @@ end = struct
     let rec pp_expression f ast =
       let open Fmt in
       let var (type t) (type_ : t Sqml.Expression.Type.t) =
-        const char '$' ++ using Int.succ int
-        ++ const
-             (option (const string "::" ++ string))
-             (Option.map (column_type_of_expression_type type_)
-                ~f:(fun (Type t : Sqml.Expression.Column.Type.any_atomic) ->
-                  Sqml.Dialect.Postgresql.string_of_type ~include_nullable:false
-                    t))
+        match type_ with
+        | Array element ->
+          pp_array dialect element (const char '$' ++ using Int.succ int)
+        | _ ->
+          const char '$' ++ using Int.succ int
+          ++ const
+               (option (const string "::" ++ string))
+               (Option.map (column_type_of_expression_type type_)
+                  ~f:(fun (Type t : Sqml.Expression.Column.Type.any_atomic) ->
+                    Sqml.Dialect.Postgresql.string_of_type
+                      ~include_nullable:false t))
       in
       let rec pp current_precedence : Expression.ast Fmt.t =
        fun f -> function
@@ -332,7 +418,7 @@ end = struct
           Fmt.list ~sep:comma
             (const string selectable ++ const string "." ++ string)
             f names
-        | Const { type_; value } -> pp_from_type type_ f value
+        | Const { type_; value } -> pp_from_type dialect type_ f value
         | Funcall { name; args; _ } ->
           (const string name ++ sp ++ const char '('
           ++ list ~sep:comma (pp None)
@@ -342,7 +428,11 @@ end = struct
           let fmt =
             const (pp (Some precedence)) lhs
             ++ sp ++ const string op ++ sp
-            ++ const (pp (Some precedence)) rhs
+            ++ const
+                 (if precedence = -1 then
+                    const char '(' ++ pp (Some precedence) ++ const char ')'
+                  else pp (Some precedence))
+                 rhs
           in
           match current_precedence with
           | Some current_precedence when current_precedence > precedence ->
@@ -685,9 +775,11 @@ end = struct
 
   module Printers_of_types = Sqml.Expression.Type.List.Transduce (Hlist_printers)
 
-  let pp_values_of_types types =
+  let pp_values_of_types dialect types =
     let open Fmt in
-    let printers = Printers_of_types.map ~f:{ f = pp_from_type } types in
+    let printers =
+      Printers_of_types.map ~f:{ f = (fun t -> pp_from_type dialect t) } types
+    in
     let rec print :
         type l. l Hlist_printers.t -> Formatter.t -> l Hlist.t -> unit =
       function
@@ -770,7 +862,7 @@ end = struct
       Log.debug (fun m ->
           m "execute prepared query:@ @[%a@]" (pp_query `Pgsql) query)
     and* () =
-      let pp_values = pp_values_of_types types in
+      let pp_values = pp_values_of_types `Pgsql types in
       Log.debug (fun m -> m "values:@ %a" pp_values values)
     in
     match prepared with

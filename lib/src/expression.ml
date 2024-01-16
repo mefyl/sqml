@@ -60,6 +60,7 @@ module Type = struct
   module Transduce_type = Column.Type.List.Transduce (Type.List)
 
   let rec of_atomic_column_type : type a. a Column.Type.atomic -> a t = function
+    | Array element -> Array (of_atomic_column_type element)
     | Bigint -> Bigint
     | Bool -> Bool
     | Custom { encode; decode; repr } ->
@@ -354,7 +355,7 @@ end
 include Infix
 
 let in_ (_, value) (_, array) =
-  (Type.Bool, Infix { lhs = value; op = "IN"; rhs = array; precedence = 0 })
+  (Type.Bool, Infix { lhs = value; op = "= ANY"; rhs = array; precedence = -1 })
 
 let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag)
     ?for_ ?limit ?(skip_locked = false) ?where what =

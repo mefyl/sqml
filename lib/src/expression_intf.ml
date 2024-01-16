@@ -3,6 +3,7 @@ open Utils
 module Column = struct
   module Type = struct
     type 'a atomic =
+      | Array : 't atomic -> 't list atomic
       | Bigint : Int64.t atomic
       | Bool : bool atomic
       | Custom : {

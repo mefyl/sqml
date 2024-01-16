@@ -463,27 +463,47 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         (module Model.T1)
         ~where:(Model.T1.id = id)
         [ Model.T1.Column.name := name ]
+    and get_in Sqml.Expression.List.[ ids ] =
+      Model.select
+        ~from:(module Model.T1)
+        ~where:Sqml.Expression.(in_ Model.T1.id ids)
+        Model.T1.name
     in
     let get = Engine.prepare [ Int ] get
     and put = Engine.prepare [ Model.T1.type_ ] put
-    and update = Engine.prepare [ Int; String ] update in
+    and update = Engine.prepare [ Int; String ] update
+    and get_in = Engine.prepare [ Array Int ] get_in in
     let* Zero =
       Engine.run put db Hlist.[ (271, "prepared", Some "prepared") ]
     in
     let* (Many res) = Engine.run get db Hlist.[ 271 ] in
-    let* res = Sequence.to_list res in
-    Alcotest.(check ~here:[%here] (list string) "selected" [ "prepared" ] res);
+    let* () =
+      Sequence.to_list res
+      >>| Alcotest.(check ~here:[%here] (list string) "selected" [ "prepared" ])
+    in
     let* Zero =
       Engine.run put db Hlist.[ (272, "prepared'", Some "prepared'") ]
     in
     let* (Many res) = Engine.run get db Hlist.[ 272 ] in
-    let* res = Sequence.to_list res in
-    Alcotest.(check ~here:[%here] (list string) "selected'" [ "prepared'" ] res);
+    let* () =
+      Sequence.to_list res
+      >>| Alcotest.(
+            check ~here:[%here] (list string) "selected'" [ "prepared'" ])
+    in
     let* Zero = Engine.run update db Hlist.[ 272; "prepared''" ] in
     let* (Many res) = Engine.run get db Hlist.[ 272 ] in
-    let+ res = Sequence.to_list res in
-    Alcotest.(
-      check ~here:[%here] (list string) "selected'" [ "prepared''" ] res)
+    let* () =
+      Sequence.to_list res
+      >>| Alcotest.(
+            check ~here:[%here] (list string) "selected'" [ "prepared''" ])
+    in
+    let* (Many res) = Engine.run get_in db Hlist.[ [ 272; 273 ] ] in
+    let* () =
+      Sequence.to_list res
+      >>| Alcotest.(
+            check ~here:[%here] (list string) "selected'" [ "prepared''" ])
+    in
+    Lwt_result.return ()
 
   let join db =
     let check expected =
@@ -560,6 +580,25 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let* _ = make () in
       Lwt_result.return ()
   end
+
+  let in' db =
+    let q =
+      let open Sqml.Expression in
+      Model.select
+        ~from:(module Model.T1)
+        ~where:(in_ Model.T1.id (const (Array Int) [ 1; 2; 3 ]))
+        Model.T1.id
+    in
+    let* () = populate db in
+    let* () =
+      let* (Many res) = Engine.query db q in
+      let* res = Sequence.to_list res in
+      Alcotest.(
+        check ~here:[%here] (list int) "selected ids" [ 1; 2 ]
+          (List.sort ~compare:Int.compare res))
+      |> Lwt_result.return
+    in
+    Lwt_result.return ()
 end
 
 module Caqti = Sqml_caqti.Make (Model)
@@ -677,6 +716,7 @@ let () =
              test_case_db "timestamp" Caqti_test.timestamp;
              test_case "is_null" Caqti_test.is_null;
              test_case "json" Caqti_test.json;
+             test_case "in" Caqti_test.in';
              test_case "conflict" @@ Caqti_test.conflict true;
              test_case_db "versioning-stable" Caqti_test.Versioning.stable;
              test_case "prepared" Caqti_test.prepared;

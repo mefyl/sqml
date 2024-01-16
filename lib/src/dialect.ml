@@ -30,6 +30,7 @@ module Postgresql : S = Make (struct
 
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.atomic -> string = function
+      | Array element -> f element ^ "[]"
       | Bigint -> "BIGINT"
       | Bool -> "BOOLEAN"
       | Custom { repr; _ } -> f repr
