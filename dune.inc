@@ -8,9 +8,23 @@
  (action
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input
-    %{dep:sqml.opam} --cross sqml,sqml-caqti,acid,hlist,metaversion,timmy
-    --cross-both "" --cross-exclude ""))))
+    %{dep:sqml.opam} --cross
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy --cross-both ""
+    --cross-exclude ""))))
 (rule (target sqml-ios.%{version:sqml}.opam) (deps (:opam sqml-ios.opam))
+ (action
+  (with-stdout-to %{target}
+   (progn (cat %{opam})
+    (echo
+     "url { src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml}\" }")))))
+(rule (target sqml-macos.opam)
+ (action
+  (with-stdout-to %{target}
+   (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-macos --input
+    %{dep:sqml.opam} --cross
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy --cross-both ""
+    --cross-exclude ""))))
+(rule (target sqml-macos.%{version:sqml}.opam) (deps (:opam sqml-macos.opam))
  (action
   (with-stdout-to %{target}
    (progn (cat %{opam})
@@ -24,7 +38,7 @@
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite --input
     %{dep:sqml.opam.locked} --local
-    sqml,sqml-caqti,acid,hlist,metaversion,timmy))))
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy))))
 (rule (target sqml-caqti.%{version:sqml-caqti}.opam)
  (deps (:opam sqml-caqti.opam))
  (action
@@ -37,10 +51,24 @@
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-ios --input
     %{dep:sqml-caqti.opam} --cross
-    sqml,sqml-caqti,acid,hlist,metaversion,timmy --cross-both ""
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy --cross-both ""
     --cross-exclude ""))))
 (rule (target sqml-caqti-ios.%{version:sqml-caqti}.opam)
  (deps (:opam sqml-caqti-ios.opam))
+ (action
+  (with-stdout-to %{target}
+   (progn (cat %{opam})
+    (echo
+     "url { src: \"git://git@gitlab.routine.co:routine/sqml#%{version:sqml-caqti}\" }")))))
+(rule (target sqml-caqti-macos.opam)
+ (action
+  (with-stdout-to %{target}
+   (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite-macos --input
+    %{dep:sqml-caqti.opam} --cross
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy --cross-both ""
+    --cross-exclude ""))))
+(rule (target sqml-caqti-macos.%{version:sqml-caqti}.opam)
+ (deps (:opam sqml-caqti-macos.opam))
  (action
   (with-stdout-to %{target}
    (progn (cat %{opam})
@@ -54,4 +82,4 @@
   (with-stdout-to %{target}
    (run %{dep:.logistic/dune/extdeps/extdeps.exe} rewrite --input
     %{dep:sqml-caqti.opam.locked} --local
-    sqml,sqml-caqti,acid,hlist,metaversion,timmy))))
+    sqml,sqml-caqti,acid,acid-lwt,hlist,metaversion,timmy))))
