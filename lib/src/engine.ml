@@ -1,4 +1,4 @@
-open Acid
+open Acid_lwt
 
 type error = [ `Sqml_engine of string ]
 

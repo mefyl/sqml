@@ -1,4 +1,4 @@
-open Acid
+open Acid_lwt
 
 let src = Logs.Src.create ~doc:"SQML" "sqml"
 let info f = Logs_lwt.info ~src f |> Lwt.map ~f:Result.return
