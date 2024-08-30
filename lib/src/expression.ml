@@ -354,8 +354,13 @@ end
 
 include Infix
 
-let in_ (_, value) (_, array) =
+let in' (_, value) (_, array) =
   (Type.Bool, Infix { lhs = value; op = "= ANY"; rhs = array; precedence = -1 })
+
+let not_in (_, value) (_, array) =
+  (Type.Bool, Infix { lhs = value; op = "!= ALL"; rhs = array; precedence = -1 })
+
+let not (_, value) = (Type.Bool, Funcall { name = "NOT"; args = [ value ] })
 
 let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag)
     ?for_ ?limit ?(skip_locked = false) ?where what =
