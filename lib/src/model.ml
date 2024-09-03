@@ -332,14 +332,18 @@ struct
       returning : ('t, 'tag) Expression.t;
     }
 
-    type ('t, 'tag) select = {
-      for_ : Expression.for_ option;
-      from : (module Selectable.S with type model = tag and type tag = 'tag);
-      limit : int option;
-      skip_locked : bool;
-      what : ('t, 'tag) Expression.t;
-      where : (bool, 'tag) Expression.t option;
-    }
+    type ('t, 'tag) select =
+      | Select : {
+          for_ : Expression.for_ option;
+          from :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          limit : int option;
+          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
+          skip_locked : bool;
+          what : ('t, 'tag) Expression.t;
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> ('t, 'tag) select
 
     type ('t, 'tag, 'from) update = {
       into : (module Table.S with type model = tag and type tag = 'tag);
@@ -381,11 +385,7 @@ struct
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : {
-          select : ('t, 'tag) select;
-          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
-        }
-          -> ('t, many) t
+      | Select : ('t, 'tag) select -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
@@ -411,7 +411,7 @@ struct
 
   let select ~from ?for_ ?limit ?order_by ?(skip_locked = false) ?where what =
     Query.Select
-      { select = { for_; from; limit; skip_locked; what; where }; order_by }
+      (Select { for_; from; limit; order_by; skip_locked; what; where })
 
   module Indexed =
     Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)
@@ -443,10 +443,13 @@ struct
   let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
       ?for_ ?(skip_locked = false) ?where what =
     let where = unique index indexed where in
-    Query.Select_unique { for_; from; limit = None; skip_locked; what; where }
+    Query.Select_unique
+      (Select
+         { for_; from; limit = None; order_by = None; skip_locked; what; where })
 
-  let select_one ~from ?for_ ?(skip_locked = false) ?where what =
-    Query.Select_unique { for_; from; limit = Some 1; skip_locked; what; where }
+  let select_one ~from ?for_ ?order_by ?(skip_locked = false) ?where what =
+    Query.Select_unique
+      (Select { for_; from; limit = Some 1; order_by; skip_locked; what; where })
 
   let insert ~into ?on_conflict value =
     Query.Insert

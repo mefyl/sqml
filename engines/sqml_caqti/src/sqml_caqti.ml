@@ -310,8 +310,8 @@ end = struct
     | Delete_unique { returning; _ } -> type_of_expr returning
     | Insert _ -> Caqti_type.unit
     | Insert_returning { returning; _ } -> type_of_expr returning
-    | Select { select = { what; _ }; _ } -> type_of_expr what
-    | Select_unique { what; _ } -> type_of_expr what
+    | Select (Select { what; _ }) -> type_of_expr what
+    | Select_unique (Select { what; _ }) -> type_of_expr what
     | Update _ -> Caqti_type.unit
     | Update_returning { returning; _ } -> type_of_expr returning
     | Update_unique { returning; _ } -> type_of_expr returning
@@ -582,8 +582,8 @@ end = struct
             (Table.Column.List.map ~f:{ f = atomic_columns } T.Meta.columns
             |> List.concat)
             pp_expression value conflict_pg () pp_returning returning)
-      and pp_select (type t tag) ?order_by
-          ({ for_; from; limit; skip_locked; what; where } :
+      and pp_select (type t tag)
+          (Select { for_; from; limit; order_by; skip_locked; what; where } :
             (t, tag) Model.Query.select) =
         let pp_for f =
           let forable =
@@ -691,7 +691,7 @@ end = struct
         pp_insert into { excluded } on_conflict (Some returning)
           Expression.(to_ast value)
       | Select_unique select -> pp_select select
-      | Select { select; order_by } -> pp_select ?order_by select
+      | Select select -> pp_select select
       | Update { into; what; where } ->
         pp_update into what None where Expression.None
       | Update_returning { from; into; returning; where; what } ->
@@ -738,10 +738,10 @@ end = struct
           let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
           let+ res = C.find_opt query () in
           Sqml.Model.One_maybe res
-        | Select { select = { what; _ }; _ } ->
+        | Select (Select { what; _ }) ->
           let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query
-        | Select_unique { what; _ } ->
+        | Select_unique (Select { what; _ }) ->
           let query = (Caqti_type.unit ->? type_of_expr what) query_str in
           let+ res = C.find_opt query () in
           Sqml.Model.One_maybe res

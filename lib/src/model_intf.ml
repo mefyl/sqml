@@ -104,14 +104,18 @@ module type S = sig
       returning : ('t, 'tag) Expression.t;
     }
 
-    type ('t, 'tag) select = {
-      for_ : Expression.for_ option;
-      from : (module Selectable.S with type model = tag and type tag = 'tag);
-      limit : int option;
-      skip_locked : bool;
-      what : ('t, 'tag) Expression.t;
-      where : (bool, 'tag) Expression.t option;
-    }
+    type ('t, 'tag) select =
+      | Select : {
+          for_ : Expression.for_ option;
+          from :
+            (module Selectable.S with type model = tag and type tag = 'tag);
+          limit : int option;
+          order_by : ((_, 'tag) Expression.t * Table.ordering) option;
+          skip_locked : bool;
+          what : ('t, 'tag) Expression.t;
+          where : (bool, 'tag) Expression.t option;
+        }
+          -> ('t, 'tag) select
 
     type ('t, 'tag, 'from) update = {
       into : (module Table.S with type model = tag and type tag = 'tag);
@@ -153,11 +157,7 @@ module type S = sig
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : {
-          select : ('t, 'tag) select;
-          order_by : ((_, 'tag) Expression.t * Table.ordering) option;
-        }
-          -> ('t, many) t
+      | Select : ('t, 'tag) select -> ('t, many) t
       | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
@@ -235,6 +235,7 @@ module type S = sig
   val select_one :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?for_:Expression.for_ ->
+    ?order_by:(_, 'tag) Expression.t * Table.ordering ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
