@@ -466,7 +466,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     and get_in Sqml.Expression.List.[ ids ] =
       Model.select
         ~from:(module Model.T1)
-        ~where:Sqml.Expression.(in_ Model.T1.id ids)
+        ~where:Sqml.Expression.(in' Model.T1.id ids)
         Model.T1.name
     in
     let get = Engine.prepare [ Int ] get
@@ -586,7 +586,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let open Sqml.Expression in
       Model.select
         ~from:(module Model.T1)
-        ~where:(in_ Model.T1.id (const (Array Int) [ 1; 2; 3 ]))
+        ~where:(in' Model.T1.id (const (Array Int) [ 1; 2; 3 ]))
         Model.T1.id
     in
     let* () = populate db in
