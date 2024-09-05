@@ -332,18 +332,19 @@ struct
       returning : ('t, 'tag) Expression.t;
     }
 
-    type ('t, 'tag) select =
+    type 't select =
       | Select : {
           for_ : Expression.for_ option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
+          group_by : (_, 'tag) Expression.t option;
           limit : int option;
           order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
           skip_locked : bool;
-          what : ('t, 'tag) Expression.t;
+          what : ('t, _) Expression.t;
           where : (bool, 'tag) Expression.t option;
         }
-          -> ('t, 'tag) select
+          -> 't select
 
     type ('t, 'tag, 'from) update = {
       into : (module Table.S with type model = tag and type tag = 'tag);
@@ -385,8 +386,8 @@ struct
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : ('t, 'tag) select -> ('t, many) t
-      | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
+      | Select : 't select -> ('t, many) t
+      | Select_unique : 't select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -409,9 +410,41 @@ struct
       | Update_unique _ -> One_maybe
   end
 
+  let group (type group selectable)
+      ~(from :
+         (module Selectable.S with type model = tag and type tag = selectable))
+      ~(by : (group, selectable) Expression.Column.t) ?limit ?order_by ?where
+      what =
+    let column = Expression.column by in
+    let what =
+      what (column |> Expression.Private.reify |> Expression.Private.conceal)
+    in
+    Query.Select
+      (Select
+         {
+           for_ = None;
+           from;
+           group_by = Some column;
+           limit;
+           order_by;
+           skip_locked = false;
+           what;
+           where;
+         })
+
   let select ~from ?for_ ?limit ?order_by ?(skip_locked = false) ?where what =
     Query.Select
-      (Select { for_; from; limit; order_by; skip_locked; what; where })
+      (Select
+         {
+           for_;
+           from;
+           group_by = None;
+           limit;
+           order_by;
+           skip_locked;
+           what;
+           where;
+         })
 
   module Indexed =
     Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)
@@ -445,11 +478,30 @@ struct
     let where = unique index indexed where in
     Query.Select_unique
       (Select
-         { for_; from; limit = None; order_by = None; skip_locked; what; where })
+         {
+           for_;
+           from;
+           group_by = None;
+           limit = None;
+           order_by = None;
+           skip_locked;
+           what;
+           where;
+         })
 
   let select_one ~from ?for_ ?order_by ?(skip_locked = false) ?where what =
     Query.Select_unique
-      (Select { for_; from; limit = Some 1; order_by; skip_locked; what; where })
+      (Select
+         {
+           for_;
+           from;
+           group_by = None;
+           limit = Some 1;
+           order_by;
+           skip_locked;
+           what;
+           where;
+         })
 
   let insert ~into ?on_conflict value =
     Query.Insert

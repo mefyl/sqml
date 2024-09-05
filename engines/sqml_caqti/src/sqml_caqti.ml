@@ -456,11 +456,13 @@ end = struct
             f ()
         | List l -> list ~sep:comma (pp None) f l
         | Null -> Fmt.string f "NULL"
-        | Select { for_; from; limit; skip_locked; what; where } ->
-          pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a)" (pp None) what
+        | Select { for_; from; group_by; limit; skip_locked; what; where } ->
+          pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a%a)" (pp None) what
             (pp None) from
             (option (sp ++ box ~indent:2 (const string "WHERE " ++ pp None)))
             where
+            (option (sp ++ box ~indent:2 (const string "GROUP BY " ++ pp None)))
+            group_by
             (option (sp ++ const string "FOR " ++ pp_for))
             for_
             (option (sp ++ string))
@@ -470,6 +472,7 @@ end = struct
         | Selectable { name; alias } ->
           (const string name ++ const (option (const char ' ' ++ string)) alias)
             f ()
+        | Star -> const string "*" f ()
         | Switch { cases; default } ->
           let pp_case f (cond, value) =
             (const string "WHEN" ++ sp
@@ -582,9 +585,10 @@ end = struct
             (Table.Column.List.map ~f:{ f = atomic_columns } T.Meta.columns
             |> List.concat)
             pp_expression value conflict_pg () pp_returning returning)
-      and pp_select (type t tag)
-          (Select { for_; from; limit; order_by; skip_locked; what; where } :
-            (t, tag) Model.Query.select) =
+      and pp_select (type t)
+          (Select
+             { for_; from; group_by; limit; order_by; skip_locked; what; where } :
+            t Model.Query.select) =
         let pp_for f =
           let forable =
             let rec forable =
@@ -635,6 +639,9 @@ end = struct
         ++ const
              (option (sp ++ box ~indent:2 (pp_clause "WHERE")))
              Expression.(Option.map ~f:to_ast where)
+        ++ const
+             (option (sp ++ box ~indent:2 (pp_clause "GROUP BY")))
+             Expression.(Option.map ~f:to_ast group_by)
         ++ const (option (sp ++ pp_for)) for_
         ++ const (option (sp ++ pp_order_by)) order_by
         ++ const

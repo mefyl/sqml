@@ -599,6 +599,42 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       |> Lwt_result.return
     in
     Lwt_result.return ()
+
+  let group db =
+    let* () =
+      populate
+        ~t1s:
+          [
+            (0, "Alice", None);
+            (1, "Bob", None);
+            (2, "Carol", None);
+            (3, "Alice", None);
+            (4, "Alice", None);
+            (5, "Carol", None);
+          ]
+        db
+    in
+    let* () =
+      let* (Many res) =
+        Engine.query db
+        @@ Model.group ~from:(module Model.T1) ~by:Model.T1.Column.name
+        @@ fun name ->
+        Sqml.Expression.(
+          of_list [ name; Group.max Model.T1.Column.id; Group.count ])
+      in
+      let* res = Sequence.to_list res in
+      Alcotest.(
+        check ~here:[%here]
+          (list (triple string int int))
+          "selected names"
+          [ ("Alice", 4, 3); ("Bob", 1, 1); ("Carol", 5, 2) ]
+          (res
+          |> List.sort ~compare:(fun Hlist.(l :: _) Hlist.(r :: _) ->
+                 String.compare l r)
+          |> List.map ~f:(fun Hlist.[ name; id; count ] -> (name, id, count))))
+      |> Lwt_result.return
+    in
+    Lwt_result.return ()
 end
 
 module Caqti = Sqml_caqti.Make (Model)
@@ -714,6 +750,7 @@ let () =
              test_case "update" Caqti_test.update;
              test_case "update_from" Caqti_test.update_from;
              test_case_db "timestamp" Caqti_test.timestamp;
+             test_case "group" Caqti_test.group;
              test_case "is_null" Caqti_test.is_null;
              test_case "json" Caqti_test.json;
              test_case "in" Caqti_test.in';

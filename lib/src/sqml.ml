@@ -1,7 +1,11 @@
 module Column = Table.Column
 module Dialect = Dialect
 module Engine = Engine
-module Expression = Expression
+
+module Expression :
+  module type of Expression with module Private := Expression.Private =
+  Expression
+
 module Log = Log
 module Model = Model
 module Selectable = Selectable

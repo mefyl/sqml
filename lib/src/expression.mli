@@ -123,4 +123,19 @@ val select_one :
   ('what, 'tag) t ->
   ('what Option.t, 'tag) t
 
-val coerce : ('t, _) t -> ('t, _) t
+type 't aggregated
+
+module Group : sig
+  val all : (bool, 'tag) Column.t -> (bool, 'tag aggregated) t
+  val any : (bool, 'tag) Column.t -> (bool, 'tag aggregated) t
+  val average : (int, 'tag) Column.t -> (int, 'tag aggregated) t
+  val count : (int, 'tag aggregated) t
+  val max : ('t, 'tag) Column.t -> ('t, 'tag aggregated) t
+  val min : ('t, 'tag) Column.t -> ('t, 'tag aggregated) t
+  val sum : (int, 'tag) Column.t -> (int, 'tag aggregated) t
+end
+
+module Private : sig
+  val conceal : 't Type.t * ast -> ('t, 'tag) t
+  val reify : ('t, 'tag) t -> 't Type.t * ast
+end

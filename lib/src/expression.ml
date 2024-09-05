@@ -140,8 +140,10 @@ module Traverse_ast (M : Monad.S2) = struct
       | Select select ->
         let* from = traverse_ast select.from
         and* what = traverse_ast select.what in
+        let*?? group_by = Option.map ~f:traverse_ast select.group_by in
         let+?? where = Option.map ~f:traverse_ast select.where in
-        Select { select with from; what; where }
+        Select { select with from; group_by; what; where }
+      | Star -> M.return Star
       | Switch { cases; default } ->
         let* cases =
           let f (cond, v) =
@@ -173,6 +175,14 @@ let to_ast (_, ast) = ast
 let to_type (t, _) = t
 
 type ('t, 'tag) t = 't Type.t * ast
+
+let atomic_columns = function
+  | { Column.name; type_ = Atomic _; _ } -> [ name ]
+  | { name; type_ = Composite { columns; _ }; _ } ->
+    Column.Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
+
+let column (Column.{ selectable; type_; _ } as c) =
+  (Type.of_column_type type_, Column { names = atomic_columns c; selectable })
 
 type ('t, 'tag) option =
   | None : (unit, 'tag) option
@@ -291,14 +301,6 @@ let coalesce_default args default =
   let args = Base.List.map ~f:snd args in
   (to_type default, Funcall { args = args @ [ snd default ]; name = "COALESCE" })
 
-let atomic_columns = function
-  | { Column.name; type_ = Atomic _; _ } -> [ name ]
-  | { name; type_ = Composite { columns; _ }; _ } ->
-    Column.Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
-
-let column (Column.{ selectable; type_; _ } as c) =
-  (Type.of_column_type type_, Column { names = atomic_columns c; selectable })
-
 let map ~decode ~encode (type_, v) =
   let type_ = Type.Custom { decode; encode; repr = type_ } in
 
@@ -362,12 +364,13 @@ let not_in (_, value) (_, array) =
 
 let not (_, value) = (Type.Bool, Funcall { name = "NOT"; args = [ value ] })
 
-let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag)
+let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?by
     ?for_ ?limit ?(skip_locked = false) ?where what =
   Select
     {
       for_;
       from = From.to_ast ();
+      group_by = by;
       limit;
       skip_locked;
       what = to_ast what;
@@ -381,4 +384,23 @@ let select_one ~from ?for_ ?skip_locked ?where what =
   ( Type.Nullable (fst what),
     _select ~from ?for_ ~limit:1 ?skip_locked ?where what )
 
-let coerce = Fn.id
+type 't aggregated = 't
+
+module Group = struct
+  let aggregate_call name c =
+    let type', ast = column c in
+    (type', Funcall { name; args = [ ast ] })
+
+  let count = (Type.Int, Funcall { name = "COUNT"; args = [ Star ] })
+  let all c = aggregate_call "BOOL_AND" c
+  let any c = aggregate_call "BOOL_OR" c
+  let average c = aggregate_call "AVG" c
+  let max c = aggregate_call "MAX" c
+  let min c = aggregate_call "MIN" c
+  let sum c = aggregate_call "SUM" c
+end
+
+module Private = struct
+  let conceal = Fn.id
+  let reify = Fn.id
+end

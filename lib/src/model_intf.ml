@@ -30,6 +30,12 @@ type 'tag on_conflict =
   | Set : ('tag excluded -> 'tag Expression.assignment list) -> 'tag on_conflict
   | Update : _ on_conflict
 
+module type GROUP = sig
+  type group
+  type tag
+  type aggregated
+end
+
 module type S = sig
   val version : Semver.t
 
@@ -104,18 +110,19 @@ module type S = sig
       returning : ('t, 'tag) Expression.t;
     }
 
-    type ('t, 'tag) select =
+    type 't select =
       | Select : {
           for_ : Expression.for_ option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
+          group_by : (_, 'tag) Expression.t option;
           limit : int option;
-          order_by : ((_, 'tag) Expression.t * Table.ordering) option;
+          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
           skip_locked : bool;
-          what : ('t, 'tag) Expression.t;
+          what : ('t, _) Expression.t;
           where : (bool, 'tag) Expression.t option;
         }
-          -> ('t, 'tag) select
+          -> 't select
 
     type ('t, 'tag, 'from) update = {
       into : (module Table.S with type model = tag and type tag = 'tag);
@@ -157,8 +164,8 @@ module type S = sig
           value : ('mapped, 'free) Expression.t;
         }
           -> ('t, one) t
-      | Select : ('t, 'tag) select -> ('t, many) t
-      | Select_unique : ('t, 'tag) select -> ('t, one_maybe) t
+      | Select : 't select -> ('t, many) t
+      | Select_unique : 't select -> ('t, one_maybe) t
       | Update : {
           into : (module Table.S with type model = tag and type tag = 'tag);
           what : 'tag Expression.assignment list;
@@ -211,6 +218,16 @@ module type S = sig
     ?on_conflict:'tag on_conflict ->
     ('mapped, 'free) Expression.t ->
     ('t, one) Query.t
+
+  val group :
+    from:(module Selectable.S with type model = tag and type tag = 'tag) ->
+    by:('group, 'tag) Expression.Column.t ->
+    ?limit:int ->
+    ?order_by:('group, 'tag) Expression.t * Table.ordering ->
+    ?where:(bool, 'tag) Expression.t ->
+    (('group, 'tag Expression.aggregated) Expression.t ->
+    ('what, 'tag Expression.aggregated) Expression.t) ->
+    ('what, many) Query.t
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->

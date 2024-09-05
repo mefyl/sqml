@@ -107,6 +107,7 @@ type ast =
   | Select : {
       for_ : for_ option;
       from : ast;
+      group_by : ast option;
       limit : int option;
       skip_locked : bool;
       what : ast;
@@ -117,6 +118,7 @@ type ast =
       name : string;
       alias : string option;
     }
+  | Star
   | Switch : {
       cases : (ast * ast) list;
       default : ast Option.t;
