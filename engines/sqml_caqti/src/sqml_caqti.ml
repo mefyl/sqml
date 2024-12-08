@@ -948,6 +948,11 @@ end = struct
         C.commit ())
     |> Lwt_result.map_error (fun e -> `Sqml_engine (Caqti_error.show e))
 
+  let rollback transaction =
+    Lwt_guarded.acquire transaction ~f:(fun (module C : Caqti_lwt.CONNECTION) ->
+        C.rollback ())
+    |> Lwt_result.map_error (fun e -> `Sqml_engine (Caqti_error.show e))
+
   let split_pattern pattern in_ =
     let length = String.Search_pattern.pattern pattern |> String.length
     and splits =

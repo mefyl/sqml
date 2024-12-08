@@ -38,6 +38,7 @@ module type S = sig
     ('res, ([> error ] as 'error)) Lwt_result.t
 
   val commit : transaction -> (unit, ([> error ] as 'error)) Lwt_result.t
+  val rollback : transaction -> (unit, ([> error ] as 'error)) Lwt_result.t
   val close : t -> unit Lwt.t
 
   val schema :
