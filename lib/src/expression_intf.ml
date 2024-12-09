@@ -17,6 +17,8 @@ module Column = struct
       | Int : int atomic
       | Json : Ezjsonm.value atomic
       | Nullable : 't atomic -> 't option atomic
+      | Serial : int atomic
+      | Serial_big : Int64.t atomic
       | Text : string atomic
       | Time : Timmy.Time.t atomic
       | Varchar : int -> string atomic

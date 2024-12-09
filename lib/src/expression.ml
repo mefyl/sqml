@@ -70,6 +70,8 @@ module Type = struct
     | Int -> Int
     | Json -> Json
     | Nullable t -> Nullable (of_atomic_column_type t)
+    | Serial -> Int
+    | Serial_big -> Bigint
     | Text -> String
     | Time -> Time
     | Varchar _ -> String

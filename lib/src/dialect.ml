@@ -39,6 +39,8 @@ module Postgresql : S = Make (struct
       | Int -> "INTEGER"
       | Json -> "JSONB"
       | Nullable t -> f t
+      | Serial -> "SERIAL"
+      | Serial_big -> "BIGSERIAL"
       | Text -> "TEXT"
       | Time -> "TIMESTAMP"
       | Varchar len -> Fmt.str "VARCHAR(%i)" len
