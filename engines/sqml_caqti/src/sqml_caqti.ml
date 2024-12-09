@@ -419,6 +419,7 @@ end = struct
             (const string selectable ++ const string "." ++ string)
             f names
         | Const { type_; value } -> pp_from_type dialect type_ f value
+        | Default -> Fmt.string f "DEFAULT"
         | Funcall { name; args; _ } ->
           (const string name ++ sp ++ const char '('
           ++ list ~sep:comma (pp None)

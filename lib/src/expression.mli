@@ -47,6 +47,7 @@ val case :
 val case_else :
   ((bool, 'tag) t * ('t, 'tag) t) list -> ('t, 'tag) t -> ('t, 'tag) t
 
+val default : (_, _) t (* FIXME: obviously unsafe *)
 val now : (Timmy.Time.t, 'tag) t
 val to_ast : ('t, 'tag) t -> ast
 val to_type : ('t, 'tag) t -> 't Type.t

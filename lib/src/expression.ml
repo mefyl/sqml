@@ -117,7 +117,8 @@ module Traverse_ast (M : Monad.S2) = struct
 
   let traverse_ast ast ~f =
     let rec traverse_ast = function
-      | (Column _ | Const _ | Null | Selectable _ | Var _) as ast -> f ast
+      | (Column _ | Const _ | Default | Null | Selectable _ | Var _) as ast ->
+        f ast
       | Funcall ({ args; _ } as pl) ->
         let+ args = Acid.List.map ~f:traverse_ast args |> M.all in
         Funcall { pl with args }
@@ -289,6 +290,15 @@ let case_else cases default =
       }
   in
   (type_, ast)
+
+let default =
+  ( Type.Custom
+      {
+        repr = Null;
+        encode = (fun _ -> None);
+        decode = (fun _ -> Result.fail "cannot decode DEFAULT");
+      },
+    Default )
 
 let now = (Type.Time, Funcall { name = "NOW"; args = [] })
 let make_column ~name ~selectable type_ = Column.{ name; selectable; type_ }

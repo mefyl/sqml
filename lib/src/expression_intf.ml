@@ -84,6 +84,7 @@ type ast =
       value : 't;
     }
       -> ast
+  | Default : ast
   | Funcall : {
       name : string;
       args : ast list;
