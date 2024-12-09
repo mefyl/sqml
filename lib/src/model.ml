@@ -91,7 +91,7 @@ struct
         in
         type_of_columns Column.columns
 
-      let type_ =
+      let type_values =
         let rec type_of_columns :
             type a.
             (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
@@ -100,10 +100,12 @@ struct
             Expression.Type.of_column_type hd.type_ :: type_of_columns tl
           | [] -> []
         in
+        type_of_columns Column.columns
+
+      let type_ =
         let decode columns = Meta.map columns |> Result.return
         and encode = Meta.unmap in
-        Expression.Type.Custom
-          { decode; encode; repr = type_of_columns Column.columns }
+        Expression.Type.Custom { decode; encode; repr = type_values }
 
       let const value = Expression.const type_ value
 
@@ -163,6 +165,10 @@ struct
         Table.Index.Unique { columns; name = "pkey" }
 
       let indexes = Meta.indexes Column.columns
+
+      let values (values : Meta.columns Expression.List.t) :
+          Meta.mapped Expression.t =
+        Expression.Private.conceal (type_, Expression.(to_ast @@ of_list values))
     end
 
     let _ = v.tables <- Array.append v.tables [| (module Res) |]
