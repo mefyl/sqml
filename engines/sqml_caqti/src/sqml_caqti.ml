@@ -981,6 +981,8 @@ end = struct
       in
       let+ type_ =
         match (data_type, char_length) with
+        | "bigint", _ ->
+          Result.return (Column.Type.Type Bigint : Column.Type.any_atomic)
         | "boolean", _ ->
           Result.return (Column.Type.Type Bool : Column.Type.any_atomic)
         | "character varying", Some l ->
