@@ -40,9 +40,7 @@ module type S = sig
   val commit : transaction -> (unit, ([> error ] as 'error)) Lwt_result.t
   val rollback : transaction -> (unit, ([> error ] as 'error)) Lwt_result.t
   val close : t -> unit Lwt.t
-
-  val schema :
-    t -> (Table.Schema.t list, [ `Sqml_engine of string ]) Lwt_result.t
+  val schema : t -> (Table.Schema.t list, [> error ]) Lwt_result.t
 end
 
 let diff (type t) (module E : S with type t = t) (t : t) =
