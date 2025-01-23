@@ -10,6 +10,7 @@ module type S = sig
 
   val query :
     transaction ->
+    ?tags:Logs.Tag.set ->
     ('t, 'arity) Model.Query.t ->
     ( ('t, 'arity, ([> error ] as 'error)) Root.Model.result,
       'error )
@@ -27,6 +28,7 @@ module type S = sig
   val run :
     ('args, 'tag, 'res, 'arity) prepared ->
     transaction ->
+    ?tags:Logs.Tag.set ->
     'args Hlist.t ->
     ( ('res, 'arity, ([> error ] as 'error)) Root.Model.result,
       'error )

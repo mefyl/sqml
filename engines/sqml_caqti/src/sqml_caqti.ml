@@ -1,8 +1,7 @@
 open Sqml
 open Utils
 module Array = Array.Monadic2 (Lwt_result)
-open Let.Syntax2 (Lwt_result)
-open Let.Syntax' (Lwt)
+open Let.Syntax (Lwt)
 
 let rec json_of_sqml : type t. t Sqml.Expression.Type.t -> t -> Ezjsonm.value =
   function
@@ -189,7 +188,7 @@ end = struct
 
   let make ?max_size uri =
     let open Caqti_request.Infix in
-    let* pool =
+    let*! pool =
       let config = Caqti_pool_config.create ?max_size () in
       Caqti_lwt_unix.connect_pool ~pool_config:config (Uri.of_string uri)
       |> Lwt.return |> error
@@ -213,7 +212,7 @@ end = struct
       if not @@ Caqti_driver_info.can_transact i then
         Lwt_result.return (None, dialect)
       else
-        let* found = C.find found_query () in
+        let*! found = C.find found_query () in
         let caqti_metadata_type = Caqti_type.(t4 int int int ptime) in
         if found then
           let query =
@@ -226,7 +225,7 @@ end = struct
                     "datetime(migrated)"
                   else "migrated"))
           in
-          let* major, minor, subminor, _ = C.find query () in
+          let*! major, minor, subminor, _ = C.find query () in
           let current = Semver.from_parts major minor subminor [] [] in
           let* () =
             Log.info (fun m ->
@@ -239,7 +238,7 @@ end = struct
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           let create_table (type tag) (module T : Table.S with type tag = tag) =
-            let* () =
+            let*! () =
               match Caqti_driver_info.dialect_tag i with
               | `Sqlite -> Lwt_result.return ()
               | `Pgsql -> (
@@ -275,7 +274,7 @@ end = struct
             in
             Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
           in
-          let* () = Array.iter ~f:create_table (Model.tables ()) in
+          let*! () = Array.iter ~f:create_table (Model.tables ()) in
           let query =
             (caqti_metadata_type ->. Caqti_type.unit)
               (Fmt.str
@@ -283,14 +282,14 @@ end = struct
                   ?, ?, ?)"
                  (table_name i (Some "sqml") "metadata"))
           in
-          let* () =
+          let*! () =
             let Semver.{ major; minor; patch; _ } = Model.version
             and now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
             C.exec query (major, minor, patch, now)
           in
           Lwt_result.return (Some Model.version, dialect)
     in
-    Caqti_lwt_unix.Pool.use create pool |> error >>= function
+    Caqti_lwt_unix.Pool.use create pool |> error >>=! function
     | Some current, dialect ->
       if Poly.(current <> Model.version) then
         fail "model version mismatch: code at %s, data at %s"
@@ -709,7 +708,8 @@ end = struct
     in
     pp
 
-  let query transaction (type res arity) (query : (res, arity) Model.Query.t) :
+  let query transaction ?tags (type res arity)
+      (query : (res, arity) Model.Query.t) :
       ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
     let open Caqti_request.Infix in
     let f (module C : Caqti_lwt.CONNECTION) =
@@ -731,46 +731,46 @@ end = struct
       let query_str = Fmt.str "%a" (pp_query dialect) query in
       let* () =
         Log.debug @@ fun m ->
-        m "execute query:@ @[%a@]" (pp_query dialect) query
+        m ?tags "execute query:@ @[%a@]" (pp_query dialect) query
       in
       let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
         match query with
         | Delete _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
-          let+ () = C.exec query () in
+          let+! () = C.exec query () in
           Sqml.Model.Zero
         | Delete_returning { returning; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
         | Delete_unique { returning; _ } ->
           let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
-          let+ res = C.find_opt query () in
+          let+! res = C.find_opt query () in
           Sqml.Model.One_maybe res
         | Select (Select { what; _ }) ->
           let query = (Caqti_type.unit ->* type_of_expr what) query_str in
           collect query
         | Select_unique (Select { what; _ }) ->
           let query = (Caqti_type.unit ->? type_of_expr what) query_str in
-          let+ res = C.find_opt query () in
+          let+! res = C.find_opt query () in
           Sqml.Model.One_maybe res
         | Insert _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
-          let+ () = C.exec query () in
+          let+! () = C.exec query () in
           Sqml.Model.Zero
         | Insert_returning { returning; _ } ->
           let query = (Caqti_type.unit ->! type_of_expr returning) query_str in
-          let+ res = C.find query () in
+          let+! res = C.find query () in
           Sqml.Model.One res
         | Update _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
-          let+ () = C.exec query () in
+          let+! () = C.exec query () in
           Sqml.Model.Zero
         | Update_returning { returning; _ } ->
           let query = (Caqti_type.unit ->* type_of_expr returning) query_str in
           collect query
         | Update_unique { returning; _ } ->
           let query = (Caqti_type.unit ->? type_of_expr returning) query_str in
-          let+ res = C.find_opt query () in
+          let+! res = C.find_opt query () in
           Sqml.Model.One_maybe res
       in
       res |> error
@@ -831,7 +831,7 @@ end = struct
       let query_str dialect =
         let q = Fmt.str "%a" (pp_query dialect) query in
         let () =
-          Logs.debug (fun m ->
+          Log.Sync.debug (fun m ->
               m "@[<2>prepare query:@ @[%a@]@]@ @[<hv 2>arguments:@ %a@]"
                 (pp_query dialect) query
                 (Expression.Type.List.pp ~sep:Fmt.comma
@@ -859,16 +859,16 @@ end = struct
 
   let run (type args res arity)
       ({ query; prepared; types } : (args, 'tag, res, arity) prepared)
-      transaction (values : args Hlist.t) =
+      transaction ?tags (values : args Hlist.t) =
     let* () =
       let pp_values = pp_values_of_types `Pgsql types in
       Log.debug (fun m ->
-          m "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
+          m ?tags "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
             (pp_query `Pgsql) query pp_values values)
     in
     match prepared with
     | Zero prepared ->
-      let+ () =
+      let+! () =
         let f (module C : Caqti_lwt.CONNECTION) =
           C.exec prepared values |> error
         in
@@ -877,7 +877,7 @@ end = struct
       (Sqml.Model.Zero
         : (res, arity, ([> Sqml.Engine.error ] as 'error)) Sqml.Model.result)
     | One prepared ->
-      let+ res =
+      let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
           C.find prepared values |> error
         in
@@ -885,7 +885,7 @@ end = struct
       in
       Sqml.Model.One res
     | One_maybe prepared ->
-      let+ res =
+      let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
           C.find_opt prepared values |> error
         in
@@ -893,7 +893,7 @@ end = struct
       in
       Sqml.Model.One_maybe res
     | Many prepared ->
-      let+ res =
+      let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
           let f response =
             let f stream =
@@ -913,17 +913,17 @@ end = struct
   let connect { pool; _ } f =
     let f c =
       let module C = (val c : Caqti_lwt.CONNECTION) in
-      let* () = C.start () in
+      let*! () = C.start () in
       let f () =
-        f (Lwt_guarded.make c) >>=: function
+        f (Lwt_guarded.make c) >>= function
         | Result.Error e ->
-          let* () = C.rollback () in
+          let*! () = C.rollback () in
           Lwt_result.fail (`Shitty_api e)
         | Result.Ok res ->
-          let+ () = C.commit () in
+          let+! () = C.commit () in
           res
       and catch exn =
-        let* () = C.rollback () in
+        let*! () = C.rollback () in
         raise exn
       in
       Lwt.catch f catch
@@ -1002,7 +1002,7 @@ end = struct
     in
     let f (module C : Caqti_lwt.CONNECTION) =
       let open Caqti_request.Infix in
-      let* tables =
+      let*! tables =
         let query =
           (Caqti_type.unit ->* Caqti_type.(t2 string string))
             ~oneshot:true
@@ -1013,8 +1013,8 @@ end = struct
         C.collect_list query () |> error
       in
       let f (schema, name) =
-        let* columns =
-          let* columns =
+        let*! columns =
+          let*! columns =
             let query =
               (Caqti_type.(t2 string string)
               ->* Caqti_type.(t4 (option int) string string string))
@@ -1039,7 +1039,7 @@ end = struct
           in
           columns |> List.map ~f |> Result.all |> Lwt.return
         in
-        let* constraints =
+        let*! constraints =
           let query =
             (Caqti_type.(t2 string string)
             ->* Caqti_type.(
@@ -1069,7 +1069,7 @@ end = struct
                  WHERE cons.table_schema = $1 AND cons.table_name = $2
                  ORDER BY cons.constraint_name, col.ordinal_position |}
           in
-          let+ rows = C.collect_list query (schema, name) |> error in
+          let+! rows = C.collect_list query (schema, name) |> error in
           let f = function
             | (constraint_name, _, "PRIMARY KEY", _) :: _ as columns ->
               let get_column (_, c, _, _) = c in
@@ -1124,14 +1124,14 @@ end = struct
                  String.(left <> right))
           |> List.filter_map ~f
         in
-        let* indexes =
+        let*! indexes =
           let query =
             (Caqti_type.(t2 string string) ->* Caqti_type.(t2 string string))
               {| SELECT indexname, indexdef
                  FROM pg_indexes
                  WHERE schemaname = $1 AND tablename = $2 |}
           in
-          let* rows = C.collect_list query (schema, name) |> error in
+          let*! rows = C.collect_list query (schema, name) |> error in
           let f (name, def) =
             let open Let.Syntax2 (Result) in
             let fail =
@@ -1175,7 +1175,9 @@ end = struct
           |> List.filter_map ~f:(function
                | Result.Ok res -> Some res
                | Result.Error (`Sqml_engine error) ->
-                 let () = Logs.warn (fun m -> m "ignoring index: %s" error) in
+                 let () =
+                   Log.Sync.warn (fun m -> m "ignoring index: %s" error)
+                 in
                  None)
           |> Lwt_result.return
         in
