@@ -832,17 +832,11 @@ end = struct
         let q = Fmt.str "%a" (pp_query dialect) query in
         let () =
           Logs.debug (fun m ->
-              m "caqti: prepare query:@ @[%a@]" (pp_query dialect) query)
-        and () =
-          Expression.Type.List.iter
-            ~f:
-              {
-                f =
-                  (fun t ->
-                    Logs.debug (fun m ->
-                        m "caqti: arguments:@ @[%a@]" Sqml.Expression.Type.pp t));
-              }
-            types
+              m "@[<2>prepare query:@ @[%a@]@]@ @[<hv 2>arguments:@ %a@]"
+                (pp_query dialect) query
+                (Expression.Type.List.pp ~sep:Fmt.comma
+                   { f = Sqml.Expression.Type.pp })
+                types)
         in
         q
       in
@@ -867,11 +861,10 @@ end = struct
       ({ query; prepared; types } : (args, 'tag, res, arity) prepared)
       transaction (values : args Hlist.t) =
     let* () =
-      Log.debug (fun m ->
-          m "execute prepared query:@ @[%a@]" (pp_query `Pgsql) query)
-    and* () =
       let pp_values = pp_values_of_types `Pgsql types in
-      Log.debug (fun m -> m "values:@ %a" pp_values values)
+      Log.debug (fun m ->
+          m "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
+            (pp_query `Pgsql) query pp_values values)
     in
     match prepared with
     | Zero prepared ->
