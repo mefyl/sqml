@@ -917,36 +917,51 @@ end = struct
       in
       Sqml.Model.Many res
 
-  let connect { pool; _ } ?tags f =
-    let f c =
-      let module C = (val c : Caqti_lwt.CONNECTION) in
-      let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
-      let*! () = C.start () in
-      let f () =
-        f (Lwt_guarded.make c) >>= function
-        | Result.Error e ->
+  let unmap = function
+    | `Shitty_api e -> e
+    | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+
+  let rec connect t ?tags f =
+    let* result =
+      let f c =
+        let module C = (val c : Caqti_lwt.CONNECTION) in
+        let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
+        let*! () = C.start () in
+        let f () =
+          f (Lwt_guarded.make c) >>= function
+          | Result.Error e ->
+            let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
+            let*! () = C.rollback () in
+            Lwt_result.fail (`Shitty_api e)
+          | Result.Ok res ->
+            let* () = Log.debug @@ fun m -> m ?tags "transaction commit" in
+            let+! () = C.commit () in
+            res
+        and catch exn =
           let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
           let*! () = C.rollback () in
-          Lwt_result.fail (`Shitty_api e)
-        | Result.Ok res ->
-          let* () = Log.debug @@ fun m -> m ?tags "transaction commit" in
-          let+! () = C.commit () in
-          res
-      and catch exn =
-        let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
-        let*! () = C.rollback () in
-        raise exn
+          raise exn
+        in
+        Lwt.catch f catch
       in
-      Lwt.catch f catch
-    and unmap = function
-      | `Shitty_api e -> e
-      | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+      Caqti_lwt_unix.Pool.use f
+        (t.pool
+          : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t
+          :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt_unix.Pool.t)
     in
-    Caqti_lwt_unix.Pool.use f
-      (pool
-        : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t
-        :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt_unix.Pool.t)
-    |> Lwt_result.map_error unmap
+    match result with
+    | Result.Ok _ as res -> Lwt.return res
+    | Result.Error
+        (`Request_failed
+          {
+            msg =
+              Caqti_driver_postgresql.Result_error_msg
+                { sqlstate = "deadlock_detected"; _ };
+            _;
+          }) ->
+      let* () = Log.warn @@ fun m -> m ?tags "deadlock detected, retrying" in
+      connect t ?tags f
+    | Result.Error error -> Lwt_result.fail @@ unmap error
 
   let savepoint_start =
     let open Caqti_request.Infix in
@@ -982,9 +997,6 @@ end = struct
         raise exn
       in
       Lwt.catch f catch
-    and unmap = function
-      | `Shitty_api e -> e
-      | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
     in
     Lwt_guarded.acquire ~f transaction |> Lwt_result.map_error unmap
 

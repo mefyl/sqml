@@ -6,6 +6,7 @@
  (libraries
   base
   caqti
+  caqti-driver-postgresql
   caqti-lwt
   caqti-lwt.unix
   logs
