@@ -121,6 +121,12 @@ let type_of_expr e = Sqml.Expression.to_type e |> caqti_of_type
 module Make (Model : Model.S) : sig
   include Engine.S with module Model = Model
 
+  val with_savepoint :
+    transaction ->
+    (transaction ->
+    ('result, ([> `Sqml_engine of string ] as 'error)) Lwt_result.t) ->
+    ('result, 'error) Lwt_result.t
+
   val make :
     ?max_size:int -> string -> (t, [> `Sqml_engine of string ]) Lwt_result.t
 end = struct
@@ -937,15 +943,41 @@ end = struct
         :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt_unix.Pool.t)
     |> Lwt_result.map_error unmap
 
-  let commit transaction =
-    Lwt_guarded.acquire transaction ~f:(fun (module C : Caqti_lwt.CONNECTION) ->
-        C.commit ())
-    |> Lwt_result.map_error (fun e -> `Sqml_engine (Caqti_error.show e))
+  let savepoint_start =
+    let open Caqti_request.Infix in
+    (Caqti_type.unit -->. Caqti_type.unit) @@:- fun _ -> "SAVEPOINT __sqml;"
 
-  let rollback transaction =
-    Lwt_guarded.acquire transaction ~f:(fun (module C : Caqti_lwt.CONNECTION) ->
-        C.rollback ())
-    |> Lwt_result.map_error (fun e -> `Sqml_engine (Caqti_error.show e))
+  let savepoint_commit =
+    let open Caqti_request.Infix in
+    (Caqti_type.unit -->. Caqti_type.unit) @@:- fun _ ->
+    "RELEASE SAVEPOINT __sqml;"
+
+  let savepoint_rollback =
+    let open Caqti_request.Infix in
+    (Caqti_type.unit -->. Caqti_type.unit) @@:- fun _ ->
+    "ROLLBACK TO SAVEPOINT __sqml;"
+
+  let with_savepoint transaction f =
+    let f ((module C : Caqti_lwt.CONNECTION) as transaction) =
+      let*! () = C.exec savepoint_start () in
+      let f () =
+        f (Lwt_guarded.make transaction) >>= function
+        | Result.Error e ->
+          let*! () = C.exec savepoint_rollback () in
+          Lwt_result.fail (`Shitty_api e)
+        | Result.Ok res ->
+          let+! () = C.exec savepoint_commit () in
+          res
+      and catch exn =
+        let*! () = C.exec savepoint_rollback () in
+        raise exn
+      in
+      Lwt.catch f catch
+    and unmap = function
+      | `Shitty_api e -> e
+      | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+    in
+    Lwt_guarded.acquire ~f transaction |> Lwt_result.map_error unmap
 
   let split_pattern pattern in_ =
     let length = String.Search_pattern.pattern pattern |> String.length
