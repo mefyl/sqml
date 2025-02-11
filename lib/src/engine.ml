@@ -36,6 +36,7 @@ module type S = sig
 
   val connect :
     t ->
+    ?tags:Logs.Tag.set ->
     (transaction -> ('res, 'error) Lwt_result.t) ->
     ('res, ([> error ] as 'error)) Lwt_result.t
 

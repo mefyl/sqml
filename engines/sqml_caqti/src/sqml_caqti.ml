@@ -123,6 +123,7 @@ module Make (Model : Model.S) : sig
 
   val with_savepoint :
     transaction ->
+    ?tags:Logs.Tag.set ->
     (transaction ->
     ('result, ([> `Sqml_engine of string ] as 'error)) Lwt_result.t) ->
     ('result, 'error) Lwt_result.t
@@ -916,19 +917,23 @@ end = struct
       in
       Sqml.Model.Many res
 
-  let connect { pool; _ } f =
+  let connect { pool; _ } ?tags f =
     let f c =
       let module C = (val c : Caqti_lwt.CONNECTION) in
+      let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
       let*! () = C.start () in
       let f () =
         f (Lwt_guarded.make c) >>= function
         | Result.Error e ->
+          let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
           let*! () = C.rollback () in
           Lwt_result.fail (`Shitty_api e)
         | Result.Ok res ->
+          let* () = Log.debug @@ fun m -> m ?tags "transaction commit" in
           let+! () = C.commit () in
           res
       and catch exn =
+        let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
         let*! () = C.rollback () in
         raise exn
       in
@@ -957,18 +962,22 @@ end = struct
     (Caqti_type.unit -->. Caqti_type.unit) @@:- fun _ ->
     "ROLLBACK TO SAVEPOINT __sqml;"
 
-  let with_savepoint transaction f =
+  let with_savepoint transaction ?tags f =
     let f ((module C : Caqti_lwt.CONNECTION) as transaction) =
+      let* () = Log.debug @@ fun m -> m ?tags "savepoint start" in
       let*! () = C.exec savepoint_start () in
       let f () =
         f (Lwt_guarded.make transaction) >>= function
         | Result.Error e ->
+          let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
           let*! () = C.exec savepoint_rollback () in
           Lwt_result.fail (`Shitty_api e)
         | Result.Ok res ->
+          let* () = Log.debug @@ fun m -> m ?tags "savepoint commit" in
           let+! () = C.exec savepoint_commit () in
           res
       and catch exn =
+        let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
         let*! () = C.exec savepoint_rollback () in
         raise exn
       in
