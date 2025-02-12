@@ -124,12 +124,10 @@ module Make (Model : Model.S) : sig
   val with_savepoint :
     transaction ->
     ?tags:Logs.Tag.set ->
-    (transaction ->
-    ('result, ([> `Sqml_engine of string ] as 'error)) Lwt_result.t) ->
+    (transaction -> ('result, ([> Engine.error ] as 'error)) Lwt_result.t) ->
     ('result, 'error) Lwt_result.t
 
-  val make :
-    ?max_size:int -> string -> (t, [> `Sqml_engine of string ]) Lwt_result.t
+  val make : ?max_size:int -> string -> (t, [> Engine.error ]) Lwt_result.t
 end = struct
   type t = {
     dialect : Sqml.Dialect.t;
@@ -178,7 +176,18 @@ end = struct
   let fail fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
   let convert_error =
-    let f e = `Sqml_engine (Caqti_error.show e) in
+    let f = function
+      | `Request_failed
+          ({
+             msg =
+               Caqti_driver_postgresql.Result_error_msg
+                 { sqlstate = "40P01"; _ };
+             _;
+           } :
+            Caqti_error.query_error) ->
+        `Sqml_deadlock
+      | e -> `Sqml_engine (Caqti_error.show e)
+    in
     Result.map_error ~f
 
   let error = Lwt.map ~f:convert_error
@@ -921,7 +930,7 @@ end = struct
     | `Shitty_api e -> e
     | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
 
-  let rec connect t ?tags f =
+  let connect t ?tags f =
     let* result =
       let f c =
         let module C = (val c : Caqti_lwt.CONNECTION) in
@@ -951,16 +960,6 @@ end = struct
     in
     match result with
     | Result.Ok _ as res -> Lwt.return res
-    | Result.Error
-        (`Request_failed
-          {
-            msg =
-              Caqti_driver_postgresql.Result_error_msg
-                { sqlstate = "deadlock_detected"; _ };
-            _;
-          }) ->
-      let* () = Log.warn @@ fun m -> m ?tags "deadlock detected, retrying" in
-      connect t ?tags f
     | Result.Error error -> Lwt_result.fail @@ unmap error
 
   let savepoint_start =

@@ -1,6 +1,9 @@
 open Acid_lwt
 
-type error = [ `Sqml_engine of string ]
+type error =
+  [ `Sqml_deadlock
+  | `Sqml_engine of string
+  ]
 
 module type S = sig
   type t
