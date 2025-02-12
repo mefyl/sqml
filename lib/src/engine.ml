@@ -9,6 +9,8 @@ let pp_error fmt = function
   | `Sqml_deadlock -> Fmt.string fmt "SQL deadlock detected"
   | `Sqml_engine error -> Fmt.pf fmt "SQL engine error: %s" error
 
+let error_to_string e = Fmt.to_to_string pp_error e
+
 module type S = sig
   type t
   type transaction
