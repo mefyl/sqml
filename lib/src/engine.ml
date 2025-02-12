@@ -5,6 +5,10 @@ type error =
   | `Sqml_engine of string
   ]
 
+let pp_error fmt = function
+  | `Sqml_deadlock -> Fmt.string fmt "SQL deadlock detected"
+  | `Sqml_engine error -> Fmt.pf fmt "SQL engine error: %s" error
+
 module type S = sig
   type t
   type transaction
