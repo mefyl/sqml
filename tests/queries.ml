@@ -16,11 +16,10 @@ let () =
    * Logs.Src.set_level Caqti_common_priv.request_log_src (Some Logs.Debug); *)
   Logs.Src.set_level Sqml.Log.src (Some Logs.Debug)
 
-let error : [ `Sqml_engine of string ] Alcotest.testable =
-  Alcotest.testable
-    (fun fmt (`Sqml_engine s) -> Fmt.string fmt s)
+let error =
+  Alcotest.testable Sqml.Engine.pp_error
     (* We don't care about the error message *)
-      (fun _ _ -> true)
+    (fun _ _ -> true)
 
 module ModelS :
   Sqml.Model.S
