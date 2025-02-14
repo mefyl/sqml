@@ -4,6 +4,7 @@ type error =
   [ `Sqml_deadlock
   | `Sqml_engine of string
   ]
+[@@deriving eq]
 
 let pp_error fmt = function
   | `Sqml_deadlock -> Fmt.string fmt "SQL deadlock detected"
