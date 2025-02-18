@@ -8,4 +8,4 @@ include:
 
 check:
   services:
-    - postgres:12.2-alpine
+    - postgres@sha256:9ea72265275674225b1eaa2ae897dd244028af4ee7ef6e4e89fe474938e0992e
