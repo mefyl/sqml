@@ -8,7 +8,7 @@ license: "GPLv3"
 homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
-  "ocamlformat" {= "0.26.1"}
+  "ocamlformat" {= "0.26.2"}
   "opam-file-format"
   "sexplib"
   "alcotest" {= "1.8.0" & with-test}
@@ -33,8 +33,6 @@ depends: [
   "ezjsonm" {= "1.3.0"}
   "fmt" {= "0.9.0"}
   "hex" {= "1.5.0"}
-  "host-arch-x86_64" {= "1"}
-  "host-system-other" {= "1"}
   "jsonm" {= "1.0.2"}
   "logs" {= "0.7.0"}
   "lwt" {= "5.7.0"}
