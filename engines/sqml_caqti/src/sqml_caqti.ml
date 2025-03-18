@@ -81,7 +81,10 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
       with Ezjsonm.Parse_error (_, error) -> Result.fail error
     in
     Caqti_type.(custom ~encode ~decode string)
-  | Null -> failwith "FIXME"
+  | Null ->
+    (* We don't have `Caqti.never`, but this should be safe since it can never
+       return `Some _` *)
+    Caqti_type.(option (Stdlib.Obj.magic unit))
   | Nullable t -> Caqti_type.option (caqti_of_type t)
   | String -> Caqti_type.string
   | Time ->
