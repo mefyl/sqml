@@ -16,8 +16,8 @@ let rec json_of_sqml : type t. t Sqml.Expression.Type.t -> t -> Ezjsonm.value =
   | String -> fun string -> `String string
   | _ -> failwith "fixme json"
 
-let rec sqml_of_json :
-    type t. t Sqml.Expression.Type.t -> Ezjsonm.value -> (t, string) Result.t =
+let rec sqml_of_json : type t.
+    t Sqml.Expression.Type.t -> Ezjsonm.value -> (t, string) Result.t =
  fun type' ->
   let fail value =
     Result.fail
@@ -39,7 +39,8 @@ let rec sqml_of_json :
       decode repr
   | Int -> (
     function
-    | `Float float -> Result.Ok (Float.to_int float) | value -> fail value)
+    | `Float float -> Result.Ok (Float.to_int float)
+    | value -> fail value)
   | String -> (
     function `String string -> Result.Ok string | value -> fail value)
   | _ -> failwith "fixme json"
@@ -65,7 +66,8 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
   | Date ->
     let encode d =
       Timmy.Date.to_time ~timezone:Timmy.Timezone.utc d
-      |> Timmy.Time.to_ptime |> Result.return
+      |> Timmy.Time.to_ptime
+      |> Result.return
     and decode t =
       Timmy.Time.of_ptime t
       |> Timmy.Date.of_time ~timezone:Timmy.Timezone.utc
@@ -104,8 +106,8 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     Caqti_type.custom ~decode ~encode
     @@ Caqti_type.t2 (caqti_of_type l) (caqti_of_type r)
 
-let rec caqti_of_types :
-    type l. l Sqml.Expression.Type.List.t -> l Hlist.t Caqti_type.t =
+let rec caqti_of_types : type l.
+    l Sqml.Expression.Type.List.t -> l Hlist.t Caqti_type.t =
   let open Caqti_type in
   function
   | hd :: tl ->
@@ -149,8 +151,7 @@ end = struct
     fmt f
       (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
 
-  let rec column_type_of_expression_type :
-      type t.
+  let rec column_type_of_expression_type : type t.
       t Sqml.Expression.Type.t -> Sqml.Expression.Column.Type.any_atomic option
       = function
     | Array _ -> None
@@ -210,7 +211,8 @@ end = struct
     let*! pool =
       let config = Caqti_pool_config.create ?max_size () in
       Caqti_lwt_unix.connect_pool ~pool_config:config (Uri.of_string uri)
-      |> Lwt.return |> error
+      |> Lwt.return
+      |> error
     in
     let create (module C : Caqti_lwt.CONNECTION) =
       let i = C.driver_info in
@@ -342,9 +344,8 @@ end = struct
       pp =
     match dialect with
     | `Pgsql ->
-      let rec element_type :
-          type element. element Sqml.Expression.Type.t -> (_, _, _, _) format4 =
-        function
+      let rec element_type : type element.
+          element Sqml.Expression.Type.t -> (_, _, _, _) format4 = function
         | Custom { repr; _ } -> element_type repr
         | Int -> "::int"
         | String -> ""
@@ -355,7 +356,8 @@ end = struct
       fun f ->
         Fmt.fmt
           Stdlib.(
-            "(ARRAY (SELECT value" ^^ element_type element
+            "(ARRAY (SELECT value"
+            ^^ element_type element
             ^^ " FROM json_array_elements_text(%a) AS value))")
           f pp
     | `Sqlite -> fun f -> Fmt.fmt "json('%a')" f pp
@@ -369,8 +371,8 @@ end = struct
         string fmt (Timmy.Time.to_rfc3339 t);
         char fmt '\''
       in
-      let rec pp_values :
-          type l. l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
+      let rec pp_values : type l.
+          l Hlist.t Sqml.Expression.Type.t -> l Hlist.t Fmt.t = function
         | [] -> nop
         | [ hd ] -> fun f [ hd_v ] -> pp_from_type hd f hd_v
         | hd :: tl ->
@@ -422,7 +424,8 @@ end = struct
         | Array element ->
           pp_array dialect element (const char '$' ++ using Int.succ int)
         | _ ->
-          const char '$' ++ using Int.succ int
+          const char '$'
+          ++ using Int.succ int
           ++ const
                (option (const string "::" ++ string))
                (Option.map (column_type_of_expression_type type_)
@@ -432,82 +435,98 @@ end = struct
       in
       let rec pp current_precedence : Expression.ast Fmt.t =
        fun f -> function
-        | Column { selectable; names; _ } ->
-          Fmt.list ~sep:comma
-            (const string selectable ++ const string "." ++ string)
-            f names
-        | Const { type_; value } -> pp_from_type dialect type_ f value
-        | Default -> Fmt.string f "DEFAULT"
-        | Funcall { name; args; _ } ->
-          (const string name ++ sp ++ const char '('
-          ++ list ~sep:comma (pp None)
-          ++ const char ')')
-            f args
-        | Infix { op; lhs; rhs; precedence } -> (
-          let fmt =
-            const (pp (Some precedence)) lhs
-            ++ sp ++ const string op ++ sp
-            ++ const
-                 (if precedence = -1 then
-                    const char '(' ++ pp (Some precedence) ++ const char ')'
-                  else pp (Some precedence))
-                 rhs
-          in
-          match current_precedence with
-          | Some current_precedence when current_precedence > precedence ->
-            (const char '(' ++ fmt ++ const char ')') f ()
-          | _ -> fmt f ())
-        | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
-        | Is_not_null ast -> (pp None ++ sp ++ const string "IS NOT NULL") f ast
-        | Join { left; right; on; type_ } ->
-          let verb =
-            match type_ with
-            | Inner -> "INNER JOIN"
-            | Outer -> "OUTER JOIN"
-            | Outer_left -> "LEFT OUTER JOIN"
-            | Outer_right -> "RIGHT OUTER JOIN"
-          in
-          (const (pp None) left
-          ++ sp ++ const string verb ++ sp
-          ++ const (pp None) right
-          ++ sp ++ const string "ON" ++ sp
-          ++ const (option ~none:(const string "true") pp_expression) on)
-            f ()
-        | List l -> list ~sep:comma (pp None) f l
-        | Null -> Fmt.string f "NULL"
-        | Select { for_; from; group_by; limit; skip_locked; what; where } ->
-          pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a%a)" (pp None) what
-            (pp None) from
-            (option (sp ++ box ~indent:2 (const string "WHERE " ++ pp None)))
-            where
-            (option (sp ++ box ~indent:2 (const string "GROUP BY " ++ pp None)))
-            group_by
-            (option (sp ++ const string "FOR " ++ pp_for))
-            for_
-            (option (sp ++ string))
-            (if skip_locked then Some "SKIP LOCKED" else None)
-            (option (sp ++ pp_limit))
-            limit
-        | Selectable { name; alias } ->
-          (const string name ++ const (option (const char ' ' ++ string)) alias)
-            f ()
-        | Star -> const string "*" f ()
-        | Switch { cases; default } ->
-          let pp_case f (cond, value) =
-            (const string "WHEN" ++ sp
-            ++ const (pp None) cond
-            ++ sp ++ const string "THEN" ++ sp
-            ++ const (pp None) value
-            ++ sp)
-              f ()
-          in
-          (const string "CASE" ++ sp
-          ++ const (list pp_case) cases
-          ++ const (option (const string "ELSE" ++ sp ++ pp None ++ sp)) default
-          ++ const string "END")
-            f ()
-        | Var { index; size; type_ } ->
-          (list ~sep:comma (var type_)) f @@ List.range index (index + size)
+         | Column { selectable; names; _ } ->
+           Fmt.list ~sep:comma
+             (const string selectable ++ const string "." ++ string)
+             f names
+         | Const { type_; value } -> pp_from_type dialect type_ f value
+         | Default -> Fmt.string f "DEFAULT"
+         | Funcall { name; args; _ } ->
+           (const string name
+           ++ sp
+           ++ const char '('
+           ++ list ~sep:comma (pp None)
+           ++ const char ')')
+             f args
+         | Infix { op; lhs; rhs; precedence } -> (
+           let fmt =
+             const (pp (Some precedence)) lhs
+             ++ sp
+             ++ const string op
+             ++ sp
+             ++ const
+                  (if precedence = -1 then
+                     const char '(' ++ pp (Some precedence) ++ const char ')'
+                   else pp (Some precedence))
+                  rhs
+           in
+           match current_precedence with
+           | Some current_precedence when current_precedence > precedence ->
+             (const char '(' ++ fmt ++ const char ')') f ()
+           | _ -> fmt f ())
+         | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
+         | Is_not_null ast ->
+           (pp None ++ sp ++ const string "IS NOT NULL") f ast
+         | Join { left; right; on; type_ } ->
+           let verb =
+             match type_ with
+             | Inner -> "INNER JOIN"
+             | Outer -> "OUTER JOIN"
+             | Outer_left -> "LEFT OUTER JOIN"
+             | Outer_right -> "RIGHT OUTER JOIN"
+           in
+           (const (pp None) left
+           ++ sp
+           ++ const string verb
+           ++ sp
+           ++ const (pp None) right
+           ++ sp
+           ++ const string "ON"
+           ++ sp
+           ++ const (option ~none:(const string "true") pp_expression) on)
+             f ()
+         | List l -> list ~sep:comma (pp None) f l
+         | Null -> Fmt.string f "NULL"
+         | Select { for_; from; group_by; limit; skip_locked; what; where } ->
+           pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a%a)" (pp None) what
+             (pp None) from
+             (option (sp ++ box ~indent:2 (const string "WHERE " ++ pp None)))
+             where
+             (option
+                (sp ++ box ~indent:2 (const string "GROUP BY " ++ pp None)))
+             group_by
+             (option (sp ++ const string "FOR " ++ pp_for))
+             for_
+             (option (sp ++ string))
+             (if skip_locked then Some "SKIP LOCKED" else None)
+             (option (sp ++ pp_limit))
+             limit
+         | Selectable { name; alias } ->
+           (const string name ++ const (option (const char ' ' ++ string)) alias)
+             f ()
+         | Star -> const string "*" f ()
+         | Switch { cases; default } ->
+           let pp_case f (cond, value) =
+             (const string "WHEN"
+             ++ sp
+             ++ const (pp None) cond
+             ++ sp
+             ++ const string "THEN"
+             ++ sp
+             ++ const (pp None) value
+             ++ sp)
+               f ()
+           in
+           (const string "CASE"
+           ++ sp
+           ++ const (list pp_case) cases
+           ++ const
+                (option (const string "ELSE" ++ sp ++ pp None ++ sp))
+                default
+           ++ const string "END")
+             f ()
+         | Var { index; size; type_ } ->
+           (list ~sep:comma (var type_)) f @@ List.range index (index + size)
       in
       pp None f ast
     and pp_for f = function
@@ -526,12 +545,13 @@ end = struct
           f
       and pp_returning : type t tag. (t, tag) Expression.option Fmt.t =
        fun f -> function
-        | Expression.None -> ()
-        | Some e ->
-          Fmt.(
-            (sp
-            ++ box ~indent:2 (const string "RETURNING" ++ sp ++ pp_expression))
-              f (Expression.to_ast e))
+         | Expression.None -> ()
+         | Some e ->
+           Fmt.(
+             (sp
+             ++ box ~indent:2 (const string "RETURNING" ++ sp ++ pp_expression)
+             )
+               f (Expression.to_ast e))
       in
       let pp_delete (type t tag)
           (from :
@@ -623,7 +643,8 @@ end = struct
                 (List.map ~f:outer @@ forable left) @ forable right
               | Join { left; right; type_ = Outer; _ } ->
                 (List.map ~f:outer @@ forable left)
-                @ List.map ~f:outer @@ forable right
+                @ List.map ~f:outer
+                @@ forable right
               | _ -> []
             in
             let module From = (val from) in
@@ -649,11 +670,13 @@ end = struct
         in
         let module Selectable = (val from) in
         (box ~indent:2
-           (const string "SELECT" ++ sp
+           (const string "SELECT"
+           ++ sp
            ++ const pp_expression Expression.(to_ast what))
         ++ sp
         ++ box ~indent:2
-             (const string "FROM" ++ sp
+             (const string "FROM"
+             ++ sp
              ++ const pp_expression (Selectable.to_ast ()))
         ++ const
              (option (sp ++ box ~indent:2 (pp_clause "WHERE")))
@@ -807,9 +830,8 @@ end = struct
     let printers =
       Printers_of_types.map ~f:{ f = (fun t -> pp_from_type dialect t) } types
     in
-    let rec print :
-        type l. l Hlist_printers.t -> Formatter.t -> l Hlist.t -> unit =
-      function
+    let rec print : type l.
+        l Hlist_printers.t -> Formatter.t -> l Hlist.t -> unit = function
       | [] -> fun _ [] -> ()
       | [ printer ] -> fun fmt [ value ] -> printer fmt value
       | printer :: printers ->
@@ -1050,8 +1072,8 @@ end = struct
         | _ ->
           Result.fail
             (`Sqml_engine
-              (Fmt.str "unrecognized data_type in information_schema: %S"
-                 data_type))
+               (Fmt.str "unrecognized data_type in information_schema: %S"
+                  data_type))
       in
       nullable type_
     in
@@ -1192,7 +1214,7 @@ end = struct
             let fail =
               Result.fail
                 (`Sqml_engine
-                  (Fmt.str "unrecognized index definition for %s: %s" name def))
+                   (Fmt.str "unrecognized index definition for %s: %s" name def))
             in
             let* def, unique =
               match

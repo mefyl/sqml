@@ -231,10 +231,10 @@ let to_list = function
   | type_, Var { index; _ } ->
     let rec f : type a. int -> a Hlist.t Type.t -> (a, 'tag) List.t =
      fun i -> function
-      | hd :: tl ->
-        (hd, Var { index = index + i; size = 1; type_ = hd }) :: f (i + 1) tl
-      | [] -> []
-      | _ -> failwith "unreachable C"
+       | hd :: tl ->
+         (hd, Var { index = index + i; size = 1; type_ = hd }) :: f (i + 1) tl
+       | [] -> []
+       | _ -> failwith "unreachable C"
     in
     f 0 type_
   | _ -> Fmt.failwith "unreachable A"

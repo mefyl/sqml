@@ -98,8 +98,8 @@ module Schema = struct
     match type_ with
     | Type (Atomic t) -> [ { name; type_ = Type t } ]
     | Type (Composite { columns; _ }) ->
-      let rec of_types :
-          type t. t Column.Type.List.t -> Schema.column_atomic list = function
+      let rec of_types : type t.
+          t Column.Type.List.t -> Schema.column_atomic list = function
         | Column.Type.List.[] -> []
         | (field, t) :: tl ->
           { name = name ^ "_" ^ field; type_ = Type t } :: of_types tl

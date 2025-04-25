@@ -26,8 +26,7 @@ struct
       module Column = struct
         type nonrec 't t = ('t, tag) Expression.Column.t
 
-        let rec bind_columns :
-            type l.
+        let rec bind_columns : type l.
             l Table.Column.List.t ->
             (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
           function
@@ -82,9 +81,9 @@ struct
       end
 
       let column_types =
-        let rec type_of_columns :
-            type a. (a, _) Expression.Column.List.t -> a Expression.Type.List.t
-            = function
+        let rec type_of_columns : type a.
+            (a, _) Expression.Column.List.t -> a Expression.Type.List.t =
+          function
           | hd :: tl ->
             Expression.Type.of_column_type hd.type_ :: type_of_columns tl
           | [] -> []
@@ -92,8 +91,7 @@ struct
         type_of_columns Column.columns
 
       let type_values =
-        let rec type_of_columns :
-            type a.
+        let rec type_of_columns : type a.
             (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
           function
           | hd :: tl ->
@@ -110,8 +108,7 @@ struct
       let const value = Expression.const type_ value
 
       module Expression = struct
-        let rec bind_expressions :
-            type l tag.
+        let rec bind_expressions : type l tag.
             (l, tag) Expression.Column.List.t -> (l, tag) Expression.List.t =
           function
           | Expression.Column.List.(head :: tail) ->
@@ -637,7 +634,8 @@ end
 
 let create (type tag) (module Model : S with type tag = tag) =
   Array.map ~f:Table.Query.create (Model.tables ())
-  |> Array.to_list |> List.concat
+  |> Array.to_list
+  |> List.concat
 
 let diff (type tag) (module Dialect : Dialect.S)
     (module Model : S with type tag = tag) meta =
@@ -647,7 +645,8 @@ let diff (type tag) (module Dialect : Dialect.S)
         (Dialect.table_name ?schema:t.name.schema t.name.name, t))
     |> Map.of_alist_exn (module String)
   and expected =
-    Model.tables () |> Array.to_list
+    Model.tables ()
+    |> Array.to_list
     |> List.map ~f:(fun ((module T : Table.S with type tag = tag) as t) ->
            ( Dialect.table_name ?schema:T.Meta.schema T.Meta.name,
              Table.Schema.of_table t ))
@@ -662,7 +661,9 @@ let diff (type tag) (module Dialect : Dialect.S)
             let f (({ name; _ } : Table.Schema.column_atomic) as c) =
               (name, c)
             in
-            columns |> Set.to_list |> List.map ~f
+            columns
+            |> Set.to_list
+            |> List.map ~f
             |> Map.of_alist_exn (module String)
           in
           (map effective.Table.Schema.columns, map expected.Table.Schema.columns)
@@ -734,7 +735,11 @@ let diff (type tag) (module Dialect : Dialect.S)
         Set.symmetric_diff effective_indexes expected_indexes |> Seq.map ~f
       in
       Seq.of_list [ columns_diff; constraints_diff; indexes_diff ]
-      |> Seq.concat |> Seq.to_list
+      |> Seq.concat
+      |> Seq.to_list
   in
   Map.symmetric_diff ~data_equal:Table.Schema.equal effective expected
-  |> Seq.map ~f |> Seq.to_list |> List.concat |> List.concat
+  |> Seq.map ~f
+  |> Seq.to_list
+  |> List.concat
+  |> List.concat
