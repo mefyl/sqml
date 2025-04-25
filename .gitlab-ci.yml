@@ -4,7 +4,7 @@ variables:
   POSTGRES_HOST_AUTH_METHOD: "trust"
 
 include:
-  - local: '/.logistic/ci/.gitlab-ci.yml'
+  - local: '/.logistic/ci/dune/.gitlab-ci.yml'
 
 check:
   services:

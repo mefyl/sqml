@@ -1,0 +1,17 @@
+(version 0.0.1)
+
+(build
+ (progn
+  (when
+   %{pkg-self:dev}
+   (run dune subst))
+  (run dune build -p %{pkg-self:name} -j %{jobs} @install)))
+
+(depends dune ppxlib semver2)
+
+(source
+ (fetch
+  (url
+   git+ssh://git@gitlab.routine.co/routine/metaversion#c867be9176e252e07f61067f7bc749444d56447c)))
+
+(dev)
