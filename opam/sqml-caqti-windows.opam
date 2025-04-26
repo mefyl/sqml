@@ -1,0 +1,21 @@
+opam-version: "2.0"
+version: "0.11.0"
+synopsis: "SQML Caqti backend engine."
+maintainer: ["mefyl <mefyl@gruntech.org>"]
+authors: ["mefyl <mefyl@gruntech.org>"]
+license: "GPLv3"
+homepage: "https://github.com/mefyl/sqml"
+bug-reports: "https://github.com/mefyl/sqml/issues"
+depends: [
+  "dune" {>= "2.8"}
+  "caqti" {>= "2.0.0" & < "2.1.0"}
+  "caqti-driver-postgresql"
+  "caqti-lwt"
+  "sqlite3" {>= "5.0.1"}
+  "sqml-windows" {= version}
+]
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build" "-x" "windows" "-p" "sqml-caqti" "-j" jobs "@install"]
+]
+dev-repo: "git+https://github.com/mefyl/sqml.git"
