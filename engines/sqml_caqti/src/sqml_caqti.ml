@@ -684,8 +684,8 @@ end = struct
         ++ const
              (option (sp ++ box ~indent:2 (pp_clause "GROUP BY")))
              Expression.(Option.map ~f:to_ast group_by)
-        ++ const (option (sp ++ pp_for)) for_
         ++ const (option (sp ++ pp_order_by)) order_by
+        ++ const (option (sp ++ pp_for)) for_
         ++ const
              (option (sp ++ string))
              (if skip_locked then Some "SKIP LOCKED" else None)
