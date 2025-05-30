@@ -51,13 +51,16 @@
           # { acid = "*"; logs = "0.7.0"; }
         , extraDevPackagesQuery ? { }
         , extraDevPackages ? (pkgs: [ ])
-        , extraOverlay ? (final: prev: { })
+          # An extra overlay applied to the OCaml packages set.
+          # The first argument is the global pkgs set, the two other ones are the standard overlay arguments for the OCaml pkg set.
+        , extraOCamlOverlay ? (pkgs: final: prev: { })
           # Regexes to filter in the opam files to pick
         , opamFilesRegexes ? [ "^.*\\.opam$" ]
         , resolveArgsOverride ? (args: args)
         , extraRepos ? [ ]
           # Unfortunately the OCaml version must be passed explicitly because it impacts the development packages (LSP, etc.) provided by the shell.
-        , ocamlVersion ? "5.2.0"
+        , ocamlVersion
+        , ocamlformatVersion ? builtins.head (builtins.match ".*^version=([^\n]*).*" (builtins.readFile (path + "/.ocamlformat")))
         , withSwift ? false
           # Whether to make the shell swift-compatible.
           # This isn't enabled by default as it is
@@ -66,10 +69,6 @@
         flake-utils.lib.eachDefaultSystem (
           system:
           let
-            ocamlPackagesVersion =
-              let parsedVersion = builtins.splitVersion ocamlVersion;
-              in builtins.elemAt parsedVersion 0 + "_" + builtins.elemAt parsedVersion 1;
-
             pkgs = import nixpkgs {
               inherit system;
               # Required for steam-run
@@ -103,6 +102,9 @@
                 # Useful development packages
                 developmentQuery = {
                   utop = "*";
+                  ocaml-lsp-server = "*";
+                  merlin = "*";
+                  ocamlformat = ocamlformatVersion;
                 } // pkgs.lib.optionalAttrs
                   (builtins.compareVersions ocamlVersion "5.2.0" >= 0)
                   {
@@ -132,7 +134,7 @@
                 query;
 
             overlay = final: prev: {
-              # You can add overrides here or pass them from each individual `shell.nix` via `extraOverlay`.
+              # You can add overrides here or pass them from each individual `shell.nix` via `extraOCamlOverlay`.
               # To add a local, development repo (e.g. your hacked `schematic` rather than the one from Routine's `opam` repo), you can `overrideAttrs` to replace the source like this:
               #
               # schematic = prev.schematic.overrideAttrs (a: {
@@ -141,30 +143,21 @@
               # });
               #
               # Remember to update your nix-shell (e.g. with `direnv reload`) after every change in the local repo.
-              schematic-http = prev.schematic-http.overrideAttrs (a: { buildInputs = a.nativeBuildInputs or [ ] ++ [ prev.logs ]; });
-              timmy-jsoo = prev.timmy-jsoo.overrideAttrs (a: { buildInputs = a.nativeBuildInputs or [ ] ++ [ prev.logs ]; });
-              timmy-unix = prev.timmy-unix.overrideAttrs (a: { buildInputs = a.buildInputs or [ ] ++ [ pkgs.tzdata prev.logs ]; });
-              timmy-lwt = prev.timmy-lwt.overrideAttrs (a: { buildInputs = a.buildInputs or [ ] ++ [ prev.logs ]; });
+              acid = prev.acid.overrideAttrs (a: {
+                doCheck = false;
+              });
               acid-jsoo = prev.acid-jsoo.overrideAttrs (a: { buildInputs = a.nativeBuildInputs or [ ] ++ [ final.acid-lwt ]; });
-
-              # On NixOS, this looks for timezone files in a non-existent location.
-              conf-tzdata = null;
-
-              utop = prev.utop.overrideAttrs (a: {
-                # Utop has multiple root directories and Nix only wants one
-                sourceRoot = ".";
-              });
-
-              landmarks = prev.landmarks.overrideAttrs (a: {
+              acid-lwt = prev.acid-lwt.overrideAttrs (a: {
                 doCheck = false;
               });
 
-              landmarks-ppx = prev.landmarks-ppx.overrideAttrs (a: {
-                doCheck = false;
+              cohttp = prev.cohttp.overrideAttrs (a: {
+                buildInputs = a.nativeBuildInputs or [ ] ++ [
+                  (final.http or null)
+                ];
               });
-
-              # Because of our pin of cohttp 6.0.0~beta2, which is weird
               cohttp-eio = prev.cohttp-eio.overrideAttrs (a: {
+                # Because of our pin of cohttp 6.0.0~beta2, which is weird
                 buildInputs = a.nativeBuildInputs or [ ] ++ [
                   prev.uri
                   prev.logs
@@ -174,77 +167,118 @@
                   final.cohttp
                 ];
               });
-              cohttp = prev.cohttp.overrideAttrs (a: {
-                buildInputs = a.nativeBuildInputs or [ ] ++ [
-                  (final.http or null)
-                ];
+              cohttp-lwt-unix = prev.cohttp-lwt-unix.overrideAttrs (a: {
+                doCheck = false;
               });
 
-              cohttp-lwt-unix = prev.cohttp-lwt-unix.overrideAttrs (a: {
+              # On NixOS, this looks for timezone files in a non-existent location.
+              conf-tzdata = null;
+
+              crdt = prev.crdt.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              gapi = prev.gapi.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              landmarks = prev.landmarks.overrideAttrs (a: {
+                doCheck = false;
+              });
+              landmarks-ppx = prev.landmarks-ppx.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              lcs = prev.lcs.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              mandate = prev.mandate.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              mellifera = prev.mellifera.overrideAttrs (a: {
+                doCheck = false;
+              });
+              mellifera-cohttp = prev.mellifera-cohttp.overrideAttrs (a: {
+                doCheck = false;
+              });
+              mellifera-httpaf = prev.mellifera-httpaf.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              merlin = prev.merlin.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              mrou = prev.mrou.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              ocaml-compiler = prev.ocaml-compiler.overrideAttrs (a: {
+                buildInputs = a.buildInputs ++ [ pkgs.zstd ];
+              });
+
+              rfc5545 = prev.rfc5545.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              routine-crdt = prev.routine-crdt.overrideAttrs (a: {
+                doCheck = false;
+              });
+              routine-metrics = prev.routine-metrics.overrideAttrs (a: {
+                doCheck = false;
+              });
+              routine-schemas = prev.routine-schemas.overrideAttrs (a: {
                 doCheck = false;
               });
 
               schematic = prev.schematic.overrideAttrs (a: {
                 doCheck = false;
               });
-              timmy-timezones = prev.timmy-timezones.overrideAttrs (a: {
+              schematic-cohttp-eio = prev.schematic-cohttp-eio.overrideAttrs (a: {
                 doCheck = false;
               });
-              acid = prev.acid.overrideAttrs (a: {
+              schematic-http = prev.schematic-http.overrideAttrs (a: {
+                buildInputs = a.nativeBuildInputs or [ ] ++ [ prev.logs ];
+              });
+              schematic-jsoo = prev.schematic-jsoo.overrideAttrs (a: {
                 doCheck = false;
               });
-              acid-lwt = prev.acid-lwt.overrideAttrs (a: {
+
+              sqml-caqti = prev.sqml-caqti.overrideAttrs (a: {
+                doCheck = false;
+              });
+
+              stripe = prev.stripe.overrideAttrs (a: {
                 doCheck = false;
               });
               stripe-schemas = prev.stripe-schemas.overrideAttrs (a: {
                 doCheck = false;
               });
-              gapi = prev.gapi.overrideAttrs (a: {
+
+              timmy-jsoo = prev.timmy-jsoo.overrideAttrs (a: { buildInputs = a.nativeBuildInputs or [ ] ++ [ prev.logs ]; });
+              timmy-lwt = prev.timmy-lwt.overrideAttrs (a: {
+                doCheck = false;
+                buildInputs = a.buildInputs or [ ] ++ [ prev.logs ];
+              });
+              timmy-timezones = prev.timmy-timezones.overrideAttrs (a: {
                 doCheck = false;
               });
-              crdt = prev.crdt.overrideAttrs (a: {
+              timmy-unix = prev.timmy-unix.overrideAttrs (a: {
                 doCheck = false;
+                buildInputs = a.buildInputs or [ ] ++ [ pkgs.tzdata prev.logs ];
               });
-              mandate = prev.mandate.overrideAttrs (a: {
-                doCheck = false;
-              });
-              stripe = prev.stripe.overrideAttrs (a: {
-                doCheck = false;
-              });
-              sqml-caqti = prev.sqml-caqti.overrideAttrs (a: {
-                doCheck = false;
-              });
-              routine-schemas = prev.routine-schemas.overrideAttrs (a: {
-                doCheck = false;
-              });
-              rfc5545 = prev.rfc5545.overrideAttrs (a: {
-                doCheck = false;
-              });
-              lcs = prev.lcs.overrideAttrs (a: {
-                doCheck = false;
-              });
-              mellifera = prev.mellifera.overrideAttrs (a: {
-                doCheck = false;
-              });
-              mellifera-httpaf = prev.mellifera-httpaf.overrideAttrs (a: {
-                doCheck = false;
-              });
-              mrou = prev.mrou.overrideAttrs (a: {
-                doCheck = false;
-              });
-              routine-metrics = prev.routine-metrics.overrideAttrs (a: {
-                doCheck = false;
+
+              utop = prev.utop.overrideAttrs (a: {
+                # Utop has multiple root directories and Nix only wants one
+                sourceRoot = ".";
               });
             };
 
-            scope' = scope.overrideScope (pkgs.lib.composeExtensions overlay extraOverlay);
+            scope' = scope.overrideScope (pkgs.lib.composeExtensions overlay (extraOCamlOverlay pkgs));
 
             devPackages = [
-              # For some reason, these packages cannot be installed via `opam-nix` as it leads to resolution conflicts 🤷 So we use the Nix packages instead.
-              pkgs.ocaml-ng."ocamlPackages_${ocamlPackagesVersion}".ocamlformat_0_27_0
-              pkgs.ocaml-ng."ocamlPackages_${ocamlPackagesVersion}".ocaml-lsp
-              pkgs.ocaml-ng."ocamlPackages_${ocamlPackagesVersion}".merlin
-
               # System libraries
               pkgs.appimage-run
               pkgs.autoconf
