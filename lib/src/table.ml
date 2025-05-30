@@ -1,6 +1,15 @@
 open Acid
 include Table_intf
 
+let rec pp_ordering : 'a. 'a ordering Fmt.t =
+ fun (type t) f (ordering : t ordering) ->
+  let open Fmt in
+  match ordering with
+  | Ordering.Ascending -> string f "ASC"
+  | Descending -> string f "DESC"
+  | Nulls_first ordering -> pf f "%a NULLS FIRST" pp_ordering ordering
+  | Nulls_last ordering -> pf f "%a NULLS LAST" pp_ordering ordering
+
 let pp_referential_action f =
   let open Fmt in
   function
@@ -24,10 +33,6 @@ let referential_action_of_string = function
   | "SET NULL" -> Some Set_null
   | "SET DEFAULT" -> Some Set_default
   | _ -> None
-
-let pp_ordering f =
-  let open Fmt in
-  function Ascending -> string f "ASC" | Descending -> string f "DESC"
 
 module Column = struct
   include Column
@@ -165,7 +170,19 @@ module Schema = struct
       let f : type kind tag. (kind, tag) Index.t -> _ =
         let of_columns columns =
           let f = function
-            | { Index.Column.column; order } -> (column.name, order)
+            | { Index.Column.column; order } ->
+              let rec index_order : 't. 't ordering -> Schema.Index.ordering =
+               fun (type t) (ordering : t ordering) ->
+                match ordering with
+                | Ascending ->
+                  { Schema.Index.ascending = true; nulls_first = None }
+                | Descending -> { ascending = false; nulls_first = None }
+                | Nulls_first order ->
+                  { (index_order order) with nulls_first = Some true }
+                | Nulls_last order ->
+                  { (index_order order) with nulls_first = Some false }
+              in
+              (column.name, index_order order)
           in
           Index.Column.List.map ~f:{ f } columns |> List_nonempty.of_list_exn
         in
@@ -316,6 +333,18 @@ module Query = struct
         (Dialect.string_of_type ~include_nullable:false to_)
         (Dialect.string_of_type ~include_nullable:false from)
     | Create_index (table_name, { columns; name = { name; schema }; unique }) ->
+      let rec pp_ordering f =
+        let open Fmt in
+        function
+        | { Schema.Index.ascending = true; nulls_first = None } ->
+          string f "ASC"
+        | { Schema.Index.ascending = false; nulls_first = None } ->
+          string f "DESC"
+        | { nulls_first = Some true; _ } as ordering ->
+          pf f "%a NULLS FIRST" pp_ordering ordering
+        | { nulls_first = Some false; _ } as ordering ->
+          pf f "%a NULLS LAST" pp_ordering ordering
+      in
       pf f "@[<2>CREATE %sINDEX %s@ ON %a@ (%a)@]"
         (if unique then "UNIQUE " else "")
         (Dialect.index_name ?schema name)

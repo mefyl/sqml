@@ -661,12 +661,25 @@ end = struct
           | Sqml.Expression.Share ->
             Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
           | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
-        and pp_order_by =
-          Fmt.(
-            pair ~sep:sp
-              (using Expression.to_ast
-              @@ (const string "ORDER BY " ++ pp_expression))
-              Table.pp_ordering)
+        and pp_order_by f =
+          let pp_order_by (expression, ordering) =
+            Fmt.pf f "%a %a"
+              (using Expression.to_ast pp_expression)
+              expression Table.pp_ordering ordering
+          in
+          function
+          | Sqml.Model.Order_by.[] -> ()
+          | head :: tail ->
+            Fmt.pf f "@ ORDER BY ";
+            pp_order_by head;
+            let rec loop = function
+              | Sqml.Model.Order_by.[] -> ()
+              | head :: tail ->
+                Fmt.comma f ();
+                pp_order_by head;
+                loop tail
+            in
+            loop tail
         in
         let module Selectable = (val from) in
         (box ~indent:2
@@ -684,7 +697,7 @@ end = struct
         ++ const
              (option (sp ++ box ~indent:2 (pp_clause "GROUP BY")))
              Expression.(Option.map ~f:to_ast group_by)
-        ++ const (option (sp ++ pp_order_by)) order_by
+        ++ const pp_order_by order_by
         ++ const (option (sp ++ pp_for)) for_
         ++ const
              (option (sp ++ string))
@@ -1234,7 +1247,10 @@ end = struct
                   match
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
-                           (c, Sqml.Table.Ascending (* FIXME *)))
+                           ( c,
+                             Sqml.Table.Schema.Index.
+                               { ascending = true; nulls_first = None }
+                             (* FIXME *) ))
                   with
                   | head :: tail -> Result.Ok List_nonempty.(head :: tail)
                   | _ -> fail

@@ -36,6 +36,14 @@ module type GROUP = sig
   type aggregated
 end
 
+module Order_by = struct
+  type 'tag t =
+    | ( :: ) :
+        (('t, 'tag) Expression.t * 't Table_intf.ordering) * 'tag t
+        -> 'tag t
+    | [] : _ t
+end
+
 module type S = sig
   val version : Semver.t
 
@@ -117,7 +125,7 @@ module type S = sig
             (module Selectable.S with type model = tag and type tag = 'tag);
           group_by : (_, 'tag) Expression.t option;
           limit : int option;
-          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
+          order_by : 'tag Order_by.t;
           skip_locked : bool;
           what : ('t, _) Expression.t;
           where : (bool, 'tag) Expression.t option;
@@ -223,7 +231,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     by:('group, 'tag) Expression.Column.t ->
     ?limit:int ->
-    ?order_by:('group, 'tag) Expression.t * Table.ordering ->
+    ?order_by:'tag Order_by.t ->
     ?where:(bool, 'tag) Expression.t ->
     (('group, 'tag Expression.aggregated) Expression.t ->
     ('what, 'tag Expression.aggregated) Expression.t) ->
@@ -233,7 +241,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?for_:Expression.for_ ->
     ?limit:int ->
-    ?order_by:(_, 'tag) Expression.t * Table.ordering ->
+    ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
@@ -252,7 +260,7 @@ module type S = sig
   val select_one :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ?for_:Expression.for_ ->
-    ?order_by:(_, 'tag) Expression.t * Table.ordering ->
+    ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->

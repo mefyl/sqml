@@ -92,16 +92,21 @@ type 'tag constraint_ =
       reference_with_actions
       -> 'tag constraint_
 
-type ordering =
-  | Ascending
-  | Descending
-[@@deriving eq, ord, sexp_of]
+module Ordering = struct
+  type _ t =
+    | Ascending : _ t
+    | Descending : _ t
+    | Nulls_first : 'a t -> 'a option t
+    | Nulls_last : 'a t -> 'a option t
+end
+
+type 't ordering = 't Ordering.t
 
 module Index = struct
   module Column = struct
     type ('t, 'tag) t = {
       column : ('t, 'tag) Expression.Column.t;
-      order : ordering;
+      order : 't ordering;
     }
 
     module List = Hlist.Make2 (struct
@@ -244,6 +249,11 @@ module Schema = struct
       columns : ((string * ordering) List_nonempty.t[@sexp.opaque]);
       name : name;
       unique : bool;
+    }
+
+    and ordering = {
+      ascending : bool;
+      nulls_first : bool option;
     }
     [@@deriving eq, ord, sexp_of]
   end

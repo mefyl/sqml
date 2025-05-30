@@ -342,7 +342,7 @@ struct
             (module Selectable.S with type model = tag and type tag = 'tag);
           group_by : (_, 'tag) Expression.t option;
           limit : int option;
-          order_by : ((_, 'tag) Expression.t * Table_intf.ordering) option;
+          order_by : 'tag Order_by.t;
           skip_locked : bool;
           what : ('t, _) Expression.t;
           where : (bool, 'tag) Expression.t option;
@@ -416,8 +416,8 @@ struct
   let group (type group selectable)
       ~(from :
          (module Selectable.S with type model = tag and type tag = selectable))
-      ~(by : (group, selectable) Expression.Column.t) ?limit ?order_by ?where
-      what =
+      ~(by : (group, selectable) Expression.Column.t) ?limit
+      ?(order_by = Order_by.[]) ?where what =
     let column = Expression.column by in
     let what =
       what (column |> Expression.Private.reify |> Expression.Private.conceal)
@@ -435,7 +435,8 @@ struct
            where;
          })
 
-  let select ~from ?for_ ?limit ?order_by ?(skip_locked = false) ?where what =
+  let select ~from ?for_ ?limit ?(order_by = Order_by.[]) ?(skip_locked = false)
+      ?where what =
     Query.Select
       (Select
          {
@@ -486,13 +487,14 @@ struct
            from;
            group_by = None;
            limit = None;
-           order_by = None;
+           order_by = [];
            skip_locked;
            what;
            where;
          })
 
-  let select_one ~from ?for_ ?order_by ?(skip_locked = false) ?where what =
+  let select_one ~from ?for_ ?(order_by = Order_by.[]) ?(skip_locked = false)
+      ?where what =
     Query.Select_unique
       (Select
          {
