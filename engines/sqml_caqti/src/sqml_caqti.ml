@@ -141,7 +141,12 @@ end = struct
 
   let dialect { dialect; _ } = dialect
 
-  type transaction = (module Caqti_lwt.CONNECTION) Lwt_guarded.t
+  type transaction = transaction_content Lwt_guarded.t
+
+  and transaction_content = {
+    connection : (module Caqti_lwt.CONNECTION);
+    mutable error : Sqml.Engine.error Option.t;
+  }
 
   let quote_pattern = String.Search_pattern.create "'"
 
@@ -763,6 +768,19 @@ end = struct
     in
     pp
 
+  let acquire transaction ~f =
+    let f = function
+      | { error = Some error; _ } ->
+        Lwt_result.fail (error : Sqml.Engine.error :> [> Sqml.Engine.error ])
+      | transaction -> (
+        f transaction.connection >>| function
+        | Result.Error (#Sqml.Engine.error as error) as result ->
+          let () = transaction.error <- Some error in
+          result
+        | result -> result)
+    in
+    Lwt_guarded.acquire ~f transaction
+
   let query transaction ?tags (type res arity)
       (query : (res, arity) Model.Query.t) :
       ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
@@ -830,7 +848,7 @@ end = struct
       in
       res |> error
     in
-    Lwt_guarded.acquire ~f transaction
+    acquire ~f transaction
 
   module Hlist_printers = Hlist.Make (struct
     type 'a t = 'a Fmt.t
@@ -926,7 +944,7 @@ end = struct
         let f (module C : Caqti_lwt.CONNECTION) =
           C.exec prepared values |> error
         in
-        Lwt_guarded.acquire ~f transaction
+        acquire ~f transaction
       in
       (Sqml.Model.Zero
         : (res, arity, ([> Sqml.Engine.error ] as 'error)) Sqml.Model.result)
@@ -935,7 +953,7 @@ end = struct
         let f (module C : Caqti_lwt.CONNECTION) =
           C.find prepared values |> error
         in
-        Lwt_guarded.acquire ~f transaction
+        acquire ~f transaction
       in
       Sqml.Model.One res
     | One_maybe prepared ->
@@ -943,7 +961,7 @@ end = struct
         let f (module C : Caqti_lwt.CONNECTION) =
           C.find_opt prepared values |> error
         in
-        Lwt_guarded.acquire ~f transaction
+        acquire ~f transaction
       in
       Sqml.Model.One_maybe res
     | Many prepared ->
@@ -960,7 +978,7 @@ end = struct
           in
           C.call ~f prepared values |> error
         in
-        Lwt_guarded.acquire ~f transaction
+        acquire ~f transaction
       in
       Sqml.Model.Many res
 
@@ -970,12 +988,12 @@ end = struct
 
   let connect t ?tags f =
     let* result =
-      let f c =
-        let module C = (val c : Caqti_lwt.CONNECTION) in
+      let f connection =
+        let module C = (val connection : Caqti_lwt.CONNECTION) in
         let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
         let*! () = C.start () in
         let f () =
-          f (Lwt_guarded.make c) >>= function
+          f (Lwt_guarded.make { connection; error = None }) >>= function
           | Result.Error e ->
             let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
             let*! () = C.rollback () in
@@ -1015,27 +1033,27 @@ end = struct
     "ROLLBACK TO SAVEPOINT __sqml;"
 
   let with_savepoint transaction ?tags f =
-    let f ((module C : Caqti_lwt.CONNECTION) as transaction) =
+    let f ((module C : Caqti_lwt.CONNECTION) as connection) =
       let* () = Log.debug @@ fun m -> m ?tags "savepoint start" in
-      let*! () = C.exec savepoint_start () in
+      let*! () = C.exec savepoint_start () |> error in
       let f () =
-        f (Lwt_guarded.make transaction) >>= function
+        f (Lwt_guarded.make { connection; error = None }) >>= function
         | Result.Error e ->
           let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
-          let*! () = C.exec savepoint_rollback () in
-          Lwt_result.fail (`Shitty_api e)
+          let*! () = C.exec savepoint_rollback () |> error in
+          Lwt_result.fail e
         | Result.Ok res ->
           let* () = Log.debug @@ fun m -> m ?tags "savepoint commit" in
-          let+! () = C.exec savepoint_commit () in
+          let+! () = C.exec savepoint_commit () |> error in
           res
       and catch exn =
         let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
-        let*! () = C.exec savepoint_rollback () in
+        let*! () = C.exec savepoint_rollback () |> error in
         raise exn
       in
       Lwt.catch f catch
     in
-    Lwt_guarded.acquire ~f transaction |> Lwt_result.map_error unmap
+    acquire ~f transaction
 
   let split_pattern pattern in_ =
     let length = String.Search_pattern.pattern pattern |> String.length
@@ -1090,7 +1108,7 @@ end = struct
       in
       nullable type_
     in
-    let f (module C : Caqti_lwt.CONNECTION) =
+    let f { connection = (module C : Caqti_lwt.CONNECTION); _ } =
       let open Caqti_request.Infix in
       let*! tables =
         let query =
