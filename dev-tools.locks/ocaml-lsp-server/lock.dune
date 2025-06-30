@@ -8,18 +8,15 @@
  (complete true)
  (used
   ((source
-    https://github.com/ocaml-dune/ocaml-binary-packages.git#fb7b39863a4d229e2cd3ac212459e15650c75d4d))
+    https://github.com/ocaml/opam-repository.git#c77f3ebebeb4b5811d2ba65835d9ff61614edb02))
   ((source
-    https://github.com/ocaml-dune/opam-overlays.git#2a9543286ff0e0656058fee5c0da7abc16b8717d))
-  ((source
-    https://github.com/ocaml/opam-repository.git#edaf2946e3454afde810eb17e5013eb7b2d138e3))
-  ((source
-    ssh://git@gitlab.routine.co/routine/opam#10e6a83ef3d3cb2252e34321308cd40fd953a51f))))
+    https://github.com/ocaml-dune/opam-overlays.git#2a9543286ff0e0656058fee5c0da7abc16b8717d))))
 
 (expanded_solver_variable_bindings
  (variable_values
   (with-doc false)
   (with-dev-setup false)
+  (sys-ocaml-version 4.14.2)
   (post true)
   (os-distribution gentoo)
   (os linux)
@@ -27,8 +24,9 @@
   (arch x86_64))
  (unset_variables
   with-test
-  sys-ocaml-version
   sys-ocaml-libc
+  sys-ocaml-cc
+  sys-ocaml-arch
   enable-ocaml-beta-repository
   dev
   build))

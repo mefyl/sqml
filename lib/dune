@@ -3,16 +3,7 @@
 (library
  (name sqml)
  (public_name sqml)
- (libraries
-  acid-lwt
-  ezjsonm
-  fmt
-  logs
-  logs.lwt
-  lwt
-  ptime
-  ptime.clock.os
-  semver2
-  timmy)
+ (libraries acid-lwt ezjsonm fmt logs logs.lwt lwt ptime ptime.clock.os
+  semver2 timmy)
  (preprocess
   (pps ppx_deriving.eq ppx_deriving.ord ppx_sexp_conv)))

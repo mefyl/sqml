@@ -3,117 +3,143 @@
 (build
  (choice
   ((((arch x86_64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian))
-    ((arch arm64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian))
-    ((arch x86_64)
-     (os linux)
-     (os-distribution alpine)
-     (os-family alpine))
-    ((arch arm64)
-     (os linux)
-     (os-distribution alpine)
-     (os-family alpine))
-    ((arch x86_64)
      (os linux))
     ((arch arm64)
      (os linux))
     ((arch x86_64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew))
+     (os macos))
     ((arch arm64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew)))
+     (os macos)))
    ((action
      (run pkg-config libpq))))
   ((((arch x86_64)
-     (os win32)
-     (os-distribution cygwin)
-     (os-family windows))
+     (os win32))
     ((arch arm64)
-     (os win32)
-     (os-distribution cygwin)
-     (os-family windows)))
+     (os win32)))
    ((action
      (run
-      pkgconf
       (when
        (catch_undefined_var
-        (and_absorb_undefined_var true %{pkg:host-arch-x86_32:installed})
+        (and_absorb_undefined_var
+         true
+         (<> %{os_distribution} cygwinports))
+        false)
+       pkgconf)
+      (when
+       (catch_undefined_var
+        (and_absorb_undefined_var
+         true
+         (<> %{os_distribution} cygwinports)
+         %{pkg:host-arch-x86_32:installed})
         false)
        --personality=i686-w64-mingw32)
       (when
        (catch_undefined_var
-        (and_absorb_undefined_var true %{pkg:host-arch-x86_64:installed})
+        (and_absorb_undefined_var
+         true
+         (<> %{os_distribution} cygwinports)
+         %{pkg:host-arch-x86_64:installed})
         false)
        --personality=x86_64-w64-mingw32)
+      (when
+       (catch_undefined_var
+        (or_absorb_undefined_var
+         false
+         (<> %{os_distribution} cygwin))
+        false)
+       pkg-config)
       libpq))))))
 
 (depends
  (choice
   ((((arch x86_64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian))
-    ((arch arm64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian))
-    ((arch x86_64)
-     (os linux)
-     (os-distribution alpine)
-     (os-family alpine))
-    ((arch arm64)
-     (os linux)
-     (os-distribution alpine)
-     (os-family alpine))
-    ((arch x86_64)
      (os linux))
     ((arch arm64)
      (os linux))
     ((arch x86_64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew))
+     (os macos))
     ((arch arm64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew)))
+     (os macos)))
    (conf-pkg-config))
   ((((arch x86_64)
-     (os win32)
-     (os-distribution cygwin)
-     (os-family windows)))
+     (os win32)))
    (conf-pkg-config host-arch-x86_64 conf-mingw-w64-postgresql-x86_64))
   ((((arch arm64)
-     (os win32)
-     (os-distribution cygwin)
-     (os-family windows)))
+     (os win32)))
    (conf-pkg-config host-arch-x86_32 conf-mingw-w64-postgresql-i686))))
 
 (depexts
- (choice
-  ((((arch x86_64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian))
-    ((arch arm64)
-     (os linux)
-     (os-distribution ubuntu)
-     (os-family debian)))
-   (libpq-dev))
-  ((((arch x86_64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew))
-    ((arch arm64)
-     (os macos)
-     (os-distribution homebrew)
-     (os-family homebrew)))
-   (libpq))))
+ ((libpq-dev)
+  (= %{os_family} debian))
+ ((libpq-dev)
+  (= %{os_family} ubuntu))
+ ((libpq-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} centos)
+   (>= %{os_version} 8)))
+ ((libpq-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} rhel)
+   (>= %{os_version} 8)))
+ ((libpq-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} ol)
+   (>= %{os_version} 8)))
+ ((libpq-devel)
+  (and_absorb_undefined_var
+   (= %{os_family} fedora)
+   (>= %{os_version} 30)))
+ ((postgresql15-client)
+  (and_absorb_undefined_var
+   (= %{os_distribution} freebsd)
+   (>= %{os_version} 13)))
+ ((postgresql96-client)
+  (and_absorb_undefined_var
+   (= %{os_distribution} freebsd)
+   (< %{os_version} 13)))
+ ((postgresql96-client)
+  (= %{os_distribution} openbsd))
+ ((postgresql-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} centos)
+   (< %{os_version} 8)))
+ ((postgresql-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} rhel)
+   (< %{os_version} 8)))
+ ((postgresql-devel)
+  (and_absorb_undefined_var
+   (= %{os_distribution} ol)
+   (< %{os_version} 8)))
+ ((postgresql-devel)
+  (and_absorb_undefined_var
+   (= %{os_family} fedora)
+   (< %{os_version} 30)))
+ ((postgresql-server-devel)
+  (or_absorb_undefined_var
+   (= %{os_family} suse)
+   (= %{os_family} opensuse)))
+ ((postgresql-dev)
+  (and_absorb_undefined_var
+   (= %{os_distribution} alpine)
+   (< %{os_version} 3.15)))
+ ((postgresql14-dev)
+  (and_absorb_undefined_var
+   (= %{os_distribution} alpine)
+   (>= %{os_version} 3.15)))
+ ((postgresql)
+  (and_absorb_undefined_var
+   (= %{os} win32)
+   (= %{os_distribution} cygwinports)))
+ ((postgresql-libs)
+  (= %{os_family} arch))
+ ((libpq)
+  (and_absorb_undefined_var
+   (= %{os} macos)
+   (= %{os_distribution} homebrew)))
+ ((postgresql96)
+  (and_absorb_undefined_var
+   (= %{os} macos)
+   (= %{os_distribution} macports)))
+ ((postgresql)
+  (= %{os_distribution} nixos)))

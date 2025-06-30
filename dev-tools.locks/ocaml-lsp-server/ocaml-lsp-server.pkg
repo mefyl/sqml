@@ -1,14 +1,41 @@
-(version
- 1.22.0+binary-ocaml-5.3.0-built-2025-02-04.2-x86_64-unknown-linux-musl)
+(version 1.23.0)
 
-(install
+(build
  (progn
-  (run find . -type d -exec mkdir -p %{prefix}/{} ";")
-  (run find . -type f -exec cp {} %{prefix}/{} ";")))
+  (when
+   %{pkg-self:dev}
+   (run dune subst))
+  (run dune build -p %{pkg-self:name} -j %{jobs} @install)))
+
+(depends
+ dune
+ yojson
+ base
+ lsp
+ jsonrpc
+ re
+ ppx_yojson_conv_lib
+ dune-rpc
+ chrome-trace
+ dyn
+ stdune
+ fiber
+ ocaml
+ xdg
+ ordering
+ dune-build-info
+ spawn
+ astring
+ camlp-streams
+ ocamlc-loc
+ pp
+ csexp
+ ocamlformat-rpc-lib
+ merlin-lib)
 
 (source
  (fetch
   (url
-   https://github.com/ocaml-dune/ocaml-binary-packages/releases/download/2025-02-04.2/ocaml-lsp-server.1.22.0+binary-ocaml-5.3.0-built-2025-02-04.2-x86_64-unknown-linux-musl.tar.gz)
+   https://github.com/ocaml/ocaml-lsp/releases/download/1.23.0/lsp-1.23.0.tbz)
   (checksum
-   sha256=f9a20a565c8407ea4c71076ffb18552e3b6350011f7bc66cddedeb2551e2bfc7)))
+   sha256=7f2bd023b54a80eace16286d28891c1360768946052c939918a8a9cd95340e7d)))
