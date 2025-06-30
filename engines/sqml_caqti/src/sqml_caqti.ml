@@ -195,6 +195,33 @@ end = struct
            } :
             Caqti_error.query_error) ->
         `Sqml_deadlock
+      | `Request_failed
+          ({
+             msg =
+               Caqti_driver_postgresql.Result_error_msg
+                 { sqlstate = "23502"; _ };
+             _;
+           } :
+            Caqti_error.query_error) ->
+        `Not_null_violation
+      | `Request_failed
+          ({
+             msg =
+               Caqti_driver_postgresql.Result_error_msg
+                 { sqlstate = "23503"; _ };
+             _;
+           } :
+            Caqti_error.query_error) ->
+        `Foreign_key_violation
+      | `Request_failed
+          ({
+             msg =
+               Caqti_driver_postgresql.Result_error_msg
+                 { sqlstate = "23505"; _ };
+             _;
+           } :
+            Caqti_error.query_error) ->
+        `Unique_violation
       | e -> `Sqml_engine (Caqti_error.show e)
     in
     Result.map_error ~f

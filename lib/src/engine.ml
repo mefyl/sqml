@@ -1,14 +1,20 @@
 open Acid_lwt
 
 type error =
-  [ `Sqml_deadlock
+  [ `Foreign_key_violation
+  | `Not_null_violation
+  | `Sqml_deadlock
   | `Sqml_engine of string
+  | `Unique_violation
   ]
 [@@deriving eq]
 
 let pp_error fmt = function
+  | `Foreign_key_violation -> Fmt.string fmt "SQL foreign key violation"
+  | `Not_null_violation -> Fmt.string fmt "SQL not null violation"
   | `Sqml_deadlock -> Fmt.string fmt "SQL deadlock detected"
   | `Sqml_engine error -> Fmt.pf fmt "SQL engine error: %s" error
+  | `Unique_violation -> Fmt.string fmt "SQL unique violation"
 
 let error_to_string e = Fmt.to_to_string pp_error e
 
