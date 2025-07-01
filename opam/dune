@@ -23,3 +23,16 @@
     (run git log
      "--pretty=url { src: \"git://git@gitlab.routine.co:routine/sqml#%H\" }"
      -n1)))))
+
+(rule
+ (target sqml-schematic.%{version:sqml-schematic}.opam)
+ (deps
+  (:opam ../sqml-schematic.opam))
+ (action
+  (with-stdout-to
+   %{target}
+   (progn
+    (cat %{opam})
+    (run git log
+     "--pretty=url { src: \"git://git@gitlab.routine.co:routine/sqml#%H\" }"
+     -n1)))))

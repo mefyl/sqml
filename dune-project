@@ -57,3 +57,28 @@
    (>= 5.0.1))
   (sqml
    (= :version))))
+
+(package
+ (name sqml-schematic)
+ (synopsis "SQML schematic plugin.")
+ (depends
+  (schematic
+   (and
+    (>= 0.21.0)
+    (< 0.22.0)))
+  (sqml
+   (= :version))))
+
+(pin
+ (url
+  git+ssh://git@gitlab.routine.co/routine/schematic#a0d1a3e011495cea19b55cdcb6d66f1ee2179c5b)
+ (package
+  (name schematic)
+  (version 0.21.0)))
+
+(pin
+ (url
+  git+ssh://git@gitlab.routine.co/routine/timmy#80198a36e3f7c72fd7233ef28d62c6c840ba3232)
+ (package
+  (name timmy)
+  (version 1.1.8)))

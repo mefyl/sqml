@@ -1,6 +1,6 @@
 include module type of Model_intf
 
-module Make (Meta : sig
+module Make (_ : sig
   val version : Semver.t
 end) : S
 

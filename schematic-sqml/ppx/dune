@@ -1,0 +1,7 @@
+(library
+ (name sqml_schematic_ppx)
+ (public_name sqml-schematic.ppx)
+ (kind ppx_deriver)
+ (libraries acid schematic.ppx)
+ (preprocess
+  (pps ppxlib.metaquot)))
