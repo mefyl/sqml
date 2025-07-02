@@ -1,11 +1,16 @@
 (version 0.21.0)
 
 (build
- (all_platforms ((dune))))
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
 
 (depends
  (all_platforms
-  (base
+  (dune
+   base
    base64
    ezjsonm
    fmt
@@ -25,6 +30,6 @@
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/schematic#a0d1a3e011495cea19b55cdcb6d66f1ee2179c5b)))
+   git+ssh://git@gitlab.routine.co/routine/schematic#59e013071c8cb16b3101cfdcd0edb3652dbb9ec5)))
 
 (dev)
