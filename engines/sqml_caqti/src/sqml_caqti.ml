@@ -126,6 +126,12 @@ let type_of_expr e = Sqml.Expression.to_type e |> caqti_of_type
 module Make (Model : Model.S) : sig
   include Engine.S with module Model = Model
 
+  type current_query
+
+  val current_query : transaction -> current_query option
+  val pp_current_query : current_query Fmt.t
+  val make : ?max_size:int -> string -> (t, [> Engine.error ]) Lwt_result.t
+
   val with_savepoint :
     transaction ->
     ?tags:Logs.Tag.set ->
@@ -145,12 +151,13 @@ end = struct
 
   let dialect { dialect; _ } = dialect
 
-  type transaction = transaction_content Lwt_guarded.t
-
-  and transaction_content = {
-    connection : (module Caqti_lwt.CONNECTION);
+  type transaction = {
+    connection : (module Caqti_lwt.CONNECTION) Lwt_guarded.t;
+    current_query : current_query option ref;
     mutable error : Sqml.Engine.error Option.t;
   }
+
+  and current_query = Query : _ Model.Query.t -> current_query
 
   let quote_pattern = String.Search_pattern.create "'"
 
@@ -820,18 +827,26 @@ end = struct
     in
     pp
 
+  let current_query { current_query; _ } = !current_query
+  let pp_current_query f (Query q) = pp_query `Pgsql f q
+
   let acquire transaction ~f =
-    let f = function
-      | { error = Some error; _ } ->
+    let f connection =
+      match transaction.error with
+      | Some error ->
         Lwt_result.fail (error : Sqml.Engine.error :> [> Sqml.Engine.error ])
-      | transaction -> (
-        f transaction.connection >>| function
+      | None -> (
+        f connection >>| function
         | Result.Error (#Sqml.Engine.error as error) as result ->
           let () = transaction.error <- Some error in
           result
         | result -> result)
     in
-    Lwt_guarded.acquire ~f transaction
+    Lwt_guarded.acquire ~f transaction.connection
+
+  let with_current_query transaction query f =
+    let () = transaction.current_query := Some (Query query) in
+    Lwt.finalize f (fun () -> Lwt.return (transaction.current_query := None))
 
   let query transaction ?tags (type res arity)
       (query : (res, arity) Model.Query.t) :
@@ -946,6 +961,8 @@ end = struct
         ('args, 'res, [ `Many | `One | `Zero ]) Caqti_request.t
         -> ('args, 'res, Sqml.Model.many) prepared_query
 
+  let pp_prepared fmt { query; _ } = pp_query `Pgsql fmt query
+
   let prepare (type args res arity) (types : args Expression.Type.List.t)
       (query : (args, 'tag) Expression.List.t -> (res, arity) Model.Query.t) :
       (args, _, res, arity) prepared =
@@ -994,6 +1011,7 @@ end = struct
     | Zero prepared ->
       let+! () =
         let f (module C : Caqti_lwt.CONNECTION) =
+          with_current_query transaction query @@ fun () ->
           C.exec prepared values |> error
         in
         acquire ~f transaction
@@ -1003,6 +1021,7 @@ end = struct
     | One prepared ->
       let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
+          with_current_query transaction query @@ fun () ->
           C.find prepared values |> error
         in
         acquire ~f transaction
@@ -1011,6 +1030,7 @@ end = struct
     | One_maybe prepared ->
       let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
+          with_current_query transaction query @@ fun () ->
           C.find_opt prepared values |> error
         in
         acquire ~f transaction
@@ -1019,6 +1039,7 @@ end = struct
     | Many prepared ->
       let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
+          with_current_query transaction query @@ fun () ->
           let f response =
             let f stream =
               Lwt.bind (stream ()) ~f:(function
@@ -1040,12 +1061,17 @@ end = struct
 
   let connect t ?tags f =
     let* result =
-      let f connection =
-        let module C = (val connection : Caqti_lwt.CONNECTION) in
+      let f ((module C : Caqti_lwt.CONNECTION) as connection) =
         let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
         let*! () = C.start () in
         let f () =
-          f (Lwt_guarded.make { connection; error = None }) >>= function
+          f
+            {
+              connection = Lwt_guarded.make connection;
+              current_query = ref None;
+              error = None;
+            }
+          >>= function
           | Result.Error e ->
             let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
             let*! () = C.rollback () in
@@ -1089,7 +1115,13 @@ end = struct
       let* () = Log.debug @@ fun m -> m ?tags "savepoint start" in
       let*! () = C.exec savepoint_start () |> error in
       let f () =
-        f (Lwt_guarded.make { connection; error = None }) >>= function
+        f
+          {
+            connection = Lwt_guarded.make connection;
+            current_query = transaction.current_query;
+            error = None;
+          }
+        >>= function
         | Result.Error e ->
           let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
           let*! () = C.exec savepoint_rollback () |> error in
@@ -1160,7 +1192,7 @@ end = struct
       in
       nullable type_
     in
-    let f { connection = (module C : Caqti_lwt.CONNECTION); _ } =
+    let f (module C : Caqti_lwt.CONNECTION) =
       let open Caqti_request.Infix in
       let*! tables =
         let query =
@@ -1355,5 +1387,5 @@ end = struct
       in
       Sequence.of_list tables |> Sequence.Seq.map ~f |> Sequence.to_list
     in
-    connect t (fun transaction -> Lwt_guarded.acquire ~f transaction)
+    connect t (fun transaction -> Lwt_guarded.acquire ~f transaction.connection)
 end

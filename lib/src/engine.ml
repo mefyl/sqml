@@ -34,6 +34,7 @@ module type S = sig
 
   type ('args, 'tag, 'res, 'arity) prepared
 
+  val pp_prepared : _ prepared Fmt.t
   val dialect : t -> (module Dialect.S)
 
   val prepare :
