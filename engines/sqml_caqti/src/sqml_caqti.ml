@@ -130,7 +130,6 @@ module Make (Model : Model.S) : sig
 
   val current_query : transaction -> current_query option
   val pp_current_query : current_query Fmt.t
-  val make : ?max_size:int -> string -> (t, [> Engine.error ]) Lwt_result.t
 
   val with_savepoint :
     transaction ->
@@ -140,7 +139,7 @@ module Make (Model : Model.S) : sig
 
   val make :
     ?max_size:int ->
-    ?post_creation_statements:string list ->
+    ?post_creation_statements:(Caqti_driver_info.dialect_tag -> string list) ->
     string ->
     (t, [> Engine.error ]) Lwt_result.t
 end = struct
@@ -249,7 +248,7 @@ end = struct
     in
     map
 
-  let make ?max_size ?(post_creation_statements : string list = []) uri =
+  let make ?max_size ?(post_creation_statements = fun _ -> []) uri =
     let open Caqti_request.Infix in
     let*! pool =
       let config = Caqti_pool_config.create ?max_size () in
@@ -258,9 +257,8 @@ end = struct
       |> error
     in
     let create (module C : Caqti_lwt.CONNECTION) =
-      let i = C.driver_info in
       let dialect, found_query =
-        match Caqti_driver_info.dialect_tag i with
+        match Caqti_driver_info.dialect_tag C.driver_info with
         | `Sqlite ->
           ( Sqml.Dialect.sqlite,
             (Caqti_type.unit ->! Caqti_type.bool)
@@ -273,7 +271,7 @@ end = struct
                table_schema = 'sqml' AND table_name = 'metadata')" )
         | _ -> failwith "dialect not handled"
       in
-      if not @@ Caqti_driver_info.can_transact i then
+      if not @@ Caqti_driver_info.can_transact C.driver_info then
         Lwt_result.return (None, dialect)
       else
         let*! found = C.find found_query () in
@@ -284,9 +282,10 @@ end = struct
               (Fmt.str
                  "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
                   DESC LIMIT 1"
-                 (table_name i (Some "sqml") "metadata")
-                 (if Poly.(Caqti_driver_info.dialect_tag i = `Sqlite) then
-                    "datetime(migrated)"
+                 (table_name C.driver_info (Some "sqml") "metadata")
+                 (if
+                    Poly.(Caqti_driver_info.dialect_tag C.driver_info = `Sqlite)
+                  then "datetime(migrated)"
                   else "migrated"))
           in
           let*! major, minor, subminor, _ = C.find query () in
@@ -301,11 +300,10 @@ end = struct
             Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
-
           (* Create tables and related indexes *)
           let create_table (type tag) (module T : Table.S with type tag = tag) =
             let*! () =
-              match Caqti_driver_info.dialect_tag i with
+              match Caqti_driver_info.dialect_tag C.driver_info with
               | `Sqlite -> Lwt_result.return ()
               | `Pgsql -> (
                 match T.Meta.schema with
@@ -340,9 +338,12 @@ end = struct
             Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
           in
           let*! () = Array.iter ~f:create_table (Model.tables ()) in
-
           (* Apply post-creation statements *)
           let*! () =
+            let post_creation_statements =
+              post_creation_statements
+              @@ Caqti_driver_info.dialect_tag C.driver_info
+            in
             let* () =
               Log.debug (fun m ->
                   m "run post-creation statements:@ %a"
@@ -365,7 +366,7 @@ end = struct
               (Fmt.str
                  "INSERT INTO %s (major, minor, subminor, migrated) VALUES (?, \
                   ?, ?, ?)"
-                 (table_name i (Some "sqml") "metadata"))
+                 (table_name C.driver_info (Some "sqml") "metadata"))
           in
           let*! () =
             let Semver.{ major; minor; patch; _ } = Model.version
