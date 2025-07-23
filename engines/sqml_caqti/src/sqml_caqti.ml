@@ -132,7 +132,11 @@ module Make (Model : Model.S) : sig
     (transaction -> ('result, ([> Engine.error ] as 'error)) Lwt_result.t) ->
     ('result, 'error) Lwt_result.t
 
-  val make : ?max_size:int -> string -> (t, [> Engine.error ]) Lwt_result.t
+  val make :
+    ?max_size:int ->
+    ?post_creation_statements:string list ->
+    string ->
+    (t, [> Engine.error ]) Lwt_result.t
 end = struct
   type t = {
     dialect : Sqml.Dialect.t;
@@ -238,7 +242,7 @@ end = struct
     in
     map
 
-  let make ?max_size uri =
+  let make ?max_size ?(post_creation_statements : string list = []) uri =
     let open Caqti_request.Infix in
     let*! pool =
       let config = Caqti_pool_config.create ?max_size () in
@@ -290,6 +294,8 @@ end = struct
             Log.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
+
+          (* Create tables and related indexes *)
           let create_table (type tag) (module T : Table.S with type tag = tag) =
             let*! () =
               match Caqti_driver_info.dialect_tag i with
@@ -307,7 +313,6 @@ end = struct
               | _ -> failwith "dialect not handled"
             in
             let queries = Sqml.Table.Query.create (module T) in
-            (* let queries = Sqml.Model.table_schema dialect (module T) in *)
             let* () =
               Log.debug (fun m ->
                   m "create table:@ %a"
@@ -321,13 +326,33 @@ end = struct
               let query =
                 (Caqti_type.unit ->. Caqti_type.unit)
                   ~oneshot:true
-                  (Fmt.str "%a" (Sqml.Table.Query.pp dialect) query)
+                  (Fmt.to_to_string (Sqml.Table.Query.pp dialect) query)
               in
               C.exec query ()
             in
             Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
           in
           let*! () = Array.iter ~f:create_table (Model.tables ()) in
+
+          (* Apply post-creation statements *)
+          let*! () =
+            let* () =
+              Log.debug (fun m ->
+                  m "run post-creation statements:@ %a"
+                    Fmt.(list ~sep:(const char ';' ++ sp) string)
+                    post_creation_statements)
+            in
+            let exec query =
+              let query =
+                (Caqti_type.unit ->. Caqti_type.unit) ~oneshot:true query
+              in
+              C.exec query ()
+            in
+            post_creation_statements
+            |> Lwt_list.map_s exec
+            |> Lwt.map ~f:Result.all_unit
+          in
+
           let query =
             (caqti_metadata_type ->. Caqti_type.unit)
               (Fmt.str
