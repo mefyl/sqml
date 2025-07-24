@@ -488,15 +488,23 @@ end = struct
         match type_ with
         | Array element ->
           pp_array dialect element (const char '$' ++ using Int.succ int)
-        | _ ->
-          const char '$'
-          ++ using Int.succ int
-          ++ const
-               (option (const string "::" ++ string))
-               (Option.map (column_type_of_expression_type type_)
-                  ~f:(fun (Type t : Sqml.Expression.Column.Type.any_atomic) ->
-                    Sqml.Dialect.Postgresql.string_of_type
-                      ~include_nullable:false t))
+        | type_ -> (
+          let type_ =
+            type_
+            |> column_type_of_expression_type
+            |> Option.map
+                 ~f:(fun (Type t : Sqml.Expression.Column.Type.any_atomic) ->
+                   Sqml.Dialect.Postgresql.string_of_type
+                     ~include_nullable:false t)
+          in
+          match type_ with
+          | None -> const char '$' ++ using Int.succ int
+          | Some type_ ->
+            const string "CAST($"
+            ++ using Int.succ int
+            ++ const string " AS "
+            ++ const string type_
+            ++ const char ')')
       in
       let rec pp current_precedence : Expression.ast Fmt.t =
        fun f -> function
