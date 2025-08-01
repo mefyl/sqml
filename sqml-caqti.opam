@@ -9,7 +9,7 @@ homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
   "dune" {>= "3.20"}
-  "caqti" {>= "2.0.0" & < "2.1.0"}
+  "caqti" {>= "2.0.0" & < "3.0.0"}
   "caqti-driver-postgresql"
   "caqti-driver-sqlite3" {with-test}
   "caqti-lwt"
