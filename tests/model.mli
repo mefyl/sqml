@@ -46,13 +46,17 @@ module Ts : sig
 end
 
 module Configs : sig
-  type owner = {
-    first_name : string;
-    last_name : string;
-    age : int;
-  }
+  module Owner : sig
+    type t = {
+      first_name : string;
+      last_name : string;
+      age : int;
+    }
+    [@@deriving eq, show]
+  end
 
-  and t = string * Ezjsonm.value * owner
+  type t = string * Ezjsonm.value * owner
+  and owner = Owner.t
 
   include Table.S with type model = tag and type Meta.mapped = t
 

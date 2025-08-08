@@ -141,13 +141,17 @@ type value =
 [@@deriving eq, show]
 
 module Configs = struct
-  type owner = {
-    first_name : string;
-    last_name : string;
-    age : int;
-  }
+  module Owner = struct
+    type t = {
+      first_name : string;
+      last_name : string;
+      age : int;
+    }
+    [@@deriving eq, show]
+  end
 
-  and t = string * value * owner [@@deriving eq, show]
+  type t = string * value * owner
+  and owner = Owner.t [@@deriving eq, show]
 
   module Meta_ = struct
     include Table.Meta (struct
@@ -169,10 +173,10 @@ module Configs = struct
                  decode =
                    (function
                    | [ first_name; last_name; age ] ->
-                     { first_name; last_name; age });
+                     { Owner.first_name; last_name; age });
                  encode =
                    (function
-                   | { first_name; last_name; age } ->
+                   | { Owner.first_name; last_name; age } ->
                      [ first_name; last_name; age ]);
                }))
 
