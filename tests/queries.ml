@@ -634,6 +634,21 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       |> Lwt_result.return
     in
     Lwt_result.return ()
+
+  let composite db =
+    let query =
+      let open Sqml.Expression in
+      Model.update
+        (module Model.Configs)
+        [
+          Model.Configs.Column.owner :=
+            const
+              (to_type Model.Configs.owner)
+              { first_name = ""; last_name = ""; age = 0 };
+        ]
+    in
+    let* Zero = Engine.query db query in
+    Lwt_result.return ()
 end
 
 module Caqti = Sqml_caqti.Make (Model)
@@ -679,7 +694,6 @@ let () =
              in
              Lwt_io.with_temp_file ~prefix:"sqml-test" f
            in
-
            [
              test_case "select" @@ make Caqti_test.select;
              test_case "insert" @@ make Caqti_test.insert;
@@ -757,5 +771,6 @@ let () =
              test_case_db "versioning-stable" Caqti_test.Versioning.stable;
              test_case "prepared" Caqti_test.prepared;
              test_case "join" Caqti_test.join;
+             test_case "composite" Caqti_test.composite;
            ] );
        ]

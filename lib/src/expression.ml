@@ -42,6 +42,13 @@ module Column = struct
 
     let equal_any_atomic (Type l : any_atomic) (Type r : any_atomic) =
       equal_atomic l r
+
+    let rec atomic_columns : 'a. string -> 'a t -> string list =
+     fun name -> function
+      | Atomic _ -> [ name ]
+      | Composite { columns; _ } ->
+        Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
+      | Custom { repr; _ } -> atomic_columns name repr
   end
 
   type ('t, 'tag) t = {
@@ -53,6 +60,8 @@ module Column = struct
   module List = Hlist.Make2 (struct
     type nonrec ('t, 'tag) t = ('t, 'tag) t
   end)
+
+  let atomic_columns { name; type_; _ } = Type.atomic_columns name type_
 end
 
 module Type = struct
@@ -76,7 +85,7 @@ module Type = struct
     | Time -> Time
     | Varchar _ -> String
 
-  let of_column_type : type a. a Column.Type.t -> a t = function
+  let rec of_column_type : type a. a Column.Type.t -> a t = function
     | Atomic t -> of_atomic_column_type t
     | Composite { columns; decode; encode } ->
       let types =
@@ -89,6 +98,9 @@ module Type = struct
       in
       Custom
         { decode = Fn.compose Result.return decode; encode; repr = conv types }
+    | Custom { decode; encode; repr } ->
+      let repr = of_column_type repr in
+      Custom { decode; encode; repr }
 
   let rec pp : type a. a t Fmt.t =
     let open Fmt in
@@ -179,13 +191,9 @@ let to_type (t, _) = t
 
 type ('t, 'tag) t = 't Type.t * ast
 
-let atomic_columns = function
-  | { Column.name; type_ = Atomic _; _ } -> [ name ]
-  | { name; type_ = Composite { columns; _ }; _ } ->
-    Column.Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
-
 let column (Column.{ selectable; type_; _ } as c) =
-  (Type.of_column_type type_, Column { names = atomic_columns c; selectable })
+  ( Type.of_column_type type_,
+    Column { names = Column.atomic_columns c; selectable } )
 
 type ('t, 'tag) option =
   | None : (unit, 'tag) option
@@ -334,11 +342,43 @@ type 'tag assignment =
       -> 'tag assignment
 
 let assignment_to_asts (Set { column; value }) =
-  match column with
-  | { Column.name; type_ = Atomic _; _ } -> [ (name, snd value) ]
-  | { name; type_ = Composite { columns; _ }; _ } ->
-    Column.Type.List.map columns
-      ~f:{ f = (fun (c, _) -> (name ^ "_" ^ c, snd value)) }
+  let rec asts :
+      'column 'tag 'value.
+      ('column, 'tag) Column.t -> ('value, 'tag) t -> (string * ast) list =
+   fun (type column tag value) (column : (column, tag) Column.t)
+       (value : (value, tag) t) ->
+    match (column, snd value) with
+    | { Column.name; type_ = Atomic _; _ }, ast -> [ (name, ast) ]
+    | { name; type_ = Composite { columns; _ }; _ }, (Const _ as const) ->
+      let values =
+        let rec values = function
+          | Const { type_ = []; value = [] } -> []
+          | Const { type_ = hd_t :: tl_t; value = hd :: tl } ->
+            let hd_values = values (Const { type_ = hd_t; value = hd }) in
+            hd_values @ values (Const { type_ = tl_t; value = tl })
+          | Const { type_ = Custom { repr; encode; _ }; value } ->
+            values (Const { type_ = repr; value = encode value })
+          | value -> [ value ]
+        in
+        values const
+      in
+      Column.Type.List.mapi columns
+        ~f:
+          {
+            f =
+              (fun i (c, _) ->
+                match Acid.List.nth values i with
+                | None ->
+                  Fmt.failwith "missing value for composite column %s" name
+                | Some ast -> (name ^ "_" ^ c, ast));
+          }
+    | { name; type_ = Composite _; _ }, ast ->
+      Fmt.failwith "unexpected value for composite column %s: %a" name pp_ast
+        ast
+    | { type_ = Custom { repr; _ }; _ }, _ ->
+      asts { column with type_ = repr } value
+  in
+  asts column value
 
 module Infix = struct
   let arithmetics precedence op (_, lhs) (_, rhs) =

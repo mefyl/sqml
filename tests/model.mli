@@ -56,6 +56,14 @@ module Configs : sig
 
   include Table.S with type model = tag and type Meta.mapped = t
 
+  module Column : sig
+    include module type of Column
+
+    val id : string Expression.column
+    val config : Ezjsonm.value Expression.column
+    val owner : owner Expression.column
+  end
+
   val id : string Expression.t
   val config : Ezjsonm.value Expression.t
   val owner : owner Expression.t

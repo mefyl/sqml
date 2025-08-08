@@ -194,5 +194,11 @@ module Configs = struct
 
   include BindTable (Meta_)
 
+  module Column = struct
+    include Column
+
+    let Sqml.Expression.Column.List.[ id; config; owner ] = Column.columns
+  end
+
   let Sqml.Expression.List.[ id; config; owner ] = Expression.columns
 end

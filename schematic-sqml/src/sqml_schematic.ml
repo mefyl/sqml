@@ -82,12 +82,14 @@ let rec type_of_descriptor : type t.
     t Sqml.Expression.Column.Type.t =
  fun ?id descriptor ->
   match descriptor with
-  | Any _ | Bool | Float | Date | Int | Ignore | Int64 | Json | List _ | Map _
+  | Any _ | Bool | Float | Date | Int | Ignore | Int64 | Json | List _
   | Mapping _ | Null | Nullable _ | Sequence _ | String | Time | Time_local
   | String_const _ | Tuple _ | Union _ ->
     Atomic (atomic_type_of_descriptor descriptor)
   | Coding { f } -> type_of_descriptor ?id (f None)
   | Fixpoint s -> type_of_descriptor ?id (Lazy.force s)
+  | Map { encode; decode; descriptor; _ } ->
+    Custom { encode; decode; repr = type_of_descriptor descriptor }
   | Object { decode; encode; fields } ->
     let columns = types_of_fields fields
     and hlist_of_fields = hlist_of_fields fields in

@@ -98,7 +98,7 @@ struct
 end
 
 module Schema = struct
-  let unroll_column ({ name; type_ } : Schema.column) :
+  let rec unroll_column ({ name; type_ } : Schema.column) :
       Schema.column_atomic list =
     match type_ with
     | Type (Atomic t) -> [ { name; type_ = Type t } ]
@@ -110,6 +110,7 @@ module Schema = struct
           { name = name ^ "_" ^ field; type_ = Type t } :: of_types tl
       in
       of_types columns
+    | Type (Custom { repr; _ }) -> unroll_column { name; type_ = Type repr }
 
   let of_table (type tag) (module T : S with type tag = tag) =
     let columns =
