@@ -1,4 +1,4 @@
-(version 0.13.1)
+(version 1.13.2)
 
 (build
  (all_platforms
@@ -9,11 +9,9 @@
 
 (depends
  (all_platforms
-  (dune base fmt hlist logs ocaml ppx_deriving ppx_here ptime timmy)))
+  (dune ocaml seq)))
 
 (source
  (fetch
-  (url
-   git+ssh://git@gitlab.routine.co/routine/acid#bb7e5f72e3cd10bc33a1a5c6ebe037d814fcfcc2)))
-
-(dev)
+  (url https://github.com/ocaml/ocaml-re/archive/refs/tags/1.13.2.tar.gz)
+  (checksum md5=df37d9787450525a2182ce4364048d11)))

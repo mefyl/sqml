@@ -1,4 +1,4 @@
-(version 0.13.1)
+(version 0.13.2)
 
 (build
  (all_platforms
@@ -14,6 +14,6 @@
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/acid#bb7e5f72e3cd10bc33a1a5c6ebe037d814fcfcc2)))
+   git+ssh://git@gitlab.routine.co/routine/acid#8574c623b6d7ad26aaf5e931a759611fa54a2b93)))
 
 (dev)

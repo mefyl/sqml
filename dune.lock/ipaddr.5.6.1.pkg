@@ -1,4 +1,4 @@
-(version 5.6.0)
+(version 5.6.1)
 
 (build
  (all_platforms
@@ -14,6 +14,6 @@
 (source
  (fetch
   (url
-   https://github.com/mirage/ocaml-ipaddr/releases/download/v5.6.0/ipaddr-5.6.0.tbz)
+   https://github.com/mirage/ocaml-ipaddr/releases/download/v5.6.1/ipaddr-5.6.1.tbz)
   (checksum
-   sha256=9e30433fdb4ca437a6aa8ffb447baca5eba7615fb88e7b0cd8a4b416c3208133)))
+   sha256=1e617df8abd45843c823e9be75267d27426cb578661cf25622d50b25ae14a319)))
