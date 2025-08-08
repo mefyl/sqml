@@ -44,11 +44,13 @@ module Column = struct
       equal_atomic l r
 
     let rec atomic_columns : 'a. string -> 'a t -> string list =
-     fun name -> function
+     fun (type a) name (t : a t) ->
+      match t with
       | Atomic _ -> [ name ]
       | Composite { columns; _ } ->
         Type.List.map columns ~f:{ f = (fun (c, _) -> name ^ "_" ^ c) }
       | Custom { repr; _ } -> atomic_columns name repr
+      | Nullable t -> atomic_columns name t
   end
 
   type ('t, 'tag) t = {
@@ -101,6 +103,7 @@ module Type = struct
     | Custom { decode; encode; repr } ->
       let repr = of_column_type repr in
       Custom { decode; encode; repr }
+    | Nullable t -> Nullable (of_column_type t)
 
   let rec pp : type a. a t Fmt.t =
     let open Fmt in
@@ -349,6 +352,9 @@ let assignment_to_asts (Set { column; value }) =
        (value : (value, tag) t) ->
     match (column, snd value) with
     | { Column.name; type_ = Atomic _; _ }, ast -> [ (name, ast) ]
+    | { name; type_ = Composite { columns; _ }; _ }, Null ->
+      Column.Type.List.map columns
+        ~f:{ f = (fun (c, _) -> (name ^ "_" ^ c, Null)) }
     | { name; type_ = Composite { columns; _ }; _ }, (Const _ as const) ->
       let values =
         let rec values = function
@@ -377,6 +383,7 @@ let assignment_to_asts (Set { column; value }) =
         ast
     | { type_ = Custom { repr; _ }; _ }, _ ->
       asts { column with type_ = repr } value
+    | { type_ = Nullable type_; _ }, _ -> asts { column with type_ } value
   in
   asts column value
 

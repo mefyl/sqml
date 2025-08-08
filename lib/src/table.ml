@@ -111,6 +111,14 @@ module Schema = struct
       in
       of_types columns
     | Type (Custom { repr; _ }) -> unroll_column { name; type_ = Type repr }
+    | Type (Nullable t) ->
+      unroll_column { name; type_ = Type t }
+      |> List.map ~f:(function
+           | ({ type_ = Type (Nullable _); _ } : Schema.column_atomic) as column
+             ->
+             column (* FIXME: Handle nullable through Custom *)
+           | ({ type_ = Type t; _ } : Schema.column_atomic) as column ->
+             { column with type_ = Type (Nullable t) })
 
   let of_table (type tag) (module T : S with type tag = tag) =
     let columns =

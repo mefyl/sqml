@@ -662,7 +662,8 @@ end = struct
           | (`Pgsql | `Other), Some Update ->
             let f { Column.name; type_; _ } =
               let rec pp_columns : 't. 't Column.Type.t -> string list =
-                function
+               fun (type t) (t : t Column.Type.t) ->
+                match t with
                 | Column.Type.Atomic _ ->
                   [ Fmt.str "%s = excluded.%s" name name ]
                 | Composite { columns; _ } ->
@@ -674,6 +675,7 @@ end = struct
                             Fmt.str "%s_%s = excluded.%s_%s" name c name c);
                       }
                 | Custom { repr; _ } -> pp_columns repr
+                | Nullable t -> pp_columns t
               in
               Some (pp_columns type_)
             in

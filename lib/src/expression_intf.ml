@@ -43,6 +43,7 @@ module Column = struct
           decode : 'repr -> ('a, string) Result.t;
         }
           -> 'a t
+      | Nullable : 'a t -> 'a option t
 
     type any = Type : _ t -> any
   end
