@@ -673,6 +673,22 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           );
         ]
     in
+    let* () =
+      let* (Many owners) =
+        let query =
+          Model.select ~from:(module Model.Configs) Model.Configs.owner
+        in
+        Engine.query db query
+      in
+      let+ owners = Sequence.to_list owners in
+      Alcotest.(check ~here:[%here] (list (module Model.Configs.Owner)))
+        "owners"
+        [
+          { Model.Configs.Owner.first_name = "Pipo"; last_name = ""; age = 0 };
+          { Model.Configs.Owner.first_name = "Molo"; last_name = ""; age = 1 };
+        ]
+        owners
+    in
     let* Zero =
       let query =
         let open Sqml.Expression in
@@ -687,20 +703,66 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       Engine.query db query
     in
-    let* (Many owners) =
-      let query =
-        Model.select ~from:(module Model.Configs) Model.Configs.owner
+    let* () =
+      let* (Many owners) =
+        let query =
+          Model.select ~from:(module Model.Configs) Model.Configs.owner
+        in
+        Engine.query db query
       in
-      Engine.query db query
+      let+ owners = Sequence.to_list owners in
+      Alcotest.(check ~here:[%here] (list (module Model.Configs.Owner)))
+        "owners"
+        [
+          { Model.Configs.Owner.first_name = ""; last_name = ""; age = 0 };
+          { Model.Configs.Owner.first_name = ""; last_name = ""; age = 0 };
+        ]
+        owners
     in
-    let+ owners = Sequence.to_list owners in
-    Alcotest.(check ~here:[%here] (list (module Model.Configs.Owner)))
-      "owners"
-      [
-        { Model.Configs.Owner.first_name = ""; last_name = ""; age = 0 };
-        { Model.Configs.Owner.first_name = ""; last_name = ""; age = 0 };
-      ]
-      owners
+    let* Zero =
+      let query =
+        let open Sqml.Expression in
+        let f List.[ owner ] =
+          Model.update
+            (module Model.Configs)
+            [ Model.Configs.Column.owner := owner ]
+        in
+        Engine.prepare [ to_type Model.Configs.owner ] f
+      in
+      Engine.run query db
+        [
+          {
+            Model.Configs.Owner.first_name = "pipo";
+            last_name = "molo";
+            age = 1;
+          };
+        ]
+    in
+    let* () =
+      let* (Many owners) =
+        let query =
+          Model.select ~from:(module Model.Configs) Model.Configs.owner
+        in
+        Engine.query db query
+      in
+      let+ owners = Sequence.to_list owners in
+      Alcotest.(check ~here:[%here] (list (module Model.Configs.Owner)))
+        "owners"
+        [
+          {
+            Model.Configs.Owner.first_name = "pipo";
+            last_name = "molo";
+            age = 1;
+          };
+          {
+            Model.Configs.Owner.first_name = "pipo";
+            last_name = "molo";
+            age = 1;
+          };
+        ]
+        owners
+    in
+    Lwt_result.return ()
 end
 
 module Caqti = Sqml_caqti.Make (Model)

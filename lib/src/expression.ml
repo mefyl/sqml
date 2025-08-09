@@ -378,6 +378,15 @@ let assignment_to_asts (Set { column; value }) =
                   Fmt.failwith "missing value for composite column %s" name
                 | Some ast -> (name ^ "_" ^ c, ast));
           }
+    | ( { name; type_ = Composite { columns; _ }; _ },
+        (Var { index; size; type_ } as ast) ) ->
+      Column.Type.List.mapi columns
+        ~f:
+          {
+            f =
+              (fun i (c, _) ->
+                (name ^ "_" ^ c, Var { index = index + i; size = 1; type_ }));
+          }
     | { name; type_ = Composite _; _ }, ast ->
       Fmt.failwith "unexpected value for composite column %s: %a" name pp_ast
         ast
