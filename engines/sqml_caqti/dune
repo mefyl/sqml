@@ -3,5 +3,14 @@
 (library
  (name sqml_caqti)
  (public_name sqml-caqti)
- (libraries base caqti caqti-driver-postgresql caqti-lwt caqti-lwt.unix logs
-  logs.lwt lwt semver2 sqml))
+ (libraries
+  base
+  caqti
+  caqti-driver-postgresql
+  caqti-lwt
+  caqti-lwt.unix
+  logs
+  logs.lwt
+  lwt
+  semver2
+  sqml))

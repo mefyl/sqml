@@ -1,7 +1,13 @@
 (tests
  (names queries)
  (package sqml-caqti)
- (libraries alcotest-lwt logs.fmt sqml sqml_caqti caqti-driver-postgresql
-  caqti-driver-sqlite3 ptime)
+ (libraries
+  alcotest-lwt
+  logs.fmt
+  sqml
+  sqml_caqti
+  caqti-driver-postgresql
+  caqti-driver-sqlite3
+  ptime)
  (preprocess
   (pps ppx_deriving.eq ppx_deriving.ord ppx_deriving.show ppx_here)))
