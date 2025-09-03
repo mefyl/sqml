@@ -227,11 +227,11 @@ end = struct
           ({
              msg =
                Caqti_driver_postgresql.Result_error_msg
-                 { sqlstate = "23505"; _ };
+                 { sqlstate = "23505"; error_message };
              _;
            } :
             Caqti_error.query_error) ->
-        `Unique_violation
+        `Unique_violation error_message
       | e -> `Sqml_engine (Caqti_error.show e)
     in
     Result.map_error ~f
