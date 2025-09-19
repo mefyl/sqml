@@ -651,7 +651,7 @@ end = struct
           | _, None -> (nop, nop)
           | (`Pgsql | `Other), Some Ignore ->
             (nop, const string " ON CONFLICT DO NOTHING")
-          | (`Pgsql | `Other), Some (Set assignments) ->
+          | (`Pgsql | `Sqlite | `Other), Some (Set assignments) ->
             ( nop,
               const string " ON CONFLICT ("
               ++ const (list ~sep:comma string) primary
@@ -687,7 +687,7 @@ end = struct
                    (column_map { f } T.Meta.columns |> List.concat) )
           | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
           | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
-          | `Sqlite, Some (Set _) | `Mysql, _ -> failwith "dialect not handled"
+          | `Mysql, _ -> failwith "dialect not handled"
         in
         (* Explicitely enumerate columns order on insertion, migration that add
            columns subsequently mess up the column ordering. *)
