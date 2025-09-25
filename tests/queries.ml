@@ -369,6 +369,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       Engine.query db q
     in
+    let* (One_maybe _) =
+      let q =
+        Model.insert_returning
+          ~into:(module Model.T1)
+          ~on_conflict:Ignore ~returning:Model.T1.all
+        @@ Model.T1.const (0, "one", Some "1")
+      in
+      Engine.query db q
+    in
     let* (Many res) =
       let q = Model.select ~from:(module Model.T1) Model.T1.name in
       Engine.query db q

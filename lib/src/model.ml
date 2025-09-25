@@ -373,7 +373,7 @@ struct
                with type model = tag
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
-          on_conflict : 'tag on_conflict option;
+          on_conflict : (_, 'tag) on_conflict;
           value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
@@ -384,11 +384,11 @@ struct
                with type model = tag
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
-          on_conflict : 'tag on_conflict option;
+          on_conflict : ('arity, 'tag) on_conflict;
           returning : ('t, 'tag) Expression.t;
           value : ('mapped, 'free) Expression.t;
         }
-          -> ('t, one) t
+          -> ('t, 'arity) t
       | Select : 't select -> ('t, many) t
       | Select_unique : 't select -> ('t, one_maybe) t
       | Update : {
@@ -405,7 +405,10 @@ struct
       | Delete_returning _ -> Many
       | Delete_unique _ -> One_maybe
       | Insert _ -> Zero
-      | Insert_returning _ -> One
+      | Insert_returning { on_conflict = Fail; _ } -> One
+      | Insert_returning { on_conflict = Set _; _ } -> One
+      | Insert_returning { on_conflict = Update; _ } -> One
+      | Insert_returning { on_conflict = Ignore; _ } -> One_maybe
       | Select _ -> Many
       | Select_unique _ -> One_maybe
       | Update _ -> Zero
@@ -509,15 +512,25 @@ struct
          })
 
   let insert ~into ?on_conflict value =
-    Query.Insert
-      {
-        excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
-        into;
-        on_conflict;
-        value;
-      }
+    match on_conflict with
+    | None ->
+      Query.Insert
+        {
+          excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
+          into;
+          on_conflict = Fail;
+          value;
+        }
+    | Some on_conflict ->
+      Query.Insert
+        {
+          excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
+          into;
+          on_conflict;
+          value;
+        }
 
-  let insert_returning ~into ~returning ?on_conflict value =
+  let insert_returning ~into ~on_conflict ~returning value =
     Query.Insert_returning
       {
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);

@@ -631,13 +631,13 @@ end = struct
           (Option.map ~f:Expression.to_ast where)
           (option (sp ++ box ~indent:2 (pp_clause "RETURNING")))
           (Option.map ~f:Expression.to_ast returning)
-      and pp_insert (type mapped res tag)
+      and pp_insert (type arity mapped res tag)
           (module T : Table.S
             with type model = Model.tag
              and type tag = tag
              and type Meta.mapped = mapped)
           ({ excluded } : tag Sqml.Model.excluded)
-          (on_conflict : tag Sqml.Model.on_conflict option)
+          (on_conflict : (arity, tag) Sqml.Model.on_conflict)
           (returning : (res, tag) Expression.option) value =
         let primary =
           let (Unique { columns; _ }) = T.primary in
@@ -648,10 +648,10 @@ end = struct
         let conflict_sqlite, conflict_pg =
           let open Fmt in
           match (dialect, on_conflict) with
-          | _, None -> (nop, nop)
-          | (`Pgsql | `Other), Some Ignore ->
+          | _, Fail -> (nop, nop)
+          | (`Pgsql | `Other), Ignore ->
             (nop, const string " ON CONFLICT DO NOTHING")
-          | (`Pgsql | `Sqlite | `Other), Some (Set assignments) ->
+          | (`Pgsql | `Sqlite | `Other), Set assignments ->
             ( nop,
               const string " ON CONFLICT ("
               ++ const (list ~sep:comma string) primary
@@ -659,7 +659,7 @@ end = struct
               ++ const
                    (list ~sep:comma pp_assignment)
                    (assignments { excluded }) )
-          | (`Pgsql | `Other), Some Update ->
+          | (`Pgsql | `Other), Update ->
             let f { Column.name; type_; _ } =
               let rec pp_columns : 't. 't Column.Type.t -> string list =
                fun (type t) (t : t Column.Type.t) ->
@@ -685,8 +685,8 @@ end = struct
               ++ const string ") DO UPDATE SET "
               ++ const (list ~sep:comma string)
                    (column_map { f } T.Meta.columns |> List.concat) )
-          | `Sqlite, Some Ignore -> (const string " OR IGNORE", nop)
-          | `Sqlite, Some Update -> (const string " OR REPLACE", nop)
+          | `Sqlite, Ignore -> (const string " OR IGNORE", nop)
+          | `Sqlite, Update -> (const string " OR REPLACE", nop)
           | `Mysql, _ -> failwith "dialect not handled"
         in
         (* Explicitely enumerate columns order on insertion, migration that add
@@ -913,10 +913,25 @@ end = struct
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+! () = C.exec query () in
           Sqml.Model.Zero
-        | Insert_returning { returning; _ } ->
-          let query = (Caqti_type.unit ->! type_of_expr returning) query_str in
-          let+! res = C.find query () in
-          Sqml.Model.One res
+        | Insert_returning { on_conflict; returning; _ } -> (
+          let one () =
+            let query =
+              (Caqti_type.unit ->! type_of_expr returning) query_str
+            in
+            let+! res = C.find query () in
+            Sqml.Model.One res
+          and one_maybe () =
+            let query =
+              (Caqti_type.unit ->? type_of_expr returning) query_str
+            in
+            let+! res = C.find_opt query () in
+            Sqml.Model.One_maybe res
+          in
+          match on_conflict with
+          | Fail -> one ()
+          | Ignore -> one_maybe ()
+          | Set _ -> one ()
+          | Update -> one ())
         | Update _ ->
           let query = (Caqti_type.unit ->. Caqti_type.unit) query_str in
           let+! () = C.exec query () in

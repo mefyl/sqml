@@ -25,10 +25,13 @@ type ('from, 'to_) mapper = {
   map : 't. ('t, 'from) Expression.t -> ('t, 'to_) Expression.t;
 }
 
-type 'tag on_conflict =
-  | Ignore : _ on_conflict
-  | Set : ('tag excluded -> 'tag Expression.assignment list) -> 'tag on_conflict
-  | Update : _ on_conflict
+type ('arity, 'tag) on_conflict =
+  | Fail : (one, _) on_conflict
+  | Ignore : (one_maybe, _) on_conflict
+  | Set :
+      ('tag excluded -> 'tag Expression.assignment list)
+      -> (one, 'tag) on_conflict
+  | Update : (one, _) on_conflict
 
 module type GROUP = sig
   type group
@@ -156,7 +159,7 @@ module type S = sig
                with type model = tag
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
-          on_conflict : 'tag on_conflict option;
+          on_conflict : (_, 'tag) on_conflict;
           value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
@@ -167,11 +170,11 @@ module type S = sig
                with type model = tag
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
-          on_conflict : 'tag on_conflict option;
+          on_conflict : ('arity, 'tag) on_conflict;
           returning : ('t, 'tag) Expression.t;
           value : ('mapped, 'free) Expression.t;
         }
-          -> ('t, one) t
+          -> ('t, 'arity) t
       | Select : 't select -> ('t, many) t
       | Select_unique : 't select -> ('t, one_maybe) t
       | Update : {
@@ -212,7 +215,7 @@ module type S = sig
          with type model = tag
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
-    ?on_conflict:'tag on_conflict ->
+    ?on_conflict:(_, 'tag) on_conflict ->
     ('mapped, 'free) Expression.t ->
     (unit, zero) Query.t
 
@@ -222,10 +225,10 @@ module type S = sig
          with type model = tag
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
+    on_conflict:('arity, 'tag) on_conflict ->
     returning:('t, 'tag) Expression.t ->
-    ?on_conflict:'tag on_conflict ->
     ('mapped, 'free) Expression.t ->
-    ('t, one) Query.t
+    ('t, 'arity) Query.t
 
   val group :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
