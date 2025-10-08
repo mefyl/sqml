@@ -708,18 +708,12 @@ let diff (type tag) (module Dialect : Dialect.S)
                 Table.Query.Schema.alter_column_nullable effective.name name
                   true
                 :: f (Type l, Type r)
-              | l, r -> (
-                if Expression.Column.Type.equal_any_atomic l r then []
-                else
-                  match (l, r) with
-                  | Type Bigint, Type Serial_big | Type Int, Type Serial ->
-                    (* SERIAL is actually INT with a sequence default *)
-                    []
-                  | _ ->
-                    [
-                      Table.Query.Schema.alter_column_type effective.name name l
-                        r;
-                    ])
+              | l, r when Expression.Column.Type.equal_any_atomic l r -> []
+              | Type Bigint, Type Serial_big | Type Int, Type Serial ->
+                (* SERIAL is actually INT with a sequence default *)
+                []
+              | _ ->
+                [ Table.Query.Schema.alter_column_type effective.name name l r ]
             in
             f (l, r))
       and constraints_diff =
