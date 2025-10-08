@@ -1272,31 +1272,55 @@ end = struct
                     (option
                        (t3 (t2 string string) string
                           (t4 string string string string)))))
-              {| SELECT cons.constraint_name,
-                        col.column_name,
-                        cons.constraint_type,
-                        target.table_schema AS target_schema,
-                        target.table_name AS target_table,
-                        target_col.column_name AS target_column,
-                        delete_rule,
-                        update_rule,
-                        cons.is_deferrable,
-                        cons.initially_deferred
-                 FROM information_schema.table_constraints cons
-                 LEFT JOIN information_schema.referential_constraints ref
-                   ON cons.constraint_name = ref.constraint_name
-                 LEFT JOIN information_schema.key_column_usage col
-                   ON col.constraint_name  = cons.constraint_name
-                 LEFT JOIN information_schema.table_constraints target
-                   ON target.constraint_name = ref.unique_constraint_name
-                 LEFT JOIN information_schema.key_column_usage target_col
-                   ON target_col.constraint_name = target.constraint_name AND col.ordinal_position = target_col.ordinal_position
-                 WHERE cons.table_schema = $1 AND cons.table_name = $2
-                 ORDER BY cons.constraint_name, col.ordinal_position |}
+              {|
+SELECT
+    con.conname AS constraint_name,
+    src_col.attname AS column_name,
+    con.contype AS constraint_type,
+    ns_target.nspname AS target_schema,
+    cls_target.relname AS target_table,
+    tgt_col.attname AS target_column,
+    CASE con.confdeltype
+        WHEN 'a' THEN 'NO ACTION'
+        WHEN 'r' THEN 'RESTRICT'
+        WHEN 'c' THEN 'CASCADE'
+        WHEN 'n' THEN 'SET NULL'
+        WHEN 'd' THEN 'SET DEFAULT'
+    END AS delete_rule,
+    CASE con.confupdtype
+        WHEN 'a' THEN 'NO ACTION'
+        WHEN 'r' THEN 'RESTRICT'
+        WHEN 'c' THEN 'CASCADE'
+        WHEN 'n' THEN 'SET NULL'
+        WHEN 'd' THEN 'SET DEFAULT'
+    END AS update_rule,
+    con.condeferrable AS is_deferrable,
+    con.condeferred AS initially_deferred
+FROM pg_constraint con
+JOIN pg_class cls_src ON cls_src.oid = con.conrelid
+JOIN pg_namespace ns_src ON ns_src.oid = cls_src.relnamespace
+LEFT JOIN LATERAL (
+  SELECT att.attname, att.attnum, k.ord
+  FROM unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord)
+  JOIN pg_attribute att
+    ON att.attrelid = cls_src.oid
+   AND att.attnum   = k.attnum
+) src_col ON TRUE
+LEFT JOIN pg_class cls_target ON cls_target.oid = con.confrelid
+LEFT JOIN pg_namespace ns_target ON ns_target.oid = cls_target.relnamespace
+LEFT JOIN LATERAL (
+  SELECT att.attname, att.attnum, k.ord
+  FROM unnest(con.confkey) WITH ORDINALITY AS k(attnum, ord)
+  JOIN pg_attribute att
+    ON att.attrelid = cls_target.oid
+   AND att.attnum   = k.attnum
+) tgt_col ON TRUE
+WHERE ns_src.nspname = $1 AND cls_src.relname = $2
+ORDER BY constraint_name, src_col.ord;|}
           in
           let+! rows = C.collect_list query (schema, name) |> error in
           let f = function
-            | (constraint_name, _, "PRIMARY KEY", _) :: _ as columns ->
+            | (constraint_name, _, "p", _) :: _ as columns ->
               let get_column (_, c, _, _) = c in
               Some
                 (Table.Schema.Constraint.Primary_key
@@ -1306,7 +1330,7 @@ end = struct
                    })
             | ( constraint_name,
                 _,
-                "FOREIGN KEY",
+                "f",
                 Some
                   ( (schema, name),
                     _,
@@ -1319,9 +1343,9 @@ end = struct
                 |> Result.ok_or_failwith
               and deferrability =
                 match (deferrable, initially_deferred) with
-                | "NO", "NO" -> Sqml.Table.Not_deferrable
-                | "YES", "NO" -> Sqml.Table.Deferrable
-                | "YES", "YES" -> Sqml.Table.Deferred_initially
+                | "f", "f" -> Sqml.Table.Not_deferrable
+                | "t", "f" -> Sqml.Table.Deferrable
+                | "t", "t" -> Sqml.Table.Deferred_initially
                 | _ ->
                   Fmt.failwith
                     "invalid deferrable, initially deffered values: %S, %S"
