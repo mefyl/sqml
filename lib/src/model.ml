@@ -712,7 +712,9 @@ let diff (type tag) (module Dialect : Dialect.S)
                 if Expression.Column.Type.equal_any_atomic l r then []
                 else
                   match (l, r) with
-                  | Type Bigint, Type Serial_big | Type Int, Type Serial -> []
+                  | Type Bigint, Type Serial_big | Type Int, Type Serial ->
+                    (* SERIAL is actually INT with a sequence default *)
+                    []
                   | _ ->
                     [
                       Table.Query.Schema.alter_column_type effective.name name l
