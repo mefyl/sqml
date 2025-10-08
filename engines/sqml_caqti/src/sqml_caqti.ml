@@ -1188,12 +1188,11 @@ end = struct
     and on = String.Search_pattern.create " ON "
     and using = String.Search_pattern.create " USING btree " in
     let schema_of_name = function "public" -> None | name -> Some name in
-    let type_of_info ~table:_ _column char_length nullable data_type =
+    let type_of_info ~table:_ _column ~char_length ~nullable ~default:_
+        data_type =
       let open Let.Syntax2 (Result) in
       let nullable ((Column.Type.Type t : Column.Type.any_atomic) as type_) =
-        if String.(nullable = "YES") then
-          (Type (Nullable t) : Column.Type.any_atomic)
-        else type_
+        if nullable then (Type (Nullable t) : Column.Type.any_atomic) else type_
       in
       let+ type_ =
         match (data_type, char_length) with
@@ -1240,10 +1239,12 @@ end = struct
           let*! columns =
             let query =
               (Caqti_type.(t2 string string)
-              ->* Caqti_type.(t4 (option int) string string string))
+              ->* Caqti_type.(t4 (option int) string string (t2 string string))
+              )
                 {| SELECT character_maximum_length,
                         column_name,
                         data_type,
+                        column_default,
                         is_nullable
                  FROM information_schema.columns
                  WHERE table_schema = $1
@@ -1251,10 +1252,11 @@ end = struct
             in
             C.collect_list query (schema, name) |> error
           in
-          let f (char_length, column_name, data_type, nullable) =
+          let f (char_length, column_name, data_type, (default, nullable)) =
             let open Let.Syntax2 (Result) in
             let+ type_ =
-              type_of_info ~table:name column_name char_length nullable
+              type_of_info ~table:name column_name ~char_length ~default
+                ~nullable:String.(nullable = "YES")
                 data_type
             in
             ({ Table.Schema.name = column_name; type_ }
