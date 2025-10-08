@@ -16,6 +16,8 @@ module Column = struct
       | Float, Float
       | Int, Int
       | Json, Json
+      | Serial, Serial
+      | Serial_big, Serial_big
       | Text, Text
       | Time, Time ->
         true
