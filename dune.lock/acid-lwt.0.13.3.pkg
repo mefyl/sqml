@@ -1,0 +1,19 @@
+(version 0.13.3)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune acid lwt ppx_deriving)))
+
+(source
+ (fetch
+  (url
+   git+ssh://git@gitlab.routine.co/routine/acid#0e04f28467a542fb7cc8f3e236c09ab6067d6681)))
+
+(dev)
