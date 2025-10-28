@@ -1,5 +1,5 @@
 variables:
-  PACKAGES: "pkgconfig postgresql-dev sqlite-dev"
+  PACKAGES: "gmp-dev pkgconfig postgresql-dev sqlite-dev"
   PG_HOST: "postgres"
   POSTGRES_HOST_AUTH_METHOD: "trust"
 
