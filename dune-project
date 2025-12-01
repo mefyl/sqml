@@ -15,6 +15,8 @@
 (source
  (github mefyl/sqml))
 
+(implicit_transitive_deps false)
+
 (package
  (name sqml)
  (synopsis "Type safe SQL queries.")

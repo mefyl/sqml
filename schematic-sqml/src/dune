@@ -1,6 +1,6 @@
 (library
  (name sqml_schematic)
  (public_name sqml-schematic)
- (libraries acid schematic sqml)
+ (libraries acid schematic sqml timmy)
  (preprocess
   (pps ppx_here)))

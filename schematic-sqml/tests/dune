@@ -1,6 +1,6 @@
 (test
  (name schematic_sqml_ppx)
  (package sqml-schematic)
- (libraries schematic sqml sqml-schematic)
+ (libraries acid base hlist schematic sqml sqml-schematic)
  (preprocess
   (pps schematic.ppx sqml-schematic.ppx ppx_deriving.eq ppx_deriving.show)))

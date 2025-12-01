@@ -9,8 +9,12 @@
   caqti-driver-postgresql
   caqti-lwt
   caqti-lwt.unix
+  ezjsonm
   logs
   logs.lwt
   lwt
+  ptime
   semver2
-  sqml))
+  sqml
+  unix
+  uri))

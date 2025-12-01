@@ -4,7 +4,9 @@
  (name sqml)
  (public_name sqml)
  (libraries
+  acid
   acid-lwt
+  base
   ezjsonm
   fmt
   logs
