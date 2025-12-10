@@ -132,6 +132,7 @@ module Make (Model : Model.S) : sig
   val pp_current_query : current_query Fmt.t
 
   val with_savepoint :
+    pp_error:'error Fmt.t ->
     transaction ->
     ?tags:Logs.Tag.set ->
     (transaction -> ('result, ([> Engine.error ] as 'error)) Lwt_result.t) ->
@@ -1141,7 +1142,7 @@ end = struct
     (Caqti_type.unit -->. Caqti_type.unit) @@:- fun _ ->
     "ROLLBACK TO SAVEPOINT __sqml;"
 
-  let with_savepoint transaction ?tags f =
+  let with_savepoint ~pp_error transaction ?tags f =
     let f ((module C : Caqti_lwt.CONNECTION) as connection) =
       let* () = Log.debug @@ fun m -> m ?tags "savepoint start" in
       let*! () = C.exec savepoint_start () |> error in
@@ -1154,7 +1155,9 @@ end = struct
           }
         >>= function
         | Result.Error e ->
-          let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
+          let* () =
+            Log.debug @@ fun m -> m ?tags "savepoint rollback: %a" pp_error e
+          in
           let*! () = C.exec savepoint_rollback () |> error in
           Lwt_result.fail e
         | Result.Ok res ->
@@ -1162,7 +1165,9 @@ end = struct
           let+! () = C.exec savepoint_commit () |> error in
           res
       and catch exn =
-        let* () = Log.debug @@ fun m -> m ?tags "savepoint rollback" in
+        let* () =
+          Log.debug @@ fun m -> m ?tags "savepoint rollback: %a" Fmt.exn exn
+        in
         let*! () = C.exec savepoint_rollback () |> error in
         raise exn
       in
