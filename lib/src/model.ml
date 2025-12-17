@@ -22,6 +22,7 @@ struct
       type tag = unit
 
       let name = Meta.name
+      let selected : tag Selected.t = Selected.Private.v { name }
 
       module Column = struct
         type nonrec 't t = ('t, tag) Expression.Column.t
@@ -177,6 +178,9 @@ struct
     include Selectable.S
     module L : Selectable.S with type model = model
     module R : Selectable.S with type model = model
+
+    val selected_left : L.tag Selected.t -> tag Selected.t
+    val selected_right : R.tag Selected.t -> tag Selected.t
   end
 
   module type INNER_JOIN = sig
@@ -262,6 +266,14 @@ struct
 
       module L = L
       module R = R
+
+      let selected_left =
+       fun selected ->
+        Selected.Private.v { name = "l_" ^ Selected.name selected }
+
+      let selected_right =
+       fun selected ->
+        Selected.Private.v { name = "r_" ^ Selected.name selected }
 
       let left : type a. (a, L.tag) Expression.t -> (a, tag) Expression.t =
        fun e -> Expression.map_name (fun n -> "l_" ^ n) e
@@ -438,12 +450,20 @@ struct
            where;
          })
 
+  let for_to_ast for' =
+    match for' with
+    | Some Expression.For.Share -> Some Expression.Share
+    | Some Update -> Some Update
+    | Some (Update_of tables) ->
+      Some (Update_of (List.map ~f:Selected.name tables))
+    | None -> None
+
   let select ~from ?for' ?limit ?(order_by = Order_by.[]) ?(skip_locked = false)
       ?where what =
     Query.Select
       (Select
          {
-           for';
+           for' = for_to_ast for';
            from;
            group_by = None;
            limit;
@@ -486,7 +506,7 @@ struct
     Query.Select_unique
       (Select
          {
-           for';
+           for' = for_to_ast for';
            from;
            group_by = None;
            limit = None;
@@ -501,7 +521,7 @@ struct
     Query.Select_unique
       (Select
          {
-           for';
+           for' = for_to_ast for';
            from;
            group_by = None;
            limit = Some 1;

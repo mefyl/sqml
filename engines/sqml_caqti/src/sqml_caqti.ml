@@ -600,7 +600,8 @@ end = struct
     and pp_for f = function
       | Expression.Share -> Fmt.string f "SHARE"
       | Update | Update_of [] -> Fmt.string f "UPDATE"
-      | Update_of tables  -> Fmt.(pf f "UPDATE OF %a" (list ~sep:comma string) tables)
+      | Update_of tables ->
+        Fmt.(pf f "UPDATE OF %a" (list ~sep:comma string) tables)
     and pp_limit = Fmt.(const string "LIMIT " ++ int) in
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
@@ -742,8 +743,10 @@ end = struct
           function
           | Sqml.Expression.Share ->
             Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
-          | Update | Update_of [] -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
-          | Update_of tables -> Fmt.(pf f "FOR UPDATE OF %a" (list ~sep:comma string) tables)
+          | Update | Update_of [] ->
+            Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
+          | Update_of tables ->
+            Fmt.(pf f "FOR UPDATE OF %a" (list ~sep:comma string) tables)
         and pp_order_by f =
           let pp_order_by (expression, ordering) =
             Fmt.pf f "%a %a"

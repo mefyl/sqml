@@ -61,6 +61,9 @@ module type S = sig
     include Selectable.S
     module L : Selectable.S with type model = model
     module R : Selectable.S with type model = model
+
+    val selected_left : L.tag Selected.t -> tag Selected.t
+    val selected_right : R.tag Selected.t -> tag Selected.t
   end
 
   module type INNER_JOIN = sig
@@ -242,7 +245,7 @@ module type S = sig
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    ?for':Expression.for' ->
+    ?for':'tag Expression.For.t ->
     ?limit:int ->
     ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
@@ -254,7 +257,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ('indexed Table.Index.unique, 'tag) Table.Index.t ->
     ('indexed, 'tag) Expression.List_nullable.t ->
-    ?for':Expression.for' ->
+    ?for':'tag Expression.For.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
@@ -262,7 +265,7 @@ module type S = sig
 
   val select_one :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    ?for':Expression.for' ->
+    ?for':'tag Expression.For.t ->
     ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->

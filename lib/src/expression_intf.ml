@@ -171,3 +171,10 @@ module type SELECTABLE = sig
 
   val to_ast : unit -> ast
 end
+
+module For = struct
+  type 'tag t =
+    | Share
+    | Update
+    | Update_of of 'tag Selected.t list
+end

@@ -187,6 +187,7 @@ module type S = sig
   module Meta : META
   include S' with module Meta := Meta
 
+  val selected : tag Selected.t
   val constraints : tag constraint_ list
   val primary : (Meta.primary Index.unique, tag) Index.t
   val indexes : (Meta.indexes, tag) Index.List.t
