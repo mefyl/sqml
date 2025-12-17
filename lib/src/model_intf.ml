@@ -123,7 +123,7 @@ module type S = sig
 
     type 't select =
       | Select : {
-          for_ : Expression.for_ option;
+          for' : Expression.for' option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
           group_by : (_, 'tag) Expression.t option;
@@ -242,7 +242,7 @@ module type S = sig
 
   val select :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    ?for_:Expression.for_ ->
+    ?for':Expression.for' ->
     ?limit:int ->
     ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
@@ -254,7 +254,7 @@ module type S = sig
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
     ('indexed Table.Index.unique, 'tag) Table.Index.t ->
     ('indexed, 'tag) Expression.List_nullable.t ->
-    ?for_:Expression.for_ ->
+    ?for':Expression.for' ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->
     ('t, 'tag) Expression.t ->
@@ -262,7 +262,7 @@ module type S = sig
 
   val select_one :
     from:(module Selectable.S with type model = tag and type tag = 'tag) ->
-    ?for_:Expression.for_ ->
+    ?for':Expression.for' ->
     ?order_by:'tag Order_by.t ->
     ?skip_locked:bool ->
     ?where:(bool, 'tag) Expression.t ->

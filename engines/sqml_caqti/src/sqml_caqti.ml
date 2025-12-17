@@ -555,7 +555,7 @@ end = struct
              f ()
          | List l -> list ~sep:comma (pp None) f l
          | Null -> Fmt.string f "NULL"
-         | Select { for_; from; group_by; limit; skip_locked; what; where } ->
+         | Select { for'; from; group_by; limit; skip_locked; what; where } ->
            pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a%a)" (pp None) what
              (pp None) from
              (option (sp ++ box ~indent:2 (const string "WHERE " ++ pp None)))
@@ -564,7 +564,7 @@ end = struct
                 (sp ++ box ~indent:2 (const string "GROUP BY " ++ pp None)))
              group_by
              (option (sp ++ const string "FOR " ++ pp_for))
-             for_
+             for'
              (option (sp ++ string))
              (if skip_locked then Some "SKIP LOCKED" else None)
              (option (sp ++ pp_limit))
@@ -599,7 +599,8 @@ end = struct
       pp None f ast
     and pp_for f = function
       | Expression.Share -> Fmt.string f "SHARE"
-      | Update -> Fmt.string f "UPDATE"
+      | Update | Update_of [] -> Fmt.string f "UPDATE"
+      | Update_of tables  -> Fmt.(pf f "UPDATE OF %a" (list ~sep:comma string) tables)
     and pp_limit = Fmt.(const string "LIMIT " ++ int) in
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
@@ -707,7 +708,7 @@ end = struct
             pp_expression value conflict_pg () pp_returning returning)
       and pp_select (type t)
           (Select
-             { for_; from; group_by; limit; order_by; skip_locked; what; where } :
+             { for'; from; group_by; limit; order_by; skip_locked; what; where } :
             t Model.Query.select) =
         let pp_for f =
           let forable =
@@ -741,7 +742,8 @@ end = struct
           function
           | Sqml.Expression.Share ->
             Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
-          | Update -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
+          | Update | Update_of [] -> Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
+          | Update_of tables -> Fmt.(pf f "FOR UPDATE OF %a" (list ~sep:comma string) tables)
         and pp_order_by f =
           let pp_order_by (expression, ordering) =
             Fmt.pf f "%a %a"
@@ -779,7 +781,7 @@ end = struct
              (option (sp ++ box ~indent:2 (pp_clause "GROUP BY")))
              Expression.(Option.map ~f:to_ast group_by)
         ++ const pp_order_by order_by
-        ++ const (option (sp ++ pp_for)) for_
+        ++ const (option (sp ++ pp_for)) for'
         ++ const
              (option (sp ++ string))
              (if skip_locked then Some "SKIP LOCKED" else None)

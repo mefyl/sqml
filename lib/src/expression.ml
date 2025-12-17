@@ -434,10 +434,10 @@ let not_in (_, value) (_, array) =
 let not (_, value) = (Type.Bool, Funcall { name = "NOT"; args = [ value ] })
 
 let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?by
-    ?for_ ?limit ?(skip_locked = false) ?where what =
+    ?for' ?limit ?(skip_locked = false) ?where what =
   Select
     {
-      for_;
+      for';
       from = From.to_ast ();
       group_by = by;
       limit;
@@ -446,12 +446,12 @@ let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?by
       where = Option.map ~f:to_ast where;
     }
 
-let select ~from ?for_ ?limit ?skip_locked ?where what =
-  (Type.Array (fst what), _select ~from ?for_ ?limit ?skip_locked ?where what)
+let select ~from ?for' ?limit ?skip_locked ?where what =
+  (Type.Array (fst what), _select ~from ?for' ?limit ?skip_locked ?where what)
 
-let select_one ~from ?for_ ?skip_locked ?where what =
+let select_one ~from ?for' ?skip_locked ?where what =
   ( Type.Nullable (fst what),
-    _select ~from ?for_ ~limit:1 ?skip_locked ?where what )
+    _select ~from ?for' ~limit:1 ?skip_locked ?where what )
 
 type 't aggregated = 't
 

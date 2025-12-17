@@ -127,7 +127,7 @@ type ast =
   | List of ast list
   | Null
   | Select of {
-      for_ : for_ option;
+      for' : for' option;
       from : ast;
       group_by : ast option;
       limit : int option;
@@ -151,9 +151,10 @@ type ast =
     }
       -> ast
 
-and for_ =
+and for' =
   | Share
   | Update
+  | Update_of of string list
 
 and join_type =
   | Inner

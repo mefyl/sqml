@@ -337,7 +337,7 @@ struct
 
     type 't select =
       | Select : {
-          for_ : Expression.for_ option;
+          for' : Expression.for' option;
           from :
             (module Selectable.S with type model = tag and type tag = 'tag);
           group_by : (_, 'tag) Expression.t option;
@@ -428,7 +428,7 @@ struct
     Query.Select
       (Select
          {
-           for_ = None;
+           for' = None;
            from;
            group_by = Some column;
            limit;
@@ -438,12 +438,12 @@ struct
            where;
          })
 
-  let select ~from ?for_ ?limit ?(order_by = Order_by.[]) ?(skip_locked = false)
+  let select ~from ?for' ?limit ?(order_by = Order_by.[]) ?(skip_locked = false)
       ?where what =
     Query.Select
       (Select
          {
-           for_;
+           for';
            from;
            group_by = None;
            limit;
@@ -481,12 +481,12 @@ struct
       | Some where -> Some (filter && where))
 
   let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
-      ?for_ ?(skip_locked = false) ?where what =
+      ?for' ?(skip_locked = false) ?where what =
     let where = unique index indexed where in
     Query.Select_unique
       (Select
          {
-           for_;
+           for';
            from;
            group_by = None;
            limit = None;
@@ -496,12 +496,12 @@ struct
            where;
          })
 
-  let select_one ~from ?for_ ?(order_by = Order_by.[]) ?(skip_locked = false)
+  let select_one ~from ?for' ?(order_by = Order_by.[]) ?(skip_locked = false)
       ?where what =
     Query.Select_unique
       (Select
          {
-           for_;
+           for';
            from;
            group_by = None;
            limit = Some 1;

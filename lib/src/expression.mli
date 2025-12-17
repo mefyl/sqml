@@ -114,7 +114,7 @@ val not : (bool, 'tag) t -> (bool, 'tag) t
 
 val select :
   from:(module SELECTABLE with type tag = 'tag) ->
-  ?for_:for_ ->
+  ?for':for' ->
   ?limit:int ->
   ?skip_locked:bool ->
   ?where:(bool, 'tag) t ->
@@ -123,7 +123,7 @@ val select :
 
 val select_one :
   from:(module SELECTABLE with type tag = 'tag) ->
-  ?for_:for_ ->
+  ?for':for' ->
   ?skip_locked:bool ->
   ?where:(bool, 'tag) t ->
   ('what, 'tag) t ->
