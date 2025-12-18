@@ -1,4 +1,4 @@
-(version 0.21.1)
+(version 0.21.2)
 
 (build
  (all_platforms
@@ -28,6 +28,6 @@
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/schematic#f9f4f76dd86c50ae348e5b4cf4a9f85f8f4e1583)))
+   git+ssh://git@gitlab.routine.co/routine/schematic#372d8ae7a7f4ad4aab849b054ddf920162d286d6)))
 
 (dev)

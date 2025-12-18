@@ -1,4 +1,4 @@
-(version 1.2.0)
+(version 1.2.1)
 
 (build
  (all_platforms
@@ -14,6 +14,6 @@
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/timmy#36aedcfdbc79593e8dc203e78782f0c4e4b5377d)))
+   git+ssh://git@gitlab.routine.co/routine/timmy#413f24e5a728786bc7758ce3cdc08fb94203fe1f)))
 
 (dev)
