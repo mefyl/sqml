@@ -447,6 +447,28 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
+  let conflict_fail psql db =
+    let* Zero =
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Ignore
+        @@ Model.T1.const (0, "one", Some "1")
+      in
+      Engine.query db q
+    in
+    if psql then
+      let open Let.Syntax (Lwt) in
+      let q =
+        Model.insert ~into:(module Model.T1) ~on_conflict:Fail
+        @@ Model.T1.const (0, "two", Some "2")
+      in
+      Engine.query db q >>| function
+      | Ok Zero -> Alcotest.fail ~here:[%here] "no error"
+      | Error (`Unique_violation _) -> Ok ()
+      | Error err ->
+        Alcotest.failf ~here:[%here] "unexpected error: %a" Sqml.Engine.pp_error
+          err
+    else Lwt_result.return ()
+
   let is_null db =
     let* () = populate db in
     let* (Many res) =
@@ -786,12 +808,10 @@ module Caqti_test = Test (Caqti)
 
 let () =
   let open Alcotest_lwt in
-  let test_case name f =
+  let test_case ?(here = [%here]) name f =
     let f switch () =
       Lwt.map
-        ~f:
-          Alcotest.(
-            check ~here:[%here] (result unit error) "result" (Result.Ok ()))
+        ~f:Alcotest.(check ~here (result unit error) "result" (Result.Ok ()))
         (f switch ())
     in
     test_case name `Slow f
@@ -883,8 +903,10 @@ let () =
              in
              make_db name test switch ()
            in
-           let test_case name f = test_case name @@ make name f
-           and test_case_db name f = test_case name @@ make_db name f in
+           let test_case ?here name f = test_case ?here name @@ make name f
+           and test_case_db ?here name f =
+             test_case ?here name @@ make_db name f
+           in
            [
              test_case "select" Caqti_test.select;
              test_case "insert" Caqti_test.insert;
@@ -897,7 +919,9 @@ let () =
              test_case "is_null" Caqti_test.is_null;
              test_case "json" Caqti_test.json;
              test_case "in" Caqti_test.in';
-             test_case "conflict" @@ Caqti_test.conflict true;
+             test_case ~here:[%here] "conflict" @@ Caqti_test.conflict true;
+             test_case ~here:[%here] "conflict-fail"
+             @@ Caqti_test.conflict_fail true;
              test_case_db "versioning-stable" Caqti_test.Versioning.stable;
              test_case "prepared" Caqti_test.prepared;
              test_case "join" Caqti_test.join;
