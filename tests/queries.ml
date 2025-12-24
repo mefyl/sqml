@@ -908,23 +908,25 @@ let () =
              test_case ?here name @@ make_db name f
            in
            [
-             test_case "select" Caqti_test.select;
-             test_case "insert" Caqti_test.insert;
-             test_case "delete" Caqti_test.delete;
-             test_case "delete_returning" Caqti_test.delete_returning;
-             test_case "update" Caqti_test.update;
-             test_case "update_from" Caqti_test.update_from;
-             test_case_db "timestamp" Caqti_test.timestamp;
-             test_case "group" Caqti_test.group;
-             test_case "is_null" Caqti_test.is_null;
-             test_case "json" Caqti_test.json;
-             test_case "in" Caqti_test.in';
+             test_case ~here:[%here] "select" Caqti_test.select;
+             test_case ~here:[%here] "insert" Caqti_test.insert;
+             test_case ~here:[%here] "delete" Caqti_test.delete;
+             test_case ~here:[%here] "delete_returning"
+               Caqti_test.delete_returning;
+             test_case ~here:[%here] "update" Caqti_test.update;
+             test_case ~here:[%here] "update_from" Caqti_test.update_from;
+             test_case_db ~here:[%here] "timestamp" Caqti_test.timestamp;
+             test_case ~here:[%here] "group" Caqti_test.group;
+             test_case ~here:[%here] "is_null" Caqti_test.is_null;
+             test_case ~here:[%here] "json" Caqti_test.json;
+             test_case ~here:[%here] "in" Caqti_test.in';
              test_case ~here:[%here] "conflict" @@ Caqti_test.conflict true;
              test_case ~here:[%here] "conflict-fail"
              @@ Caqti_test.conflict_fail true;
-             test_case_db "versioning-stable" Caqti_test.Versioning.stable;
-             test_case "prepared" Caqti_test.prepared;
-             test_case "join" Caqti_test.join;
-             test_case "composite" Caqti_test.composite;
+             test_case_db ~here:[%here] "versioning-stable"
+               Caqti_test.Versioning.stable;
+             test_case ~here:[%here] "prepared" Caqti_test.prepared;
+             test_case ~here:[%here] "join" Caqti_test.join;
+             test_case ~here:[%here] "composite" Caqti_test.composite;
            ] );
        ]
