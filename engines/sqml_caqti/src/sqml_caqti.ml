@@ -292,13 +292,13 @@ end = struct
           let*! major, minor, subminor, _ = C.find query () in
           let current = Semver.from_parts major minor subminor [] [] in
           let* () =
-            Log.info (fun m ->
+            Logs.info (fun m ->
                 m "load model at version %a" Fmt.(option Semver.pp) current)
           in
           Lwt_result.return (current, dialect)
         else
           let* () =
-            Log.info (fun m ->
+            Logs.info (fun m ->
                 m "create model at version %s" @@ Semver.to_string Model.version)
           in
           (* Create tables and related indexes *)
@@ -320,7 +320,7 @@ end = struct
             in
             let queries = Sqml.Table.Query.create (module T) in
             let* () =
-              Log.debug (fun m ->
+              Logs.debug (fun m ->
                   m "create table:@ %a"
                     Fmt.(
                       list
@@ -346,7 +346,7 @@ end = struct
               @@ Caqti_driver_info.dialect_tag C.driver_info
             in
             let* () =
-              Log.debug (fun m ->
+              Logs.debug (fun m ->
                   m "run post-creation statements:@ %a"
                     Fmt.(list ~sep:(const char ';' ++ sp) string)
                     post_creation_statements)
@@ -892,7 +892,7 @@ end = struct
       in
       let query_str = Fmt.str "%a" (pp_query dialect) query in
       let* () =
-        Log.debug @@ fun m ->
+        Logs.debug @@ fun m ->
         m ?tags "execute query:@ @[%a@]" (pp_query dialect) query
       in
       let res : ((res, arity, _) Sqml.Model.result, _) Lwt_result.t =
@@ -1009,7 +1009,7 @@ end = struct
       let query_str dialect =
         let q = Fmt.str "%a" (pp_query dialect) query in
         let () =
-          Log.Sync.debug (fun m ->
+          Logs.Sync.debug (fun m ->
               m "@[<2>prepare query:@ @[%a@]@]@ @[<hv 2>arguments:@ %a@]"
                 (pp_query dialect) query
                 (Expression.Type.List.pp ~sep:Fmt.comma
@@ -1040,7 +1040,7 @@ end = struct
       transaction ?tags (values : args Hlist.t) =
     let* () =
       let pp_values = pp_values_of_types `Pgsql types in
-      Log.debug (fun m ->
+      Logs.debug (fun m ->
           m ?tags "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
             (pp_query `Pgsql) query pp_values values)
     in
@@ -1099,7 +1099,7 @@ end = struct
   let connect t ?tags f =
     let* result =
       let f ((module C : Caqti_lwt.CONNECTION) as connection) =
-        let* () = Log.debug @@ fun m -> m ?tags "transaction start" in
+        let* () = Logs.debug @@ fun m -> m ?tags "transaction start" in
         let*! () = C.start () in
         let f () =
           f
@@ -1110,15 +1110,15 @@ end = struct
             }
           >>= function
           | Result.Error e ->
-            let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
+            let* () = Logs.debug @@ fun m -> m ?tags "transaction rollback" in
             let*! () = C.rollback () in
             Lwt_result.fail (`Shitty_api e)
           | Result.Ok res ->
-            let* () = Log.debug @@ fun m -> m ?tags "transaction commit" in
+            let* () = Logs.debug @@ fun m -> m ?tags "transaction commit" in
             let+! () = C.commit () in
             res
         and catch exn =
-          let* () = Log.debug @@ fun m -> m ?tags "transaction rollback" in
+          let* () = Logs.debug @@ fun m -> m ?tags "transaction rollback" in
           let*! () = C.rollback () in
           raise exn
         in
@@ -1149,7 +1149,7 @@ end = struct
 
   let with_savepoint ~pp_error transaction ?tags f =
     let f ((module C : Caqti_lwt.CONNECTION) as connection) =
-      let* () = Log.debug @@ fun m -> m ?tags "savepoint start" in
+      let* () = Logs.debug @@ fun m -> m ?tags "savepoint start" in
       let*! () = C.exec savepoint_start () |> error in
       let f () =
         f
@@ -1161,17 +1161,17 @@ end = struct
         >>= function
         | Result.Error e ->
           let* () =
-            Log.debug @@ fun m -> m ?tags "savepoint rollback: %a" pp_error e
+            Logs.debug @@ fun m -> m ?tags "savepoint rollback: %a" pp_error e
           in
           let*! () = C.exec savepoint_rollback () |> error in
           Lwt_result.fail e
         | Result.Ok res ->
-          let* () = Log.debug @@ fun m -> m ?tags "savepoint commit" in
+          let* () = Logs.debug @@ fun m -> m ?tags "savepoint commit" in
           let+! () = C.exec savepoint_commit () |> error in
           res
       and catch exn =
         let* () =
-          Log.debug @@ fun m -> m ?tags "savepoint rollback: %a" Fmt.exn exn
+          Logs.debug @@ fun m -> m ?tags "savepoint rollback: %a" Fmt.exn exn
         in
         let*! () = C.exec savepoint_rollback () |> error in
         raise exn
@@ -1438,7 +1438,7 @@ ORDER BY constraint_name, src_col.ord;|}
                | Result.Ok res -> Some res
                | Result.Error (`Sqml_engine error) ->
                  let () =
-                   Log.Sync.warn (fun m -> m "ignoring index: %s" error)
+                   Logs.Sync.warn (fun m -> m "ignoring index: %s" error)
                  in
                  None)
           |> Lwt_result.return

@@ -32,13 +32,13 @@
   ezjsonm
   (fmt
    (>= 0.8.8))
-  logs
   (lwt
    (>= 5.3.0))
   ppx_sexp_conv
   (ptime
    (>= 0.8.5))
   semver2
+  stere
   (timmy
    (and
     (>= 1.0.1)
@@ -69,4 +69,5 @@
     (>= 0.21.0)
     (< 0.22.0)))
   (sqml
-   (= :version))))
+   (= :version))
+  timmy-unix))

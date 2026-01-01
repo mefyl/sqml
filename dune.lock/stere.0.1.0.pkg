@@ -1,0 +1,19 @@
+(version 0.1.0)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune fmt hmap logs ocaml uuidm lwt)))
+
+(source
+ (fetch
+  (url
+   git+ssh://git@gitlab.routine.co/routine/stere#78ab63547307b04cdae7b49b1e616503e1d7fdfb)))
+
+(dev)

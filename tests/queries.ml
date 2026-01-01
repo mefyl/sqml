@@ -14,7 +14,7 @@ let () =
   Logs.Src.set_level Logs.default (Some Logs.Debug);
   (* Logs.Src.set_level Caqti_common_priv.default_log_src (Some Logs.Debug);
    * Logs.Src.set_level Caqti_common_priv.request_log_src (Some Logs.Debug); *)
-  Logs.Src.set_level Sqml.Log.src (Some Logs.Debug)
+  Logs.Src.set_level Sqml.Logs.src (Some Logs.Debug)
 
 let error =
   Alcotest.testable Sqml.Engine.pp_error

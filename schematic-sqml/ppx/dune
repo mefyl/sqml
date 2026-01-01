@@ -2,6 +2,13 @@
  (name sqml_schematic_ppx)
  (public_name sqml-schematic.ppx)
  (kind ppx_deriver)
- (libraries acid base hmap ppxlib schematic.deriver schematic.ppx)
+ (libraries
+  acid
+  base
+  hmap
+  ppxlib
+  schematic.deriver
+  schematic.ppx
+  timmy-unix.clock)
  (preprocess
   (pps ppxlib.metaquot)))
