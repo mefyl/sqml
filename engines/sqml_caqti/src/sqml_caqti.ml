@@ -1039,10 +1039,17 @@ end = struct
       ({ query; prepared; types } : (args, 'tag, res, arity) prepared)
       transaction ?tags (values : args Hlist.t) =
     let* () =
-      let pp_values = pp_values_of_types `Pgsql types in
-      Logs.debug (fun m ->
-          m ?tags "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
-            (pp_query `Pgsql) query pp_values values)
+      match types with
+      | [] ->
+        Logs.debug (fun m ->
+            m ?tags "@[<2>execute prepared query:@ @[%a@]@]" (pp_query `Pgsql)
+              query)
+      | types ->
+        let pp_values = pp_values_of_types `Pgsql types in
+        Logs.debug (fun m ->
+            m ?tags
+              "@[<2>execute prepared query:@ @[%a@]@]@ @[<hv 2>values: %a@]"
+              (pp_query `Pgsql) query pp_values values)
     in
     match prepared with
     | Zero prepared ->
