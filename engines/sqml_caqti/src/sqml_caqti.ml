@@ -1106,7 +1106,7 @@ end = struct
   let connect t ?tags f =
     let* result =
       let f ((module C : Caqti_lwt.CONNECTION) as connection) =
-        let* () = Logs.debug @@ fun m -> m ?tags "transaction start" in
+        Logs.with_debug (fun m -> m ?tags "transaction start") @@ fun () ->
         let*! () = C.start () in
         let f () =
           f
