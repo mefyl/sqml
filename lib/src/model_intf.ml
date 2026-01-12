@@ -163,6 +163,7 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : (_, 'tag) on_conflict;
+          on_conflict_index : (_ Table.Index.unique, 'tag) Table.Index.t option;
           value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
@@ -174,6 +175,7 @@ module type S = sig
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : ('arity, 'tag) on_conflict;
+          on_conflict_index : (_ Table.Index.unique, 'tag) Table.Index.t option;
           returning : ('t, 'tag) Expression.t;
           value : ('mapped, 'free) Expression.t;
         }
@@ -219,6 +221,7 @@ module type S = sig
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
     ?on_conflict:(_, 'tag) on_conflict ->
+    ?on_conflict_index:(_ Table.Index.unique, 'tag) Table.Index.t ->
     ('mapped, 'free) Expression.t ->
     (unit, zero) Query.t
 
@@ -229,6 +232,7 @@ module type S = sig
           and type Meta.mapped = 'mapped
           and type tag = 'tag) ->
     on_conflict:('arity, 'tag) on_conflict ->
+    ?on_conflict_index:(_ Table.Index.unique, 'tag) Table.Index.t ->
     returning:('t, 'tag) Expression.t ->
     ('mapped, 'free) Expression.t ->
     ('t, 'arity) Query.t

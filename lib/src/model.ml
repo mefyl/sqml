@@ -386,6 +386,7 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : (_, 'tag) on_conflict;
+          on_conflict_index : (_ Table.Index.unique, 'tag) Table.Index.t option;
           value : ('mapped, 'free) Expression.t;
         }
           -> (unit, zero) t
@@ -397,6 +398,7 @@ struct
                 and type Meta.mapped = 'mapped
                 and type tag = 'tag);
           on_conflict : ('arity, 'tag) on_conflict;
+          on_conflict_index : (_ Table.Index.unique, 'tag) Table.Index.t option;
           returning : ('t, 'tag) Expression.t;
           value : ('mapped, 'free) Expression.t;
         }
@@ -531,7 +533,7 @@ struct
            where;
          })
 
-  let insert ~into ?on_conflict value =
+  let insert ~into ?on_conflict ?on_conflict_index value =
     match on_conflict with
     | None ->
       Query.Insert
@@ -539,6 +541,7 @@ struct
           excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
           into;
           on_conflict = Fail;
+          on_conflict_index;
           value;
         }
     | Some on_conflict ->
@@ -547,15 +550,17 @@ struct
           excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
           into;
           on_conflict;
+          on_conflict_index;
           value;
         }
 
-  let insert_returning ~into ~on_conflict ~returning value =
+  let insert_returning ~into ~on_conflict ?on_conflict_index ~returning value =
     Query.Insert_returning
       {
         excluded = (fun e -> Expression.map_name (fun _ -> "excluded") e);
         into;
         on_conflict;
+        on_conflict_index;
         returning;
         value;
       }

@@ -641,12 +641,19 @@ end = struct
              and type Meta.mapped = mapped)
           ({ excluded } : tag Sqml.Model.excluded)
           (on_conflict : (arity, tag) Sqml.Model.on_conflict)
+          (on_conflict_index : (_ Table.Index.unique, tag) Table.Index.t option)
           (returning : (res, tag) Expression.option) value =
-        let primary =
-          let (Unique { columns; _ }) = T.primary in
+        let unique_columns (index : (_ Table.Index.unique, tag) Table.Index.t) =
+          let (Unique { columns; _ }) = index in
           Table.Index.Column.List.map
             ~f:{ f = (fun { column = { name; _ }; _ } -> name) }
             columns
+        in
+        let primary = unique_columns T.primary in
+        let index =
+          match on_conflict_index with
+          | None -> primary
+          | Some index -> unique_columns index
         in
         let conflict_sqlite, conflict_pg =
           let open Fmt in
@@ -657,7 +664,7 @@ end = struct
           | (`Pgsql | `Sqlite | `Other), Set assignments ->
             ( nop,
               const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) primary
+              ++ const (list ~sep:comma string) index
               ++ const string ") DO UPDATE SET "
               ++ const
                    (list ~sep:comma pp_assignment)
@@ -684,7 +691,7 @@ end = struct
             in
             ( nop,
               const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) primary
+              ++ const (list ~sep:comma string) index
               ++ const string ") DO UPDATE SET "
               ++ const (list ~sep:comma string)
                    (column_map { f } T.Meta.columns |> List.concat) )
@@ -832,11 +839,15 @@ end = struct
         pp_delete from where (Some returning)
       | Delete_unique { from; returning; where } ->
         pp_delete from where (Some returning)
-      | Insert { excluded; into; on_conflict; value } ->
-        pp_insert into { excluded } on_conflict Expression.None
+      | Insert { excluded; into; on_conflict; on_conflict_index; value } ->
+        pp_insert into { excluded } on_conflict on_conflict_index
+          Expression.None
           Expression.(to_ast value)
-      | Insert_returning { excluded; into; on_conflict; returning; value } ->
-        pp_insert into { excluded } on_conflict (Some returning)
+      | Insert_returning
+          { excluded; into; on_conflict; on_conflict_index; returning; value }
+        ->
+        pp_insert into { excluded } on_conflict on_conflict_index
+          (Some returning)
           Expression.(to_ast value)
       | Select_unique select -> pp_select select
       | Select select -> pp_select select
