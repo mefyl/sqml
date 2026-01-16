@@ -152,6 +152,8 @@ type ast =
       -> ast
 
 and for' =
+  | Key_share
+  | No_key_update
   | Share
   | Update
   | Update_of of string list
@@ -174,6 +176,8 @@ end
 
 module For = struct
   type 'tag t =
+    | Key_share
+    | No_key_update
     | Share
     | Update
     | Update_of of 'tag Selected.t list

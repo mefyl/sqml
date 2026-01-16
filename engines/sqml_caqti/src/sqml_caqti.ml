@@ -598,7 +598,9 @@ end = struct
       in
       pp None f ast
     and pp_for f = function
-      | Expression.Share -> Fmt.string f "SHARE"
+      | Expression.Key_share -> Fmt.string f "KEY SHARE"
+      | No_key_update -> Fmt.string f "NO KEY UPDATE"
+      | Share -> Fmt.string f "SHARE"
       | Update | Update_of [] -> Fmt.string f "UPDATE"
       | Update_of tables ->
         Fmt.(pf f "UPDATE OF %a" (list ~sep:comma string) tables)
@@ -748,8 +750,11 @@ end = struct
                    forable
           in
           function
-          | Sqml.Expression.Share ->
-            Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
+          | Sqml.Expression.Key_share ->
+            Fmt.(const string "FOR KEY SHARE" ++ pp_forable) f forable
+          | No_key_update ->
+            Fmt.(const string "FOR NO KEY UPDATE" ++ pp_forable) f forable
+          | Share -> Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
           | Update | Update_of [] ->
             Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
           | Update_of tables ->

@@ -454,7 +454,9 @@ struct
 
   let for_to_ast for' =
     match for' with
-    | Some Expression.For.Share -> Some Expression.Share
+    | Some Expression.For.Key_share -> Some Expression.Key_share
+    | Some Expression.For.No_key_update -> Some Expression.No_key_update
+    | Some Share -> Some Share
     | Some Update -> Some Update
     | Some (Update_of tables) ->
       Some (Update_of (List.map ~f:Selected.name tables))
