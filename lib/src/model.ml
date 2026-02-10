@@ -477,12 +477,11 @@ struct
            where;
          })
 
-  module Indexed =
-    Hlist.Zip2 (Table.Index.Column.List) (Expression.List_nullable)
+  module Indexed = Hlist.Zip2 (Table.Index.Column.List) (Expression.List)
 
   let unique (type columns tag)
       (index : (columns, tag) Table.Index.Column.List.t)
-      (indexed : (columns, tag) Expression.List_nullable.t)
+      (indexed : (columns, tag) Expression.List.t)
       (where : (bool, tag) Expression.t option) :
       (bool, tag) Expression.t option =
     let open Expression in
@@ -493,7 +492,7 @@ struct
              {
                f =
                  (fun ({ Table.Index.Column.column = c; _ }, value) ->
-                   some (column c) = value);
+                   column c = value);
              }
     in
     match indexed with
