@@ -9,7 +9,7 @@ homepage: "https://github.com/mefyl/sqml"
 bug-reports: "https://github.com/mefyl/sqml/issues"
 depends: [
   "dune" {>= "3.20"}
-  "schematic" {>= "0.21.0" & < "0.22.0"}
+  "schematic" {>= "0.22.0" & < "0.23.0"}
   "sqml" {= version}
   "timmy-unix"
   "odoc" {with-doc}

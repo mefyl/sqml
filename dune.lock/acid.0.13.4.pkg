@@ -9,17 +9,7 @@
 
 (depends
  (all_platforms
-  (dune
-   base
-   fmt
-   hlist
-   logs
-   ocaml
-   ppx_deriving
-   ppx_here
-   ptime
-   timmy
-   schematic)))
+  (dune base fmt hlist logs ocaml ppx_deriving ppx_here ptime timmy)))
 
 (source
  (fetch
