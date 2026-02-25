@@ -1,5 +1,36 @@
 open Acid
 
+module Enum = struct
+  type 't case = {
+    name : string;
+    encoder : 't -> string option;
+    decoder : string -> 't;
+  }
+
+  (** The type for an enum, i.e. a union where all the fields are nullary
+      constructors.
+
+      These are important for SQML because they can be represented as a single
+      [Text] column in the database. *)
+  type 't t = 't case list
+
+  let of_generic_case : type a. a Schematic.Schema.case -> a case option =
+   fun (Schematic.Schema.Case { name; encoder; decoder; schema; _ }) ->
+    match schema.descriptor with
+    | String_const const_string ->
+      Some
+        {
+          name;
+          encoder =
+            (fun value ->
+              if Option.is_some (encoder value) then Some const_string else None);
+          decoder = (fun _text -> decoder ());
+        }
+    | _ -> None
+
+  let of_generic_cases cases = Option.all @@ List.map ~f:of_generic_case cases
+end
+
 let rec atomic_type_of_descriptor : type t.
     ?id:string ->
     t Schematic.Schema.descriptor ->
@@ -43,7 +74,27 @@ let rec atomic_type_of_descriptor : type t.
   | String_const _ -> fail "String_const"
   | Object _ -> fail "Object"
   | Tuple _ -> fail "Tuple"
-  | Union _ -> fail "Union"
+  | Union { cases; _ } -> (
+    match Enum.of_generic_cases cases with
+    | Some cases ->
+      let encode value =
+        let rec find_case = function
+          | [] -> Fmt.failwith "sqml: enum value not found in any case"
+          | { Enum.encoder; name; _ } :: rest -> (
+            match encoder value with Some _ -> name | None -> find_case rest)
+        in
+        find_case cases
+      in
+      let decode text =
+        let rec find_case = function
+          | [] -> Error (Fmt.str "sqml: invalid enum value %S" text)
+          | { Enum.decoder; name; _ } :: rest ->
+            if String.equal name text then Ok (decoder name) else find_case rest
+        in
+        find_case cases
+      in
+      Custom { decode; encode; repr = Text }
+    | None -> fail "Union")
 
 and atomic_type_of_schema Schematic.Schema.{ descriptor; id; _ } =
   atomic_type_of_descriptor ?id descriptor
