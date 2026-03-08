@@ -226,11 +226,6 @@ module Schema = struct
     include Constraint
     include Base.Comparable.Make (Constraint)
   end
-
-  module Index = struct
-    include Index
-    include Base.Comparable.Make (Index)
-  end
 end
 
 module Query = struct

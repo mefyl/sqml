@@ -45,6 +45,10 @@ module Column = struct
     let equal_any_atomic (Type l : any_atomic) (Type r : any_atomic) =
       equal_atomic l r
 
+    let nullable : type t. t atomic -> bool = function
+      | Nullable _ -> true
+      | _ -> false
+
     let rec atomic_columns : 'a. string -> 'a t -> string list =
      fun (type a) name (t : a t) ->
       match t with

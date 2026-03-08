@@ -10,6 +10,7 @@ module Column : sig
     val equal : 'a t -> 'b t -> bool
     val equal_any : any -> any -> bool
     val equal_any_atomic : any_atomic -> any_atomic -> bool
+    val nullable : _ atomic -> bool
 
     (** [atomic_columns column_name type'] is the list of atomic columns name
         created to represent a composite column named [column_name] of type

@@ -62,11 +62,6 @@ module Schema : sig
     include Base.Comparable.S with type t := t
   end
 
-  module Index : sig
-    include module type of Index
-    include Base.Comparable.S with type t := t
-  end
-
   val unroll_column : column -> column_atomic list
   val equal_column : column -> column -> bool
   val of_table : (module S with type tag = 'tag) -> t

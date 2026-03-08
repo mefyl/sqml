@@ -256,7 +256,7 @@ module Schema = struct
       ascending : bool;
       nulls_first : bool option;
     }
-    [@@deriving eq, ord, sexp_of]
+    [@@deriving eq]
   end
 
   type t = {

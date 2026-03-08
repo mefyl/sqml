@@ -757,26 +757,38 @@ let diff (type tag) (module Dialect : Dialect.S)
         Set.symmetric_diff effective_constraints expected_constraints
         |> Seq.map ~f
       and indexes_diff =
-        let effective_indexes, expected_indexes =
-          let set = Set.of_list (module Table.Schema.Index) in
-          (set effective.Table.Schema.indexes, set expected.Table.Schema.indexes)
-        and f = function
-          | Either.First { Table.Schema.Index.name; _ } -> (
-            match
-              List.find expected.constraints ~f:(function
-                | Primary_key { name = constraint_name; _ } ->
-                  String.(constraint_name = name.name)
-                | _ -> false)
-            with
-            | None -> Table.Query.Schema.drop_index name
-            | Some _ ->
-              (* Primary keys underlying indexes are handled by adding the
-                 constraint. *)
-              [])
-          | Either.Second index ->
-            Table.Query.Schema.create_index effective.name index
+        let obsolete_indexes =
+          List.concat_map effective.Table.Schema.indexes ~f:(fun index ->
+              let name = index.Table.Schema.Index.name in
+              match
+                List.find
+                  ~f:(Table.Schema.Index.equal index)
+                  expected.Table.Schema.indexes
+              with
+              | Some _ -> []
+              | None -> (
+                match
+                  List.find expected.constraints ~f:(function
+                    | Primary_key { name = constraint_name; _ } ->
+                      String.(constraint_name = name.name)
+                    | _ -> false)
+                with
+                | None -> Table.Query.Schema.drop_index name
+                | Some _ ->
+                  (* Primary keys underlying indexes are handled by adding the
+                     constraint. *)
+                  []))
+        and missing_indexes =
+          List.concat_map expected.Table.Schema.indexes ~f:(fun index ->
+              match
+                List.find
+                  ~f:(Table.Schema.Index.equal index)
+                  effective.Table.Schema.indexes
+              with
+              | Some _ -> []
+              | None -> Table.Query.Schema.create_index effective.name index)
         in
-        Set.symmetric_diff effective_indexes expected_indexes |> Seq.map ~f
+        Seq.of_list [ obsolete_indexes; missing_indexes ]
       in
       Seq.of_list [ columns_diff; constraints_diff; indexes_diff ]
       |> Seq.concat
