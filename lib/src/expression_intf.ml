@@ -95,16 +95,25 @@ module Type = struct
   end)
 end
 
+type 't ast_const = {
+  type_ : 't Type.t; [@printer Fmt.nop]
+  value : 't; [@printer Fmt.nop]
+}
+[@@deriving show]
+
+let equal_ast_const (type left right) (lhs : left ast_const)
+    (rhs : right ast_const) =
+  match (lhs, rhs) with
+  | { type_ = Bool; value = lhs }, { type_ = Bool; value = rhs } ->
+    Bool.equal lhs rhs
+  | _ -> failwith "FIXME"
+
 type ast =
   | Column of {
       selectable : string;
       names : string list;
     }
-  | Const : {
-      type_ : 't Type.t; [@printer Fmt.nop]
-      value : 't; [@printer Fmt.nop]
-    }
-      -> ast
+  | Const : (_ ast_const[@equal equal_ast_const]) -> ast
   | Default
   | Funcall of {
       name : string;
@@ -147,7 +156,7 @@ type ast =
   | Var : {
       index : int;
       size : int;
-      type_ : _ Type.t; [@printer Fmt.nop]
+      type_ : _ Type.t; [@equal fun _ _ -> true] [@printer Type.pp]
     }
       -> ast
 
@@ -163,7 +172,7 @@ and join_type =
   | Outer
   | Outer_left
   | Outer_right
-[@@deriving show]
+[@@deriving eq, show]
 
 module type SELECTABLE = sig
   type model
