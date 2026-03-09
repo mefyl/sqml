@@ -507,8 +507,8 @@ struct
       | None -> Some filter
       | Some where -> Some (filter && where))
 
-  let select_unique ~from (Table.Index.Unique { expressions = index; _ }) indexed
-      ?for' ?(skip_locked = false) ?where what =
+  let select_unique ~from (Table.Index.Unique { expressions = index; _ })
+      indexed ?for' ?(skip_locked = false) ?where what =
     let where = unique index indexed where in
     Query.Select_unique
       (Select
@@ -575,8 +575,8 @@ struct
   let delete_returning ~from ?where returning =
     Query.Delete_returning { from; returning; where }
 
-  let delete_unique ~from (Table.Index.Unique { expressions = index; _ }) indexed
-      ?where returning =
+  let delete_unique ~from (Table.Index.Unique { expressions = index; _ })
+      indexed ?where returning =
     let where = unique index indexed where in
     Query.Delete_unique { from; returning; where }
 

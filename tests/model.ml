@@ -36,14 +36,8 @@ module T1_meta = struct
           {
             expressions =
               [
-                {
-                  expression = Expression.column id;
-                  order = Ascending;
-                };
-                {
-                  expression = Expression.column _name;
-                  order = Descending;
-                };
+                { expression = Expression.column id; order = Ascending };
+                { expression = Expression.column _name; order = Descending };
               ];
             name = "ids";
           };
