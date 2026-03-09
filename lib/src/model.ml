@@ -147,20 +147,24 @@ struct
       let constraints = Column.constraints @ Meta.constraints Column.columns
 
       module Index_of_columns =
-        Expression.Column.List.Transduce2 (Table.Index.Column.List)
+        Expression.Column.List.Transduce2 (Table.Index.Expression.List)
 
       let primary =
-        let columns =
+        let expressions =
           Index_of_columns.map
             (Meta.primary Column.columns)
             ~f:
               {
                 f =
                   (fun column ->
-                    { Table.Index.Column.column; order = Ascending });
+                    {
+                      Table.Index.Expression.expression =
+                        Expression.column column;
+                      order = Ascending;
+                    });
               }
         in
-        Table.Index.Unique { columns; name = "pkey" }
+        Table.Index.Unique { expressions; name = "pkey" }
 
       let indexes = Meta.indexes Column.columns
 
@@ -477,10 +481,10 @@ struct
            where;
          })
 
-  module Indexed = Hlist.Zip2 (Table.Index.Column.List) (Expression.List)
+  module Indexed = Hlist.Zip2 (Table.Index.Expression.List) (Expression.List)
 
   let unique (type columns tag)
-      (index : (columns, tag) Table.Index.Column.List.t)
+      (index : (columns, tag) Table.Index.Expression.List.t)
       (indexed : (columns, tag) Expression.List.t)
       (where : (bool, tag) Expression.t option) :
       (bool, tag) Expression.t option =
@@ -491,8 +495,8 @@ struct
            ~f:
              {
                f =
-                 (fun ({ Table.Index.Column.column = c; _ }, value) ->
-                   column c = value);
+                 (fun ({ Table.Index.Expression.expression; _ }, value) ->
+                   expression = value);
              }
     in
     match indexed with
@@ -503,7 +507,7 @@ struct
       | None -> Some filter
       | Some where -> Some (filter && where))
 
-  let select_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
+  let select_unique ~from (Table.Index.Unique { expressions = index; _ }) indexed
       ?for' ?(skip_locked = false) ?where what =
     let where = unique index indexed where in
     Query.Select_unique
@@ -571,7 +575,7 @@ struct
   let delete_returning ~from ?where returning =
     Query.Delete_returning { from; returning; where }
 
-  let delete_unique ~from (Table.Index.Unique { columns = index; _ }) indexed
+  let delete_unique ~from (Table.Index.Unique { expressions = index; _ }) indexed
       ?where returning =
     let where = unique index indexed where in
     Query.Delete_unique { from; returning; where }
@@ -581,7 +585,7 @@ struct
   let update_returning into ?where ~returning what =
     Query.Update_returning { from = None; into; returning; what; where }
 
-  let update_unique into (Table.Index.Unique { columns = index; _ }) indexed
+  let update_unique into (Table.Index.Unique { expressions = index; _ }) indexed
       ?where ~returning what =
     let where = unique index indexed where in
     Query.Update_unique { from = None; into; returning; what; where }
@@ -606,7 +610,7 @@ struct
     Query.Update_returning { from = Some from; into; returning; what; where }
 
   let update_from_unique (type from) into
-      (Table.Index.Unique { columns = index; _ }) indexed
+      (Table.Index.Unique { expressions = index; _ }) indexed
       ~from:
         (module From : Selectable.S with type model = tag and type tag = from)
       ?where ~returning what =

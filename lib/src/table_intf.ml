@@ -114,6 +114,17 @@ module Index = struct
     end)
   end
 
+  module Expression = struct
+    type ('t, 'tag) t = {
+      expression : ('t, 'tag) Expression.t;
+      order : 't ordering;
+    }
+
+    module List = Hlist.Make2 (struct
+      type nonrec ('a, 'b) t = ('a, 'b) t
+    end)
+  end
+
   type kind_non_unique = Non_unique
   type kind_unique = Unique
 
@@ -123,12 +134,12 @@ module Index = struct
 
   type ('columns, 'tag) t =
     | Non_unique : {
-        columns : ('columns, 'tag) Column.List.t;
+        expressions : ('columns, 'tag) Expression.List.t;
         name : string;
       }
         -> (('columns, kind_non_unique) kind, 'tag) t
     | Unique : {
-        columns : ('columns, 'tag) Column.List.t;
+        expressions : ('columns, 'tag) Expression.List.t;
         name : string;
       }
         -> (('columns, kind_unique) kind, 'tag) t
@@ -247,7 +258,7 @@ module Schema = struct
 
   module Index = struct
     type t = {
-      columns : ((string * ordering) List_nonempty.t[@sexp.opaque]);
+      expressions : ((Expression.ast * ordering) List_nonempty.t[@sexp.opaque]);
       name : name;
       unique : bool;
     }

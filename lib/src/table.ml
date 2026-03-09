@@ -164,11 +164,19 @@ module Schema = struct
         in
         List.map ~f T.constraints
       in
-      let (Unique { columns; _ }) = T.primary in
+      let (Unique { expressions; _ }) = T.primary in
       match
-        Index.Column.List.map
-          ~f:{ f = (fun { column = { name; _ }; _ } -> name) }
-          columns
+        Index.Expression.List.map
+          ~f:
+            {
+              f =
+                (fun { Index.Expression.expression; _ } ->
+                  match Expression.to_ast expression with
+                  | Column { names; _ } -> names
+                  | _ -> []);
+            }
+          expressions
+        |> List.concat
       with
       | [] -> foreign
       | columns ->
@@ -177,9 +185,9 @@ module Schema = struct
         :: foreign
     and indexes =
       let f : type kind tag. (kind, tag) Index.t -> _ =
-        let of_columns columns =
+        let of_expressions expressions =
           let f = function
-            | { Index.Column.column; order } ->
+            | { Index.Expression.expression; order } ->
               let rec index_order : 't. 't ordering -> Schema.Index.ordering =
                fun (type t) (ordering : t ordering) ->
                 match ordering with
@@ -191,24 +199,24 @@ module Schema = struct
                 | Nulls_last order ->
                   { (index_order order) with nulls_first = Some false }
               in
-              (column.name, index_order order)
+              (Expression.to_ast expression, index_order order)
           in
-          Index.Column.List.map ~f:{ f } columns |> List_nonempty.of_list_exn
+          Index.Expression.List.map ~f:{ f } expressions
+          |> List_nonempty.of_list_exn
         in
         function
-        | Index.Non_unique { columns; name } ->
+        | Index.Non_unique { expressions; name } ->
           {
-            Schema.Index.columns = of_columns columns;
+            Schema.Index.expressions = of_expressions expressions;
             name = { name; schema = None };
             unique = false;
           }
-        | Index.Unique { columns; name } ->
-          Schema.
-            {
-              columns = of_columns columns;
-              name = { name; schema = None };
-              unique = true;
-            }
+        | Index.Unique { expressions; name } ->
+          {
+            expressions = of_expressions expressions;
+            name = { name; schema = None };
+            unique = true;
+          }
       in
       Index.List.map ~f:{ f } T.indexes
     in
@@ -336,7 +344,8 @@ module Query = struct
         (pp_table_name dialect) table column
         (Dialect.string_of_type ~include_nullable:false to_)
         (Dialect.string_of_type ~include_nullable:false from)
-    | Create_index (table_name, { columns; name = { name; schema }; unique }) ->
+    | Create_index (table_name, { expressions; name = { name; schema }; unique })
+      ->
       let rec pp_ordering f =
         let open Fmt in
         function
@@ -354,9 +363,11 @@ module Query = struct
         (Dialect.index_name ?schema name)
         (pp_table_name dialect) table_name
         (box
-        @@ list ~sep:comma (fun f (name, ordering) ->
-               Fmt.pf f "%s %a" name pp_ordering ordering))
-        (List_nonempty.to_list columns)
+        @@ list ~sep:comma (fun f (ast, ordering) ->
+               Fmt.pf f "%a %a"
+                 Dialect.(pp ~context:Index_definition)
+                 ast pp_ordering ordering))
+        (List_nonempty.to_list expressions)
     | Create_table { columns; constraints; name; _ } ->
       let columns =
         Set.to_list columns

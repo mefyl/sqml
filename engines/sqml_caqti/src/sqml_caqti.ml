@@ -350,7 +350,9 @@ end = struct
     let pp : type tag arity. (tag, arity) Model.Query.t Fmt.t =
      fun f ->
       let open Fmt in
-      let pp_clause keyword f e = Fmt.pf f "%s %a" keyword Dialect.pp e in
+      let pp_clause keyword f e =
+        Fmt.pf f "%s %a" keyword Dialect.(pp ?context:None) e
+      in
       let pp_assignment f =
         Fmt.(
           using Expression.assignment_to_asts
@@ -371,7 +373,9 @@ end = struct
           (where : (bool, tag) Expression.t option)
           (returning : (t, tag) Expression.t option) =
         let module Table = (val from) in
-        Fmt.pf f "@[<2>DELETE FROM@ %a@]%a%a" Dialect.pp (Table.to_ast ())
+        Fmt.pf f "@[<2>DELETE FROM@ %a@]%a%a"
+          Dialect.(pp ?context:None)
+          (Table.to_ast ())
           (option (sp ++ box ~indent:2 (pp_clause "WHERE")))
           (Option.map ~f:Expression.to_ast where)
           (option (sp ++ box ~indent:2 (pp_clause "RETURNING")))
@@ -386,10 +390,18 @@ end = struct
           (on_conflict_index : (_ Table.Index.unique, tag) Table.Index.t option)
           (returning : (res, tag) Expression.option) value =
         let unique_columns (index : (_ Table.Index.unique, tag) Table.Index.t) =
-          let (Unique { columns; _ }) = index in
-          Table.Index.Column.List.map
-            ~f:{ f = (fun { column = { name; _ }; _ } -> name) }
-            columns
+          let (Unique { expressions; _ }) = index in
+          Table.Index.Expression.List.map
+            ~f:
+              {
+                f =
+                  (fun { Table.Index.Expression.expression; _ } ->
+                    match Expression.to_ast expression with
+                    | Column { names; _ } -> names
+                    | _ -> []);
+              }
+            expressions
+          |> List.concat
         in
         let primary = unique_columns T.primary in
         let index =
@@ -455,7 +467,8 @@ end = struct
                  }
                T.Meta.columns
             |> List.concat)
-            Dialect.pp value conflict_pg () pp_returning returning)
+            Dialect.(pp ?context:None)
+            value conflict_pg () pp_returning returning)
       and pp_select (type t)
           (Select
              { for'; from; group_by; limit; order_by; skip_locked; what; where } :
@@ -575,7 +588,9 @@ end = struct
       function
       | Delete { from; where } ->
         let module Table = (val from) in
-        Fmt.pf f "DELETE FROM@ %a%a" Dialect.pp (Table.to_ast ())
+        Fmt.pf f "DELETE FROM@ %a%a"
+          Dialect.(pp ?context:None)
+          (Table.to_ast ())
           (option (sp ++ pp_clause "WHERE"))
           Expression.(Option.map ~f:to_ast where)
       | Delete_returning { from; returning; where } ->
@@ -1172,13 +1187,18 @@ ORDER BY constraint_name, src_col.ord;|}
             match split_pattern on def with
             | [ name; def ] -> (
               match split_pattern using def with
-              | [ _; def ] ->
+              | [ table; def ] ->
+                let selectable =
+                  String.strip table ~drop:(Char.equal '"')
+                  |> String.split ~on:'.'
+                  |> List.last_exn
+                in
                 let def = String.sub def ~pos:1 ~len:(String.length def - 2) in
-                let* columns =
+                let* expressions =
                   match
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
-                           ( c,
+                           ( Expression.Column { names = [ c ]; selectable },
                              Sqml.Table.Schema.Index.
                                { ascending = true; nulls_first = None }
                              (* FIXME *) ))
@@ -1188,7 +1208,7 @@ ORDER BY constraint_name, src_col.ord;|}
                 in
                 Result.Ok
                   {
-                    Sqml.Table.Schema.Index.columns;
+                    Sqml.Table.Schema.Index.expressions;
                     name = { name; schema = schema_of_name schema };
                     unique;
                   }

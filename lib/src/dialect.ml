@@ -125,7 +125,7 @@ struct
     | [] -> nop
     | _ :: _ as l -> pp_values l
 
-  let rec pp_ast f ast =
+  let rec pp_ast ?(context = Default) f ast =
     let open Fmt in
     let var (type t) (type_ : t Expression.Type.t) =
       match type_ with
@@ -148,6 +148,8 @@ struct
     in
     let rec pp current_precedence : Expression.ast Fmt.t =
      fun f -> function
+       | Column { names; _ } when equal_context context Index_definition ->
+         Fmt.list ~sep:comma string f names
        | Column { selectable; names; _ } ->
          Fmt.list ~sep:comma
            (const string selectable ++ const string "." ++ string)
