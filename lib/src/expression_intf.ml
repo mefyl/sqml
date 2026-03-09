@@ -141,17 +141,33 @@ type 't ast_const = {
 }
 [@@deriving show]
 
-let equal_ast_const (type left right) (lhs : left ast_const)
-    (rhs : right ast_const) =
+let rec equal_ast_const : type left right.
+    left ast_const -> right ast_const -> bool =
+ fun lhs rhs ->
   match (lhs, rhs) with
   | { type_ = Bool; value = lhs }, { type_ = Bool; value = rhs } ->
     Bool.equal lhs rhs
-  | { type_ = String; value = lhs }, { type_ = String; value = rhs } ->
-    String.equal lhs rhs
-  | { type_ = Int; value = lhs }, { type_ = Int; value = rhs } -> lhs = rhs
   | { type_ = Bigint; value = lhs }, { type_ = Bigint; value = rhs } ->
     Int64.equal lhs rhs
-  | _ -> failwith "FIXME equal_ast_const"
+  | { type_ = Date; value = lhs }, { type_ = Date; value = rhs } ->
+    Timmy.Date.compare lhs rhs = 0
+  | { type_ = Float; value = lhs }, { type_ = Float; value = rhs } ->
+    Float.equal lhs rhs
+  | { type_ = Int; value = lhs }, { type_ = Int; value = rhs } -> lhs = rhs
+  | { type_ = Json; value = lhs }, { type_ = Json; value = rhs } ->
+    Poly.equal lhs rhs
+  | { type_ = Null; _ }, { type_ = Null; _ } -> true
+  | { type_ = Nullable _; value = None }, { type_ = Nullable _; value = None }
+    ->
+    true
+  | ( { type_ = Nullable t; value = Some lhs },
+      { type_ = Nullable t'; value = Some rhs } ) ->
+    equal_ast_const { type_ = t; value = lhs } { type_ = t'; value = rhs }
+  | { type_ = String; value = lhs }, { type_ = String; value = rhs } ->
+    String.equal lhs rhs
+  | { type_ = Time; value = lhs }, { type_ = Time; value = rhs } ->
+    Timmy.Time.compare lhs rhs = 0
+  | _ -> false
 
 type ast =
   | Cast : {
