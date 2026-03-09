@@ -148,6 +148,13 @@ struct
     in
     let rec pp current_precedence : Expression.ast Fmt.t =
      fun f -> function
+       | Cast { expr; type' } ->
+         (const string "CAST("
+         ++ const (pp None) expr
+         ++ const string " AS "
+         ++ const string (string_of_type ~include_nullable:false type')
+         ++ const char ')')
+           f ()
        | Column { names; _ } when equal_context context Index_definition ->
          Fmt.list ~sep:comma string f names
        | Column { selectable; names; _ } ->

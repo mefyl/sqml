@@ -95,6 +95,7 @@ module Infix : sig
   val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   val ( <-> ) : ('t, 'tag) t -> ('t, 'tag) t -> (float, 'tag) t
+  val ( ->>) : (_, 'tag) t -> string -> (string, 'tag) t
 end
 
 include module type of Infix
@@ -112,6 +113,11 @@ val map_name : (string -> string) -> ('t, 'tag) t -> ('t, 'tag') t
 val in' : ('what, 'tag) t -> ('what list, 'tag) t -> (bool, 'tag) t
 val not_in : ('what, 'tag) t -> ('what list, 'tag) t -> (bool, 'tag) t
 val not : (bool, 'tag) t -> (bool, 'tag) t
+
+(** [cast type' expr] casts [expr] to [type'] using [CAST(expr AS type)],
+    returning a value of the corresponding SQML type. *)
+val cast : 't Column.Type.atomic -> (_, 'tag) t -> ('t, 'tag) t
+
 
 val select :
   from:(module SELECTABLE with type tag = 'tag) ->

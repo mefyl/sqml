@@ -25,6 +25,46 @@ module Column = struct
 
     type any_atomic = Type : _ atomic -> any_atomic
 
+    let rec equal_atomic : type l r. l atomic -> r atomic -> bool =
+     fun l r ->
+      match (l, r) with
+      | Bigint, Bigint
+      | Bool, Bool
+      | Date, Date
+      | Float, Float
+      | Int, Int
+      | Json, Json
+      | Serial, Serial
+      | Serial_big, Serial_big
+      | Text, Text
+      | Time, Time ->
+        true
+      | Array l, Array r -> equal_atomic l r
+      | Custom { repr; _ }, r -> equal_atomic repr r
+      | l, Custom { repr; _ } -> equal_atomic l repr
+      | Nullable l, Nullable r -> equal_atomic l r
+      | Varchar l, Varchar r -> l = r
+      | _ -> false
+
+    let equal_any_atomic (Type l) (Type r) = equal_atomic l r
+
+    let rec pp_atomic : type t. t atomic Fmt.t =
+     fun f -> function
+      | Array t -> Fmt.pf f "%a[]" pp_atomic t
+      | Bigint -> Fmt.string f "BIGINT"
+      | Bool -> Fmt.string f "BOOLEAN"
+      | Custom { repr; _ } -> pp_atomic f repr
+      | Date -> Fmt.string f "DATE"
+      | Float -> Fmt.string f "REAL"
+      | Int -> Fmt.string f "INTEGER"
+      | Json -> Fmt.string f "JSONB"
+      | Nullable t -> Fmt.pf f "%a?" pp_atomic t
+      | Serial -> Fmt.string f "SERIAL"
+      | Serial_big -> Fmt.string f "BIGSERIAL"
+      | Text -> Fmt.string f "TEXT"
+      | Time -> Fmt.string f "TIMESTAMP"
+      | Varchar n -> Fmt.pf f "VARCHAR(%d)" n
+
     module List = Hlist.Make (struct
       type nonrec 't t = string * 't atomic
     end)
@@ -109,6 +149,12 @@ let equal_ast_const (type left right) (lhs : left ast_const)
   | _ -> failwith "FIXME"
 
 type ast =
+  | Cast : {
+      expr : ast;
+      type' : _ Column.Type.atomic;
+          [@printer Column.Type.pp_atomic] [@equal Column.Type.equal_atomic]
+    }
+      -> ast
   | Column of {
       selectable : string;
       names : string list;

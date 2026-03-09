@@ -140,6 +140,9 @@ module Traverse_ast (M : Monad.S2) = struct
     let rec traverse_ast = function
       | (Column _ | Const _ | Default | Null | Selectable _ | Var _) as ast ->
         f ast
+      | Cast ({ expr; _ } as pl) ->
+        let+ expr = traverse_ast expr in
+        Cast { pl with expr }
       | Funcall ({ args; _ } as pl) ->
         let+ args = Acid.List.map ~f:traverse_ast args |> M.all in
         Funcall { pl with args }
@@ -425,6 +428,16 @@ module Infix = struct
   let ( || ) = logic 0 "OR"
   let ( + ) lhs rhs = arithmetics 3 "+" lhs rhs
   let ( - ) lhs rhs = arithmetics 3 "-" lhs rhs
+
+  let ( ->> ) (_, lhs) key =
+    ( Type.String,
+      Infix
+        {
+          op = "->>";
+          lhs;
+          rhs = to_ast (const Type.String key);
+          precedence = 4;
+        } )
 end
 
 include Infix
@@ -436,6 +449,9 @@ let not_in (_, value) (_, array) =
   (Type.Bool, Infix { lhs = value; op = "!= ALL"; rhs = array; precedence = -1 })
 
 let not (_, value) = (Type.Bool, Funcall { name = "NOT"; args = [ value ] })
+
+let cast (type t) (type' : t Column.Type.atomic) (_, value) =
+  (Type.of_atomic_column_type type', Cast { expr = value; type' })
 
 let _select (type tag) ~from:(module From : SELECTABLE with type tag = tag) ?by
     ?for' ?limit ?(skip_locked = false) ?where what =
