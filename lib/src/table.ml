@@ -364,9 +364,16 @@ module Query = struct
         (pp_table_name dialect) table_name
         (box
         @@ list ~sep:comma (fun f (ast, ordering) ->
-               Fmt.pf f "%a %a"
-                 Dialect.(pp ~context:Index_definition)
-                 ast pp_ordering ordering))
+               let pp =
+                 match ast with
+                 | Expression.Column _ -> Dialect.(pp ~context:Index_definition)
+                 | _ ->
+                   Fmt.(
+                     const char '('
+                     ++ Dialect.(pp ~context:Index_definition)
+                     ++ const char ')')
+               in
+               Fmt.pf f "%a %a" pp ast pp_ordering ordering))
         (List_nonempty.to_list expressions)
     | Create_table { columns; constraints; name; _ } ->
       let columns =
