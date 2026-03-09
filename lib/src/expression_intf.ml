@@ -146,7 +146,12 @@ let equal_ast_const (type left right) (lhs : left ast_const)
   match (lhs, rhs) with
   | { type_ = Bool; value = lhs }, { type_ = Bool; value = rhs } ->
     Bool.equal lhs rhs
-  | _ -> failwith "FIXME"
+  | { type_ = String; value = lhs }, { type_ = String; value = rhs } ->
+    String.equal lhs rhs
+  | { type_ = Int; value = lhs }, { type_ = Int; value = rhs } -> lhs = rhs
+  | { type_ = Bigint; value = lhs }, { type_ = Bigint; value = rhs } ->
+    Int64.equal lhs rhs
+  | _ -> failwith "FIXME equal_ast_const"
 
 type ast =
   | Cast : {

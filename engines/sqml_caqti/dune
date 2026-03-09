@@ -4,6 +4,7 @@
  (name sqml_caqti)
  (public_name sqml-caqti)
  (libraries
+  angstrom
   base
   caqti
   caqti-driver-postgresql

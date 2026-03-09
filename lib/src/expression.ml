@@ -436,7 +436,7 @@ module Infix = struct
           op = "->>";
           lhs;
           rhs = to_ast (const Type.String key);
-          precedence = 4;
+          precedence = 5;
         } )
 end
 

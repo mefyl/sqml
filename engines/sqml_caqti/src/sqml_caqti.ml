@@ -957,6 +957,95 @@ end = struct
     in
     acquire ~f transaction
 
+  let atomic_of_pg_name name : Expression.Column.Type.any_atomic option =
+    let open Expression.Column.Type in
+    match name with
+    | "bigint" | "int8" -> Some (Type Bigint)
+    | "boolean" -> Some (Type Bool)
+    | "date" -> Some (Type Date)
+    | "integer" | "int4" | "int" -> Some (Type Int)
+    | "jsonb" | "json" -> Some (Type Json)
+    | "text" -> Some (Type Text)
+    | "timestamp" | "timestamp without time zone" -> Some (Type Time)
+    | _ -> None
+
+  (* FIXME: This parser is incomplete and shall be expanded as we go. *)
+  let parse_index_expression ~selectable str =
+    let open Angstrom in
+    let ident =
+      take_while1 @@ function
+      | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true
+      | _ -> false
+    and ws =
+      skip_while @@ function ' ' | '\t' | '\n' | '\r' -> true | _ -> false
+    in
+    let cast_suffix =
+      let* name = string "::" *> ws *> ident in
+      match atomic_of_pg_name (String.lowercase name) with
+      | Some t -> return t
+      | None -> fail (Printf.sprintf "unknown cast type: %s" name)
+    in
+    let expr =
+      Angstrom.fix (fun expr ->
+          let atom =
+            let case =
+              let* cases =
+                let case =
+                  let* condition =
+                    string_ci "CASE" *> ws *> string_ci "WHEN" *> ws *> expr
+                  in
+                  let+ then' = ws *> string_ci "THEN" *> ws *> expr in
+                  (condition, then')
+                in
+                many1 case
+              in
+              let+ else' =
+                ws *> string_ci "ELSE" *> ws *> expr <* ws <* string_ci "END"
+              in
+              Expression.Switch { cases; default = Some else' }
+            and column =
+              let+ ident in
+              Expression.Column { selectable; names = [ ident ] }
+            and grouped =
+              let* expr = char '(' *> ws *> expr <* ws <* char ')' in
+              option None (cast_suffix >>| Option.some) >>| function
+              | Some (Expression.Column.Type.Type type') ->
+                Expression.Cast { expr; type' }
+              | None -> expr
+            and null =
+              let+ () =
+                string_ci "NULL" *> option () (cast_suffix >>| ignore)
+              in
+              Expression.Null
+            and string =
+              let+ value =
+                char '\'' *> take_till (Char.equal '\'')
+                <* char '\''
+                <* option () (cast_suffix >>| ignore)
+              in
+              Expression.Const { type_ = Expression.Type.String; value }
+            in
+            ws *> (case <|> grouped <|> null <|> string <|> column) <* ws
+          in
+          let left_assoc base op make =
+            let* lhs = base in
+            let+ rhss = many (op *> base) in
+            List.fold_left rhss ~init:lhs ~f:make
+          in
+          let arrows =
+            left_assoc atom (Angstrom.string "->>") @@ fun lhs rhs ->
+            Expression.Infix { op = "->>"; lhs; rhs; precedence = 5 }
+          in
+          let comparisons =
+            left_assoc arrows (Angstrom.string "=") @@ fun lhs rhs ->
+            Expression.Infix { op = "="; lhs; rhs; precedence = 2 }
+          in
+          comparisons)
+    in
+    match parse_string ~consume:All (ws *> expr <* ws) str with
+    | Ok ast -> ast
+    | Error _ -> Expression.Column { names = [ str ]; selectable }
+
   let split_pattern pattern in_ =
     let length = String.Search_pattern.pattern pattern |> String.length
     and splits =
@@ -983,29 +1072,18 @@ end = struct
       in
       let+ type_ =
         match (data_type, char_length) with
-        | "bigint", _ ->
-          Result.return (Column.Type.Type Bigint : Column.Type.any_atomic)
-        | "boolean", _ ->
-          Result.return (Column.Type.Type Bool : Column.Type.any_atomic)
         | "character varying", Some l ->
           Result.return (Column.Type.Type (Varchar l) : Column.Type.any_atomic)
         | "character varying", None ->
           Result.return (Column.Type.Type Text : Column.Type.any_atomic)
-        | "date", _ ->
-          Result.return (Column.Type.Type Date : Column.Type.any_atomic)
-        | "integer", _ ->
-          Result.return (Column.Type.Type Int : Column.Type.any_atomic)
-        | "jsonb", _ ->
-          Result.return (Column.Type.Type Json : Column.Type.any_atomic)
-        | "text", _ ->
-          Result.return (Column.Type.Type Text : Column.Type.any_atomic)
-        | ("timestamp" | "timestamp without time zone"), _ ->
-          Result.return (Column.Type.Type Time : Column.Type.any_atomic)
-        | _ ->
-          Result.fail
-            (`Sqml_engine
-               (Fmt.str "unrecognized data_type in information_schema: %S"
-                  data_type))
+        | _ -> (
+          match atomic_of_pg_name data_type with
+          | Some t -> Result.return t
+          | None ->
+            Result.fail
+              (`Sqml_engine
+                 (Fmt.str "unrecognized data_type in information_schema: %S"
+                    data_type)))
       in
       nullable type_
     in
@@ -1198,7 +1276,7 @@ ORDER BY constraint_name, src_col.ord;|}
                   match
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
-                           ( Expression.Column { names = [ c ]; selectable },
+                           ( parse_index_expression ~selectable c,
                              Sqml.Table.Schema.Index.
                                { ascending = true; nulls_first = None }
                              (* FIXME *) ))
