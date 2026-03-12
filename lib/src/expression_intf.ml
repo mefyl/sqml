@@ -44,7 +44,20 @@ module Column = struct
       | l, Custom { repr; _ } -> equal_atomic l repr
       | Nullable l, Nullable r -> equal_atomic l r
       | Varchar l, Varchar r -> l = r
-      | _ -> false
+      | Bigint, _
+      | Bool, _
+      | Date, _
+      | Float, _
+      | Int, _
+      | Json, _
+      | Serial, _
+      | Serial_big, _
+      | Text, _
+      | Time, _
+      | Array _, _
+      | Nullable _, _
+      | Varchar _, _ ->
+        false
 
     let equal_any_atomic (Type l) (Type r) = equal_atomic l r
 
