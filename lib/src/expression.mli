@@ -95,7 +95,7 @@ module Infix : sig
   val ( + ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   val ( - ) : (int, 'tag) t -> (int, 'tag) t -> (int, 'tag) t
   val ( <-> ) : ('t, 'tag) t -> ('t, 'tag) t -> (float, 'tag) t
-  val ( ->> ) : (_, 'tag) t -> string -> (string, 'tag) t
+  val ( ->> ) : (Ezjsonm.value, 'tag) t -> string -> (string, 'tag) t
 end
 
 include module type of Infix
