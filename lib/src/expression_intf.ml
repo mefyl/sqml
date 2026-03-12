@@ -180,7 +180,21 @@ let rec equal_ast_const : type left right.
     String.equal lhs rhs
   | { type_ = Time; value = lhs }, { type_ = Time; value = rhs } ->
     Timmy.Time.compare lhs rhs = 0
-  | _ -> false
+  | { type_ = Array _; _ }, _
+  | { type_ = Bigint; _ }, _
+  | { type_ = Bool; _ }, _
+  | { type_ = Custom _; _ }, _
+  | { type_ = Date; _ }, _
+  | { type_ = Float; _ }, _
+  | { type_ = Int; _ }, _
+  | { type_ = Json; _ }, _
+  | { type_ = Null; _ }, _
+  | { type_ = Nullable _; _ }, _
+  | { type_ = String; _ }, _
+  | { type_ = Time; _ }, _
+  | { type_ = []; _ }, _
+  | { type_ = _ :: _; _ }, _ ->
+    false
 
 type ast =
   | Cast : {
