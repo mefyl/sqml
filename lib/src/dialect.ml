@@ -3,7 +3,9 @@ include Dialect_intf
 
 let rec column_type_of_expression_type : type t.
     t Expression.Type.t -> Expression.Column.Type.any_atomic option = function
-  | Array _ -> None
+  | Array t ->
+    Option.map (column_type_of_expression_type t) ~f:(fun (Type atomic) ->
+        (Type (Array atomic) : Expression.Column.Type.any_atomic))
   | Bigint -> Some (Type Bigint)
   | Bool -> Some (Type Bool)
   | Date -> Some (Type Date)
