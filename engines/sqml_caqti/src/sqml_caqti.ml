@@ -1276,10 +1276,17 @@ ORDER BY constraint_name, src_col.ord;|}
                   match
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
-                           ( parse_index_expression ~selectable c,
+                           let c = String.strip c in
+                           let expr, ascending =
+                             if String.is_suffix c ~suffix:" DESC" then
+                               (String.drop_suffix c 5 |> String.strip, false)
+                             else if String.is_suffix c ~suffix:" ASC" then
+                               (String.drop_suffix c 4 |> String.strip, true)
+                             else (c, true)
+                           in
+                           ( parse_index_expression ~selectable expr,
                              Sqml.Table.Schema.Index.
-                               { ascending = true; nulls_first = None }
-                             (* FIXME *) ))
+                               { ascending; nulls_first = None } ))
                   with
                   | head :: tail -> Result.Ok List_nonempty.(head :: tail)
                   | _ -> fail
