@@ -28,7 +28,8 @@ let rec json_of_sqml : type t. t Expression.Type.t -> t -> Ezjsonm.value =
     fun value -> json_of_repr (encode value)
   | Int -> fun int -> `Float (Float.of_int int)
   | String -> fun string -> `String string
-  | _ -> failwith "fixme json"
+  | type' ->
+    Fmt.failwith "json_of_sqml: unsupported type %a" Expression.Type.pp type'
 
 let rec sqml_of_json : type t.
     t Expression.Type.t -> Ezjsonm.value -> (t, string) Result.t =
@@ -57,7 +58,8 @@ let rec sqml_of_json : type t.
     | value -> fail value)
   | String -> (
     function `String string -> Result.Ok string | value -> fail value)
-  | _ -> failwith "fixme json"
+  | type' ->
+    Fmt.failwith "sqml_of_json: unsupported type %a" Expression.Type.pp type'
 
 let pp_literal_string =
   let quote_pattern = String.Search_pattern.create "'" in
