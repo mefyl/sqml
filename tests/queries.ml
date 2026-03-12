@@ -618,6 +618,15 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let*! _ = make () in
       let*! _ = make () in
       Lwt_result.return ()
+
+    let schema_diff make () =
+      let*! db = make () in
+      let+! diff = Sqml.Engine.diff (module Engine) db in
+      let dialect = Engine.dialect db in
+      let diff =
+        List.map diff ~f:(fun q -> Fmt.str "%a" (Sqml.Table.Query.pp dialect) q)
+      in
+      Alcotest.(check ~here:[%here] (list string) "no schema diff" [] diff)
   end
 
   let in' db =
@@ -669,7 +678,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
           [ ("Alice", 4, 3); ("Bob", 1, 1); ("Carol", 5, 2) ]
           (res
           |> List.sort ~compare:(fun Hlist.(l :: _) Hlist.(r :: _) ->
-                 String.compare l r)
+              String.compare l r)
           |> List.map ~f:(fun Hlist.[ name; id; count ] -> (name, id, count))))
       |> Lwt_result.return
     in
@@ -924,6 +933,8 @@ let () =
              @@ Caqti_test.conflict_fail true;
              test_case_db ~here:[%here] "versioning-stable"
                Caqti_test.Versioning.stable;
+             test_case_db ~here:[%here] "schema-diff"
+               Caqti_test.Versioning.schema_diff;
              test_case ~here:[%here] "prepared" Caqti_test.prepared;
              test_case ~here:[%here] "join" Caqti_test.join;
              test_case ~here:[%here] "composite" Caqti_test.composite;
