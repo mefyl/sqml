@@ -12,10 +12,7 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
       Result.return (Ezjsonm.value_to_string ~minify:true @@ to_json value)
     and decode string =
       let open Let.Syntax2 (Result) in
-      let* json =
-        try Result.return (Ezjsonm.value_from_string string)
-        with Ezjsonm.Parse_error (_, error) -> Result.fail error
-      in
+      let* json = Schematic.Json.of_string string in
       of_json json
     in
     Caqti_type.(custom ~encode ~decode string)
@@ -36,10 +33,7 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
   | Int -> Caqti_type.int
   | Json ->
     let encode json = Result.return (Ezjsonm.value_to_string ~minify:true json)
-    and decode string =
-      try Result.return (Ezjsonm.value_from_string string)
-      with Ezjsonm.Parse_error (_, error) -> Result.fail error
-    in
+    and decode string = Schematic.Json.of_string string in
     Caqti_type.(custom ~encode ~decode string)
   | Null ->
     (* We don't have `Caqti.never`, but this should be safe since it can never

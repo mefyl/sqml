@@ -15,6 +15,7 @@
   logs.lwt
   lwt
   ptime
+  schematic
   semver2
   sqml
   unix

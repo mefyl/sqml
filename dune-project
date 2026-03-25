@@ -57,6 +57,10 @@
   caqti-lwt
   (sqlite3
    (>= 5.0.1))
+  (schematic
+   (and
+    (>= 0.22.0)
+    (< 0.23.0)))
   (sqml
    (= :version))))
 
@@ -69,5 +73,4 @@
     (>= 0.22.0)
     (< 0.23.0)))
   (sqml
-   (= :version))
-  timmy-unix))
+   (= :version))))

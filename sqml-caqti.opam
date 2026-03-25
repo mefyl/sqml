@@ -14,6 +14,7 @@ depends: [
   "caqti-driver-sqlite3" {with-test}
   "caqti-lwt"
   "sqlite3" {>= "5.0.1"}
+  "schematic" {>= "0.22.0" & < "0.23.0"}
   "sqml" {= version}
   "odoc" {with-doc}
 ]
