@@ -872,25 +872,28 @@ end = struct
       let f ((module C : Caqti_lwt.CONNECTION) as connection) =
         Logs.with_debug (fun m -> m ?tags "transaction start") @@ fun () ->
         let*! () = C.start () in
+        let connection = Lwt_guarded.make connection in
         let f () =
-          f
-            {
-              connection = Lwt_guarded.make connection;
-              current_query = ref None;
-              error = None;
-            }
-          >>= function
+          f { connection; current_query = ref None; error = None } >>= function
           | Result.Error e ->
             let* () = Logs.debug @@ fun m -> m ?tags "transaction rollback" in
-            let*! () = C.rollback () in
+            let*! () =
+              Lwt_guarded.acquire
+                ~f:(fun (module C) -> C.rollback ())
+                connection
+            in
             Lwt_result.fail (`Shitty_api e)
           | Result.Ok res ->
             let* () = Logs.debug @@ fun m -> m ?tags "transaction commit" in
-            let+! () = C.commit () in
+            let+! () =
+              Lwt_guarded.acquire ~f:(fun (module C) -> C.commit ()) connection
+            in
             res
         and catch exn =
           let* () = Logs.debug @@ fun m -> m ?tags "transaction rollback" in
-          let*! () = C.rollback () in
+          let*! () =
+            Lwt_guarded.acquire ~f:(fun (module C) -> C.rollback ()) connection
+          in
           raise exn
         in
         Lwt.catch f catch
