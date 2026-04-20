@@ -984,6 +984,10 @@ end = struct
     in
     let expr =
       Angstrom.fix (fun expr ->
+          let null =
+            let+ () = string_ci "NULL" *> option () (cast_suffix >>| ignore) in
+            Expression.Null
+          in
           let atom =
             let case =
               let* cases =
@@ -1009,11 +1013,6 @@ end = struct
               | Some (Expression.Column.Type.Type type') ->
                 Expression.Cast { expr; type' }
               | None -> expr
-            and null =
-              let+ () =
-                string_ci "NULL" *> option () (cast_suffix >>| ignore)
-              in
-              Expression.Null
             and string =
               let+ value =
                 char '\'' *> take_till (Char.equal '\'')
@@ -1037,7 +1036,26 @@ end = struct
             left_assoc arrows (Angstrom.string "=") @@ fun lhs rhs ->
             Expression.Infix { op = "="; lhs; rhs; precedence = 2 }
           in
-          comparisons)
+          let null_checks =
+            let* lhs = comparisons in
+            let not_null =
+              ws
+              *> string_ci "IS"
+              *> ws
+              *> string_ci "NOT"
+              *> ws
+              *> null
+              *> return (Expression.Is_not_null lhs)
+            and null =
+              ws
+              *> string_ci "IS"
+              *> ws
+              *> null
+              *> return (Expression.Is_null lhs)
+            in
+            not_null <|> null <|> return lhs
+          in
+          null_checks)
     in
     match parse_string ~consume:All (ws *> expr <* ws) str with
     | Ok ast -> ast
