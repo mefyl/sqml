@@ -114,11 +114,10 @@ module Schema = struct
     | Type (Nullable t) ->
       unroll_column { name; type_ = Type t }
       |> List.map ~f:(function
-           | ({ type_ = Type (Nullable _); _ } : Schema.column_atomic) as column
-             ->
-             column (* FIXME: Handle nullable through Custom *)
-           | ({ type_ = Type t; _ } : Schema.column_atomic) as column ->
-             { column with type_ = Type (Nullable t) })
+        | ({ type_ = Type (Nullable _); _ } : Schema.column_atomic) as column ->
+          column (* FIXME: Handle nullable through Custom *)
+        | ({ type_ = Type t; _ } : Schema.column_atomic) as column ->
+          { column with type_ = Type (Nullable t) })
 
   let of_table (type tag) (module T : S with type tag = tag) =
     let columns =
@@ -364,16 +363,16 @@ module Query = struct
         (pp_table_name dialect) table_name
         (box
         @@ list ~sep:comma (fun f (ast, ordering) ->
-               let pp =
-                 match ast with
-                 | Expression.Column _ -> Dialect.(pp ~context:Index_definition)
-                 | _ ->
-                   Fmt.(
-                     const char '('
-                     ++ Dialect.(pp ~context:Index_definition)
-                     ++ const char ')')
-               in
-               Fmt.pf f "%a %a" pp ast pp_ordering ordering))
+            let pp =
+              match ast with
+              | Expression.Column _ -> Dialect.(pp ~context:Index_definition)
+              | _ ->
+                Fmt.(
+                  const char '('
+                  ++ Dialect.(pp ~context:Index_definition)
+                  ++ const char ')')
+            in
+            Fmt.pf f "%a %a" pp ast pp_ordering ordering))
         (List_nonempty.to_list expressions)
     | Create_table { columns; constraints; name; _ } ->
       let columns =

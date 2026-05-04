@@ -1235,7 +1235,7 @@ ORDER BY constraint_name, src_col.ord;|}
           in
           rows
           |> List.group ~break:(fun (left, _, _, _) (right, _, _, _) ->
-                 String.(left <> right))
+              String.(left <> right))
           |> List.filter_map ~f
         in
         let*! indexes =
@@ -1276,17 +1276,17 @@ ORDER BY constraint_name, src_col.ord;|}
                   match
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
-                           let c = String.strip c in
-                           let expr, ascending =
-                             if String.is_suffix c ~suffix:" DESC" then
-                               (String.drop_suffix c 5 |> String.strip, false)
-                             else if String.is_suffix c ~suffix:" ASC" then
-                               (String.drop_suffix c 4 |> String.strip, true)
-                             else (c, true)
-                           in
-                           ( parse_index_expression ~selectable expr,
-                             Sqml.Table.Schema.Index.
-                               { ascending; nulls_first = None } ))
+                        let c = String.strip c in
+                        let expr, ascending =
+                          if String.is_suffix c ~suffix:" DESC" then
+                            (String.drop_suffix c 5 |> String.strip, false)
+                          else if String.is_suffix c ~suffix:" ASC" then
+                            (String.drop_suffix c 4 |> String.strip, true)
+                          else (c, true)
+                        in
+                        ( parse_index_expression ~selectable expr,
+                          Sqml.Table.Schema.Index.
+                            { ascending; nulls_first = None } ))
                   with
                   | head :: tail -> Result.Ok List_nonempty.(head :: tail)
                   | _ -> fail
@@ -1302,12 +1302,10 @@ ORDER BY constraint_name, src_col.ord;|}
           in
           List.map ~f rows
           |> List.filter_map ~f:(function
-               | Result.Ok res -> Some res
-               | Result.Error (`Sqml_engine error) ->
-                 let () =
-                   Logs.Sync.warn (fun m -> m "ignoring index: %s" error)
-                 in
-                 None)
+            | Result.Ok res -> Some res
+            | Result.Error (`Sqml_engine error) ->
+              let () = Logs.Sync.warn (fun m -> m "ignoring index: %s" error) in
+              None)
           |> Lwt_result.return
         in
         Lwt_result.return

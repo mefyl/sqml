@@ -693,8 +693,8 @@ let diff (type tag) (module Dialect : Dialect.S)
     Model.tables ()
     |> Array.to_list
     |> List.map ~f:(fun ((module T : Table.S with type tag = tag) as t) ->
-           ( Dialect.table_name ?schema:T.Meta.schema T.Meta.name,
-             Table.Schema.of_table t ))
+        ( Dialect.table_name ?schema:T.Meta.schema T.Meta.name,
+          Table.Schema.of_table t ))
     |> Map.of_alist_exn (module String)
   and f = function
     | _, `Left t -> [ Table.Query.Schema.drop t ]

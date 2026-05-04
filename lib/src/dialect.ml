@@ -139,7 +139,7 @@ struct
           type_
           |> column_type_of_expression_type
           |> Option.map ~f:(fun (Type t : Expression.Column.Type.any_atomic) ->
-                 string_of_type ~include_nullable:false t)
+              string_of_type ~include_nullable:false t)
         in
         match type_ with
         | None -> const char '$' ++ using Int.succ int
