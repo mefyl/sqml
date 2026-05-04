@@ -42,7 +42,8 @@
   (timmy
    (and
     (>= 1.0.1)
-    (< 2.0.0)))))
+    (< 2.0.0)))
+  (timmy-unix :with-test)))
 
 (package
  (name sqml-caqti)
@@ -74,3 +75,10 @@
     (< 0.23.0)))
   (sqml
    (= :version))))
+
+(pin
+ (url
+  git+https://github.com/dbuenzli/bytesrw#47bdebcbc527c264572fb5fbcc5ca606e67bcd32)
+ (package
+  (name bytesrw)
+  (version 0.3.0)))
