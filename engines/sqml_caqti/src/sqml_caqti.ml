@@ -824,8 +824,7 @@ end = struct
         in
         acquire ~f transaction
       in
-      (Sqml.Model.Zero
-        : (res, arity, ([> Sqml.Engine.error ] as 'error)) Sqml.Model.result)
+      (Sqml.Model.Zero : (res, arity, [> Sqml.Engine.error ]) Sqml.Model.result)
     | One prepared ->
       let+! res =
         let f (module C : Caqti_lwt.CONNECTION) =
