@@ -95,6 +95,7 @@ let rec atomic_type_of_descriptor : type t.
       in
       Custom { decode; encode; repr = Text }
     | None -> fail "Union")
+  | Well_known { descriptor; _ } -> atomic_type_of_descriptor ?id descriptor
 
 and atomic_type_of_schema Schematic.Schema.{ descriptor; id; _ } =
   atomic_type_of_descriptor ?id descriptor
@@ -152,6 +153,7 @@ let rec type_of_descriptor : type t.
         decode = (fun columns -> decode columns);
         encode = (fun o -> encode o |> hlist_of_fields);
       }
+  | Well_known { descriptor; _ } -> type_of_descriptor ?id descriptor
 
 and type_of_schema Schematic.Schema.{ descriptor; id; _ } =
   type_of_descriptor ?id descriptor
