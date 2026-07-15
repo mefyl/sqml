@@ -173,7 +173,7 @@ struct
         Expression.Private.conceal (type_, Expression.(to_ast @@ of_list values))
     end
 
-    let _ = v.tables <- Array.append v.tables [| (module Res) |]
+    let () = v.tables <- Array.append v.tables [| (module Res) |]
 
     include Res
   end
