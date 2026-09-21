@@ -179,8 +179,12 @@ end = struct
   let make ?max_size ?(post_creation_statements = fun _ -> []) uri =
     let open Caqti_request.Infix in
     let*! pool =
-      let config = Caqti_pool_config.create ?max_size () in
-      Caqti_lwt_unix.connect_pool ~pool_config:config (Uri.of_string uri)
+      let pool_config = Caqti_pool_config.create ?max_size ()
+      and config =
+        (* Have Caqti make SQLite enforce foreign keys. *)
+        Caqti_connect_config.(set tweaks_version (1, 8) default)
+      in
+      Caqti_lwt_unix.connect_pool ~pool_config ~config (Uri.of_string uri)
       |> Lwt.return
       |> error
     in
