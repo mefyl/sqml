@@ -912,6 +912,39 @@ end
 module Caqti = Sqml_caqti.Make (Model)
 module Caqti_test = Test (Caqti)
 
+let test_cases ~sqlite ~test_case ~test_case_db =
+  let skip_on_sqlite f = if sqlite then fun _ -> Alcotest.skip () else f in
+  [
+    test_case "select" Caqti_test.select;
+    test_case "select-for-update" Caqti_test.select_for_update;
+    test_case "insert" Caqti_test.insert;
+    test_case "delete" Caqti_test.delete;
+    test_case "delete_returning" Caqti_test.delete_returning;
+    test_case "update" Caqti_test.update;
+    (* FIXME: SQLite's RETURNING cannot name the table joined through FROM. *)
+    test_case "update_from" (skip_on_sqlite Caqti_test.update_from);
+    test_case_db "timestamp" Caqti_test.timestamp;
+    test_case_db "now" Caqti_test.now;
+    test_case "group" Caqti_test.group;
+    test_case "is_null" Caqti_test.is_null;
+    test_case "json" Caqti_test.json;
+    test_case "JSON parameters in prepared statements"
+      Caqti_test.json_prepared_parameters;
+    (* FIXME: [= ANY] has no SQLite equivalent, it needs [json_each]. *)
+    test_case "in" (skip_on_sqlite Caqti_test.in');
+    test_case "conflict" Caqti_test.conflict;
+    test_case "conflict-cascade" Caqti_test.conflict_cascade;
+    test_case "conflict-fail" Caqti_test.conflict_fail;
+    test_case_db "versioning-stable" Caqti_test.Versioning.stable;
+    (* FIXME: schema introspection is only implemented for PostgreSQL. *)
+    test_case_db "schema-diff"
+      (skip_on_sqlite Caqti_test.Versioning.schema_diff);
+    (* FIXME: exercises [in'], see above. *)
+    test_case "prepared" (skip_on_sqlite Caqti_test.prepared);
+    test_case "join" Caqti_test.join;
+    test_case "composite" Caqti_test.composite;
+  ]
+
 let () =
   let open Alcotest_lwt in
   let test_case ?(here = [%here]) name f =
@@ -948,26 +981,9 @@ let () =
              in
              Lwt_io.with_temp_file ~prefix:"sqml-test" f
            in
-           [
-             test_case "select" @@ make Caqti_test.select;
-             test_case "select-for-update" @@ make Caqti_test.select_for_update;
-             test_case "insert" @@ make Caqti_test.insert;
-             test_case "delete" @@ make Caqti_test.delete;
-             test_case "delete_returning" @@ make Caqti_test.delete_returning;
-             test_case "update" @@ make Caqti_test.update;
-             test_case "conflict" @@ make @@ Caqti_test.conflict;
-             test_case "conflict-cascade" @@ make Caqti_test.conflict_cascade;
-             test_case ~here:[%here] "conflict-fail"
-             @@ make Caqti_test.conflict_fail;
-             test_case "timestamp" @@ make_db Caqti_test.timestamp;
-             test_case "now" @@ make_db Caqti_test.now;
-             test_case "json" @@ make Caqti_test.json;
-             test_case "JSON parameter in prepared statement"
-             @@ make Caqti_test.json_prepared_parameters;
-             test_case "versioning-stable"
-             @@ make_db Caqti_test.Versioning.stable
-             (* test_case "prepared" @@ make Caqti_test.prepared; *);
-           ] );
+           test_cases ~sqlite:true
+             ~test_case:(fun name f -> test_case name @@ make f)
+             ~test_case_db:(fun name f -> test_case name @@ make_db f) );
          ( "Caqti-PostgreSQL",
            let make_db db test switch () =
              let pg_host, pg_host_overridden =
@@ -1025,29 +1041,5 @@ let () =
            and test_case_db ?here name f =
              test_case ?here name @@ make_db name f
            in
-           [
-             test_case ~here:[%here] "select" Caqti_test.select;
-             test_case ~here:[%here] "select-for-update" Caqti_test.select_for_update;
-             test_case ~here:[%here] "insert" Caqti_test.insert;
-             test_case ~here:[%here] "delete" Caqti_test.delete;
-             test_case ~here:[%here] "delete_returning" Caqti_test.delete_returning;
-             test_case ~here:[%here] "update" Caqti_test.update;
-             test_case ~here:[%here] "update_from" Caqti_test.update_from;
-             test_case_db ~here:[%here] "timestamp" Caqti_test.timestamp;
-             test_case_db ~here:[%here] "now" Caqti_test.now;
-             test_case ~here:[%here] "group" Caqti_test.group;
-             test_case ~here:[%here] "is_null" Caqti_test.is_null;
-             test_case ~here:[%here] "json" Caqti_test.json;
-             test_case ~here:[%here] "JSON parameters in prepared statements"
-               Caqti_test.json_prepared_parameters;
-             test_case ~here:[%here] "in" Caqti_test.in';
-             test_case ~here:[%here] "conflict" @@ Caqti_test.conflict;
-             test_case ~here:[%here] "conflict-cascade" Caqti_test.conflict_cascade;
-             test_case ~here:[%here] "conflict-fail" @@ Caqti_test.conflict_fail;
-             test_case_db ~here:[%here] "versioning-stable" Caqti_test.Versioning.stable;
-             test_case_db ~here:[%here] "schema-diff" Caqti_test.Versioning.schema_diff;
-             test_case ~here:[%here] "prepared" Caqti_test.prepared;
-             test_case ~here:[%here] "join" Caqti_test.join;
-             test_case ~here:[%here] "composite" Caqti_test.composite;
-           ] );
+           test_cases ~sqlite:false ~test_case ~test_case_db );
        ]
