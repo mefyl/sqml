@@ -54,7 +54,7 @@
     (>= 2.0.0)
     (< 3.0.0)))
   caqti-driver-postgresql
-  (caqti-driver-sqlite3 :with-test)
+  caqti-driver-sqlite3
   caqti-lwt
   (sqlite3
    (>= 5.0.1))

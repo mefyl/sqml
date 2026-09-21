@@ -8,6 +8,7 @@
   base
   caqti
   caqti-driver-postgresql
+  caqti-driver-sqlite3
   caqti-lwt
   caqti-lwt.unix
   ezjsonm

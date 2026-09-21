@@ -123,43 +123,23 @@ end = struct
   let fail fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
   let convert_error =
+    let classify error (query_error : Caqti_error.query_error) =
+      match Caqti_error.cause error with
+      | `Foreign_key_violation -> `Foreign_key_violation
+      | `Not_null_violation -> `Not_null_violation
+      | `Unique_violation -> `Unique_violation (Caqti_error.show error)
+      | _ -> (
+        match query_error.msg with
+        | Caqti_driver_postgresql.Result_error_msg { sqlstate = "40P01"; _ } ->
+          `Sqml_deadlock
+        | Caqti_driver_sqlite3.Error_msg
+            { extended_errcode = Some (1555 | 2579); _ } ->
+          `Unique_violation (Caqti_error.show error)
+        | _ -> `Sqml_engine (Caqti_error.show error))
+    in
     let f = function
-      | `Request_failed
-          ({
-             msg =
-               Caqti_driver_postgresql.Result_error_msg
-                 { sqlstate = "40P01"; _ };
-             _;
-           } :
-            Caqti_error.query_error) ->
-        `Sqml_deadlock
-      | `Request_failed
-          ({
-             msg =
-               Caqti_driver_postgresql.Result_error_msg
-                 { sqlstate = "23502"; _ };
-             _;
-           } :
-            Caqti_error.query_error) ->
-        `Not_null_violation
-      | `Request_failed
-          ({
-             msg =
-               Caqti_driver_postgresql.Result_error_msg
-                 { sqlstate = "23503"; _ };
-             _;
-           } :
-            Caqti_error.query_error) ->
-        `Foreign_key_violation
-      | `Request_failed
-          ({
-             msg =
-               Caqti_driver_postgresql.Result_error_msg
-                 { sqlstate = "23505"; error_message };
-             _;
-           } :
-            Caqti_error.query_error) ->
-        `Unique_violation error_message
+      | `Request_failed query_error as error -> classify error query_error
+      | `Response_failed query_error as error -> classify error query_error
       | e -> `Sqml_engine (Caqti_error.show e)
     in
     Result.map_error ~f
