@@ -62,7 +62,8 @@ CREATE UNIQUE INDEX ids ON "table1" (id ASC, name DESC);
 CREATE TABLE "table2" (
   id INTEGER NOT NULL,
   CONSTRAINT table2_id_fkey
-    FOREIGN KEY (id) REFERENCES "table1"(id));|}
+    FOREIGN KEY (id)
+    REFERENCES "table1"(id) ON DELETE CASCADE);|}
     in
     Alcotest.(
       check ~here:[%here] string "creation queries" expected
@@ -517,6 +518,23 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
+  let conflict_cascade db =
+    let*! () = populate ~t1s:[ (0, "zero", None) ] db in
+    let*! () = populate_t2 [ 0 ] db in
+    let*! Zero =
+      Engine.query db
+      @@ Model.insert ~into:(module Model.T1) ~on_conflict:Update
+      @@ Model.T1.const (0, "two", Some "2")
+    in
+    let*! () = check_t1s db [ (0, "two", Some "2") ] in
+    let*! (Many t2s) =
+      Engine.query db @@ Model.select ~from:(module Model.T2) Model.T2.all
+    in
+    let+! t2s = Sequence.to_list t2s in
+    Alcotest.(
+      check ~here:[%here] (list t2) "rows referencing the upserted row" [ 0 ]
+        t2s)
+
   let conflict_fail psql db =
     let*! Zero =
       let q =
@@ -928,6 +946,7 @@ let () =
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
              test_case "update" @@ make Caqti_test.update;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
+             test_case "conflict-cascade" @@ make Caqti_test.conflict_cascade;
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
              test_case "now" @@ make_db Caqti_test.now;
              test_case "json" @@ make Caqti_test.json;
@@ -1010,6 +1029,7 @@ let () =
                Caqti_test.json_prepared_parameters;
              test_case ~here:[%here] "in" Caqti_test.in';
              test_case ~here:[%here] "conflict" @@ Caqti_test.conflict true;
+             test_case "conflict-cascade" Caqti_test.conflict_cascade;
              test_case ~here:[%here] "conflict-fail"
              @@ Caqti_test.conflict_fail true;
              test_case_db ~here:[%here] "versioning-stable"

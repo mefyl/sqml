@@ -73,7 +73,7 @@ module T2 = struct
           make "id"
             ~foreign_keys:
               [
-                Table.Column.Foreign_key.make
+                Table.Column.Foreign_key.make ~on_delete:Cascade
                   { table = (module T1); column = T1.Column.id };
               ]
             Type.Int)

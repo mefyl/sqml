@@ -407,21 +407,18 @@ end = struct
           | None -> primary
           | Some index -> unique_columns index
         in
-        let conflict_sqlite, conflict_pg =
+        let conflict =
           let open Fmt in
           match (dialect, on_conflict) with
-          | _, Fail -> (nop, nop)
-          | (`Pgsql | `Other), Ignore ->
-            (nop, const string " ON CONFLICT DO NOTHING")
+          | _, Fail -> nop
+          | (`Pgsql | `Sqlite | `Other), Ignore ->
+            const string " ON CONFLICT DO NOTHING"
           | (`Pgsql | `Sqlite | `Other), Set assignments ->
-            ( nop,
-              const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) index
-              ++ const string ") DO UPDATE SET "
-              ++ const
-                   (list ~sep:comma pp_assignment)
-                   (assignments { excluded }) )
-          | (`Pgsql | `Other), Update ->
+            const string " ON CONFLICT ("
+            ++ const (list ~sep:comma string) index
+            ++ const string ") DO UPDATE SET "
+            ++ const (list ~sep:comma pp_assignment) (assignments { excluded })
+          | (`Pgsql | `Sqlite | `Other), Update ->
             let f { Column.name; type_; _ } =
               let rec pp_columns : 't. 't Column.Type.t -> string list =
                fun (type t) (t : t Column.Type.t) ->
@@ -441,21 +438,18 @@ end = struct
               in
               Some (pp_columns type_)
             in
-            ( nop,
-              const string " ON CONFLICT ("
-              ++ const (list ~sep:comma string) index
-              ++ const string ") DO UPDATE SET "
-              ++ const (list ~sep:comma string)
-                   (column_map { f } T.Meta.columns |> List.concat) )
-          | `Sqlite, Ignore -> (const string " OR IGNORE", nop)
-          | `Sqlite, Update -> (const string " OR REPLACE", nop)
+            const string " ON CONFLICT ("
+            ++ const (list ~sep:comma string) index
+            ++ const string ") DO UPDATE SET "
+            ++ const (list ~sep:comma string)
+                 (column_map { f } T.Meta.columns |> List.concat)
           | `Mysql, _ -> failwith "dialect not handled"
         in
         (* Explicitely enumerate columns order on insertion, migration that add
            columns subsequently mess up the column ordering. *)
         Fmt.(
-          pf f "INSERT%a INTO %S (%a) VALUES(%a)%a%a" conflict_sqlite ()
-            T.Meta.name (list ~sep:comma string)
+          pf f "INSERT INTO %S (%a) VALUES(%a)%a%a" T.Meta.name
+            (list ~sep:comma string)
             (Table.Column.List.map
                ~f:
                  {
@@ -466,7 +460,7 @@ end = struct
                T.Meta.columns
             |> List.concat)
             Dialect.(pp ?context:None)
-            value conflict_pg () pp_returning returning)
+            value conflict () pp_returning returning)
       and pp_select (type t)
           (Select
              { for'; from; group_by; limit; order_by; skip_locked; what; where } :
