@@ -516,6 +516,19 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     Lwt_result.return ()
 
+  let select_for_update db =
+    let*! () = populate db in
+    let*! (Many res) =
+      Engine.query db
+      @@ Model.select
+           ~from:(module Model.T1)
+           ~for':Update ~skip_locked:true
+           ~where:Sqml.Expression.(Model.T1.id = const Int 1)
+           Model.T1.name
+    in
+    let+! res = Sequence.to_list res in
+    Alcotest.(check ~here:[%here] (list string) "locked row" [ "one" ] res)
+
   let conflict_cascade db =
     let*! () = populate ~t1s:[ (0, "zero", None) ] db in
     let*! () = populate_t2 [ 0 ] db in
@@ -937,6 +950,7 @@ let () =
            in
            [
              test_case "select" @@ make Caqti_test.select;
+             test_case "select-for-update" @@ make Caqti_test.select_for_update;
              test_case "insert" @@ make Caqti_test.insert;
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
@@ -1013,6 +1027,7 @@ let () =
            in
            [
              test_case ~here:[%here] "select" Caqti_test.select;
+             test_case ~here:[%here] "select-for-update" Caqti_test.select_for_update;
              test_case ~here:[%here] "insert" Caqti_test.insert;
              test_case ~here:[%here] "delete" Caqti_test.delete;
              test_case ~here:[%here] "delete_returning" Caqti_test.delete_returning;

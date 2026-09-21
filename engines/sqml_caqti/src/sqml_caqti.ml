@@ -445,45 +445,57 @@ end = struct
           (Select
              { for'; from; group_by; limit; order_by; skip_locked; what; where } :
             t Model.Query.select) =
-        let pp_for f =
-          let forable =
-            let rec forable =
-              let outer (name, _) = (name, false) in
-              function
-              | Expression.Selectable { alias; name } ->
-                [ (Option.value ~default:name alias, true) ]
-              | Join { left; right; type_ = Inner; _ } ->
-                forable left @ forable right
-              | Join { left; right; type_ = Outer_left; _ } ->
-                forable left @ List.map ~f:outer @@ forable right
-              | Join { left; right; type_ = Outer_right; _ } ->
-                (List.map ~f:outer @@ forable left) @ forable right
-              | Join { left; right; type_ = Outer; _ } ->
-                (List.map ~f:outer @@ forable left)
-                @ List.map ~f:outer
-                @@ forable right
-              | _ -> []
+        let pp_for f (for', skip_locked) =
+          match dialect with
+          | `Sqlite ->
+            (* SQLite is single-writer, there is nothing to lock. *)
+            ()
+          | _ ->
+            let open Fmt in
+            let forable =
+              let rec forable =
+                let outer (name, _) = (name, false) in
+                function
+                | Expression.Selectable { alias; name } ->
+                  [ (Option.value ~default:name alias, true) ]
+                | Join { left; right; type_ = Inner; _ } ->
+                  forable left @ forable right
+                | Join { left; right; type_ = Outer_left; _ } ->
+                  forable left @ List.map ~f:outer @@ forable right
+                | Join { left; right; type_ = Outer_right; _ } ->
+                  (List.map ~f:outer @@ forable left) @ forable right
+                | Join { left; right; type_ = Outer; _ } ->
+                  (List.map ~f:outer @@ forable left)
+                  @ List.map ~f:outer
+                  @@ forable right
+                | _ -> []
+              in
+              let module From = (val from) in
+              forable (From.to_ast ())
+            and pp_forable f forable =
+              if List.for_all ~f:snd forable then ()
+              else
+                Fmt.pf f " OF %a" (list ~sep:comma string)
+                @@ List.filter_map
+                     ~f:(fun (name, forable) -> Option.some_if forable name)
+                     forable
             in
-            let module From = (val from) in
-            forable (From.to_ast ())
-          and pp_forable f forable =
-            if List.for_all ~f:snd forable then ()
-            else
-              Fmt.pf f " OF %a" (list ~sep:comma string)
-              @@ List.filter_map
-                   ~f:(fun (name, forable) -> Option.some_if forable name)
-                   forable
-          in
-          function
-          | Sqml.Expression.Key_share ->
-            Fmt.(const string "FOR KEY SHARE" ++ pp_forable) f forable
-          | No_key_update ->
-            Fmt.(const string "FOR NO KEY UPDATE" ++ pp_forable) f forable
-          | Share -> Fmt.(const string "FOR SHARE" ++ pp_forable) f forable
-          | Update | Update_of [] ->
-            Fmt.(const string "FOR UPDATE" ++ pp_forable) f forable
-          | Update_of tables ->
-            Fmt.(pf f "FOR UPDATE OF %a" (list ~sep:comma string) tables)
+            let pp_mode f = function
+              | Sqml.Expression.Key_share ->
+                (const string "FOR KEY SHARE" ++ pp_forable) f forable
+              | No_key_update ->
+                (const string "FOR NO KEY UPDATE" ++ pp_forable) f forable
+              | Share -> (const string "FOR SHARE" ++ pp_forable) f forable
+              | Update | Update_of [] ->
+                (const string "FOR UPDATE" ++ pp_forable) f forable
+              | Update_of tables ->
+                pf f "FOR UPDATE OF %a" (list ~sep:comma string) tables
+            in
+            option
+              (sp
+              ++ pp_mode
+              ++ if' skip_locked (sp ++ const string "SKIP LOCKED"))
+              f for'
         and pp_order_by f =
           let pp_order_by (expression, ordering) =
             Fmt.pf f "%a %a"
@@ -521,10 +533,7 @@ end = struct
              (option (sp ++ box ~indent:2 (pp_clause "GROUP BY")))
              Expression.(Option.map ~f:to_ast group_by)
         ++ const pp_order_by order_by
-        ++ const (option (sp ++ pp_for)) for'
-        ++ const
-             (option (sp ++ string))
-             (if skip_locked then Some "SKIP LOCKED" else None)
+        ++ const pp_for (for', skip_locked)
         ++ const (option (sp ++ pp_limit)) limit)
           f ()
       and pp_update (type res tag from)
