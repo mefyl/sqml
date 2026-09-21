@@ -228,6 +228,7 @@ type ast =
       type_ : join_type;
     }
   | List of ast list
+  | Now
   | Null
   | Select of {
       for' : for' option;

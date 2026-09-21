@@ -303,6 +303,48 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
                (list (module Timmy.Time))
                "inserted timestamps" [ now; later ] res))
 
+  module Time_range = struct
+    type t =
+      | Range of {
+          start : Timmy.Time.t;
+          end' : Timmy.Time.t;
+        }
+      | Time of Timmy.Time.t
+
+    let pp f = function
+      | Range { start; end' } ->
+        Fmt.pf f "%a-%a" Timmy.Time.pp start Timmy.Time.pp end'
+      | Time time -> Timmy.Time.pp f time
+
+    let return time = Time time
+
+    let equal lhs rhs =
+      match (lhs, rhs) with
+      | Range { start; end' }, Time time | Time time, Range { start; end' } ->
+        Timmy.Time.(time >= start && time <= end')
+      | Time lhs, Time rhs -> Timmy.Time.(lhs = rhs)
+      | Range _, Range _ -> Alcotest.fail "cannot compare time ranges"
+  end
+
+  (* [Expression.now] is spelled differently by each dialect, and must produce a
+     value the engine can decode back into a [Timmy.Time.t]. *)
+  let now make () =
+    let before = Ptime_clock.now () |> Timmy.Time.of_ptime in
+    let*! db = make () in
+    Engine.connect db (fun db ->
+        let*! Zero =
+          let q = Model.insert ~into:(module Model.Ts) Sqml.Expression.now in
+          Engine.query db q
+        in
+        let q = Model.select_one ~from:(module Model.Ts) Model.Ts.time in
+        let*! (One_maybe res) = Engine.query db q in
+        let after = Ptime_clock.now () |> Timmy.Time.of_ptime in
+        Lwt_result.return
+        @@ Alcotest.(check ~here:[%here] (option (module Time_range)))
+             "now"
+             (Some (Range { start = before; end' = after }))
+             (Option.map res ~f:Time_range.return))
+
   let config = Alcotest.(testable Model.Configs.pp Model.Configs.equal)
 
   let json db =
@@ -853,6 +895,7 @@ let () =
              test_case "update" @@ make Caqti_test.update;
              test_case "conflict" @@ make @@ Caqti_test.conflict false;
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
+             test_case "now" @@ make_db Caqti_test.now;
              test_case "json" @@ make Caqti_test.json;
              test_case "versioning-stable"
              @@ make_db Caqti_test.Versioning.stable
@@ -924,6 +967,7 @@ let () =
              test_case ~here:[%here] "update" Caqti_test.update;
              test_case ~here:[%here] "update_from" Caqti_test.update_from;
              test_case_db ~here:[%here] "timestamp" Caqti_test.timestamp;
+             test_case_db ~here:[%here] "now" Caqti_test.now;
              test_case ~here:[%here] "group" Caqti_test.group;
              test_case ~here:[%here] "is_null" Caqti_test.is_null;
              test_case ~here:[%here] "json" Caqti_test.json;

@@ -76,6 +76,9 @@ module Make (D : sig
   val index_name : ?schema:string -> string -> string
   val pp_array : 'element Expression.Type.t -> 'a Fmt.t -> 'a Fmt.t
   val string_of_type : _ Expression.Column.Type.atomic -> string
+
+  (** The current timestamp as RFC3339. *)
+  val now : string
 end) =
 struct
   include D
@@ -211,6 +214,7 @@ struct
          ++ const (option ~none:(const string "true") pp_ast) on)
            f ()
        | List l -> list ~sep:comma (pp None) f l
+       | Now -> Fmt.string f D.now
        | Null -> Fmt.string f "NULL"
        | Select { for'; from; group_by; limit; skip_locked; what; where } ->
          pf f "(@,@[<2>SELECT %a@] @[<2>FROM %a@]%a%a%a%a%a)" (pp None) what
@@ -310,6 +314,7 @@ module Postgresql : S = Make (struct
         f pp
 
   let string_of_type = string_of_type_postgres
+  let now = "NOW()"
 end)
 
 let postgresql = (module Postgresql : S)
@@ -330,6 +335,8 @@ module Sqlite : S = Make (struct
       | t -> string_of_type_postgres t
     in
     f t
+
+  let now = "strftime('%Y-%m-%d %H:%M:%f+00:00', 'now')"
 end)
 
 let sqlite = (module Sqlite : S)

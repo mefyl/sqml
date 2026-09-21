@@ -138,7 +138,8 @@ module Traverse_ast (M : Monad.S2) = struct
 
   let traverse_ast ast ~f =
     let rec traverse_ast = function
-      | (Column _ | Const _ | Default | Null | Selectable _ | Var _) as ast ->
+      | (Column _ | Const _ | Default | Now | Null | Selectable _ | Var _) as
+        ast ->
         f ast
       | Cast ({ expr; _ } as pl) ->
         let+ expr = traverse_ast expr in
@@ -320,7 +321,7 @@ let default =
       },
     Default )
 
-let now = (Type.Time, Funcall { name = "NOW"; args = [] })
+let now = (Type.Time, Now)
 let make_column ~name ~selectable type_ = Column.{ name; selectable; type_ }
 
 let coalesce = function
