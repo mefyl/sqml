@@ -426,7 +426,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         [ ("prepared", value, owner) ]
         configs)
 
-  let conflict psql db =
+  let conflict db =
     let*! Zero =
       let q =
         Model.insert ~into:(module Model.T1) @@ Model.T1.const (0, "zero", None)
@@ -482,39 +482,37 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     in
     let*! () =
       let open Sqml.Expression in
-      if psql then
-        let*! Zero =
-          let q =
-            Model.insert
-              ~into:(module Model.T1)
-              ~on_conflict:
-                (Set
-                   (fun { excluded } ->
-                     [
-                       Model.T1.Column.name := Model.T1.name ^ const String "'";
-                       Model.T1.Column.description :=
-                         excluded Model.T1.description;
-                     ]))
-            @@ Model.T1.const (0, "three", Some "3")
-          in
-          Engine.query db q
+      let*! Zero =
+        let q =
+          Model.insert
+            ~into:(module Model.T1)
+            ~on_conflict:
+              (Set
+                 (fun { excluded } ->
+                   [
+                     Model.T1.Column.name := Model.T1.name ^ const String "'";
+                     Model.T1.Column.description :=
+                       excluded Model.T1.description;
+                   ]))
+          @@ Model.T1.const (0, "three", Some "3")
         in
-        let*! (Many res) =
-          let q =
-            Model.select
-              ~from:(module Model.T1)
-              (Sqml.Expression.of_list Model.T1.[ name; description ])
-          in
-          Engine.query db q
+        Engine.query db q
+      in
+      let*! (Many res) =
+        let q =
+          Model.select
+            ~from:(module Model.T1)
+            (Sqml.Expression.of_list Model.T1.[ name; description ])
         in
-        Sequence.to_list res >>|! function
-        | [ Hlist.[ name; description ] ] ->
-          Alcotest.(check ~here:[%here] string "updated row name" "two'" name);
-          Alcotest.(
-            check ~here:[%here] (option string) "updated row description"
-              (Some "3") description)
-        | _ -> Alcotest.fail "wrong number of lines"
-      else Lwt_result.return ()
+        Engine.query db q
+      in
+      Sequence.to_list res >>|! function
+      | [ Hlist.[ name; description ] ] ->
+        Alcotest.(check ~here:[%here] string "updated row name" "two'" name);
+        Alcotest.(
+          check ~here:[%here] (option string) "updated row description"
+            (Some "3") description)
+      | _ -> Alcotest.fail "wrong number of lines"
     in
     Lwt_result.return ()
 
@@ -535,7 +533,7 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       check ~here:[%here] (list t2) "rows referencing the upserted row" [ 0 ]
         t2s)
 
-  let conflict_fail psql db =
+  let conflict_fail db =
     let*! Zero =
       let q =
         Model.insert ~into:(module Model.T1) ~on_conflict:Ignore
@@ -543,18 +541,16 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       in
       Engine.query db q
     in
-    if psql then
-      let q =
-        Model.insert ~into:(module Model.T1) ~on_conflict:Fail
-        @@ Model.T1.const (0, "two", Some "2")
-      in
-      Engine.query db q >>| function
-      | Ok Zero -> Alcotest.fail ~here:[%here] "no error"
-      | Error (`Unique_violation _) -> Ok ()
-      | Error err ->
-        Alcotest.failf ~here:[%here] "unexpected error: %a" Sqml.Engine.pp_error
-          err
-    else Lwt_result.return ()
+    let q =
+      Model.insert ~into:(module Model.T1) ~on_conflict:Fail
+      @@ Model.T1.const (0, "two", Some "2")
+    in
+    Engine.query db q >>| function
+    | Ok Zero -> Alcotest.fail ~here:[%here] "no error"
+    | Error (`Unique_violation _) -> Ok ()
+    | Error err ->
+      Alcotest.failf ~here:[%here] "unexpected error: %a" Sqml.Engine.pp_error
+        err
 
   let is_null db =
     let*! () = populate db in
@@ -945,8 +941,10 @@ let () =
              test_case "delete" @@ make Caqti_test.delete;
              test_case "delete_returning" @@ make Caqti_test.delete_returning;
              test_case "update" @@ make Caqti_test.update;
-             test_case "conflict" @@ make @@ Caqti_test.conflict false;
+             test_case "conflict" @@ make @@ Caqti_test.conflict;
              test_case "conflict-cascade" @@ make Caqti_test.conflict_cascade;
+             test_case ~here:[%here] "conflict-fail"
+             @@ make Caqti_test.conflict_fail;
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
              test_case "now" @@ make_db Caqti_test.now;
              test_case "json" @@ make Caqti_test.json;
@@ -1028,14 +1026,11 @@ let () =
              test_case ~here:[%here] "JSON parameters in prepared statements"
                Caqti_test.json_prepared_parameters;
              test_case ~here:[%here] "in" Caqti_test.in';
-             test_case ~here:[%here] "conflict" @@ Caqti_test.conflict true;
-             test_case "conflict-cascade" Caqti_test.conflict_cascade;
-             test_case ~here:[%here] "conflict-fail"
-             @@ Caqti_test.conflict_fail true;
-             test_case_db ~here:[%here] "versioning-stable"
-               Caqti_test.Versioning.stable;
-             test_case_db ~here:[%here] "schema-diff"
-               Caqti_test.Versioning.schema_diff;
+             test_case ~here:[%here] "conflict" @@ Caqti_test.conflict;
+             test_case ~here:[%here] "conflict-cascade" Caqti_test.conflict_cascade;
+             test_case ~here:[%here] "conflict-fail" @@ Caqti_test.conflict_fail;
+             test_case_db ~here:[%here] "versioning-stable" Caqti_test.Versioning.stable;
+             test_case_db ~here:[%here] "schema-diff" Caqti_test.Versioning.schema_diff;
              test_case ~here:[%here] "prepared" Caqti_test.prepared;
              test_case ~here:[%here] "join" Caqti_test.join;
              test_case ~here:[%here] "composite" Caqti_test.composite;
