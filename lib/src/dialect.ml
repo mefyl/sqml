@@ -331,7 +331,7 @@ module Sqlite : S = Make (struct
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.atomic -> string = function
       | Custom { repr; _ } -> f repr
-      | Date | Time -> "TEXT"
+      | Date | Json | Time -> "TEXT"
       | t -> string_of_type_postgres t
     in
     f t

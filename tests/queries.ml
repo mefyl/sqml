@@ -391,6 +391,40 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         ]
         configs)
 
+  let json_prepared_parameters db =
+    let owner =
+      {
+        Model.Configs.Owner.first_name = "Glada";
+        last_name = "Delmarre";
+        age = 112;
+      }
+    and value = `O [ ("one", `Float 1.); ("two", `A [ `String "b" ]) ] in
+    let*! Zero =
+      Engine.query db
+      @@ Model.insert
+           ~into:(module Model.Configs)
+           Sqml.Expression.(
+             const Model.Configs.type_ ("prepared", `O [], owner))
+    in
+    let set =
+      Engine.prepare [ String; Json ]
+        (fun Sqml.Expression.List.[ id; config ] ->
+          Model.update
+            (module Model.Configs)
+            ~where:Sqml.Expression.(Model.Configs.id = id)
+            Sqml.Expression.[ Model.Configs.Column.config := config ])
+    in
+    let*! Zero = Engine.run set db Hlist.[ "prepared"; value ] in
+    let*! (Many configs) =
+      Engine.query db
+      @@ Model.select ~from:(module Model.Configs) Model.Configs.all
+    in
+    let+! configs = Sequence.to_list configs in
+    Alcotest.(
+      check ~here:[%here] (list config) "configurations"
+        [ ("prepared", value, owner) ]
+        configs)
+
   let conflict psql db =
     let*! Zero =
       let q =
@@ -897,6 +931,8 @@ let () =
              test_case "timestamp" @@ make_db Caqti_test.timestamp;
              test_case "now" @@ make_db Caqti_test.now;
              test_case "json" @@ make Caqti_test.json;
+             test_case "JSON parameter in prepared statement"
+             @@ make Caqti_test.json_prepared_parameters;
              test_case "versioning-stable"
              @@ make_db Caqti_test.Versioning.stable
              (* test_case "prepared" @@ make Caqti_test.prepared; *);
@@ -962,8 +998,7 @@ let () =
              test_case ~here:[%here] "select" Caqti_test.select;
              test_case ~here:[%here] "insert" Caqti_test.insert;
              test_case ~here:[%here] "delete" Caqti_test.delete;
-             test_case ~here:[%here] "delete_returning"
-               Caqti_test.delete_returning;
+             test_case ~here:[%here] "delete_returning" Caqti_test.delete_returning;
              test_case ~here:[%here] "update" Caqti_test.update;
              test_case ~here:[%here] "update_from" Caqti_test.update_from;
              test_case_db ~here:[%here] "timestamp" Caqti_test.timestamp;
@@ -971,6 +1006,8 @@ let () =
              test_case ~here:[%here] "group" Caqti_test.group;
              test_case ~here:[%here] "is_null" Caqti_test.is_null;
              test_case ~here:[%here] "json" Caqti_test.json;
+             test_case ~here:[%here] "JSON parameters in prepared statements"
+               Caqti_test.json_prepared_parameters;
              test_case ~here:[%here] "in" Caqti_test.in';
              test_case ~here:[%here] "conflict" @@ Caqti_test.conflict true;
              test_case ~here:[%here] "conflict-fail"
