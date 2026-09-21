@@ -79,6 +79,9 @@ module Make (D : sig
 
   (** The current timestamp as RFC3339. *)
   val now : string
+
+  (** [pp_in ~negated ~value ~set] tests [value] for membership in [set]. *)
+  val pp_in : negated:bool -> value:unit Fmt.t -> set:unit Fmt.t -> unit Fmt.t
 end) =
 struct
   include D
@@ -193,6 +196,11 @@ struct
          | Some current_precedence when current_precedence > precedence ->
            (const char '(' ++ fmt ++ const char ')') f ()
          | _ -> fmt f ())
+       | In { value; set; negated } ->
+         D.pp_in ~negated
+           ~value:(fun f () -> pp None f value)
+           ~set:(fun f () -> pp None f set)
+           f ()
        | Is_null ast -> (pp None ++ sp ++ const string "IS NULL") f ast
        | Is_not_null ast -> (pp None ++ sp ++ const string "IS NOT NULL") f ast
        | Join { left; right; on; type_ } ->
@@ -315,6 +323,11 @@ module Postgresql : S = Make (struct
 
   let string_of_type = string_of_type_postgres
   let now = "NOW()"
+
+  let pp_in ~negated ~value ~set f () =
+    Fmt.pf f "%a %s (%a)" value ()
+      (if negated then "!= ALL" else "= ANY")
+      set ()
 end)
 
 let postgresql = (module Postgresql : S)
@@ -326,7 +339,7 @@ module Sqlite : S = Make (struct
     | Some schema -> Fmt.str "%S" @@ Fmt.str "%s_%s" schema name
 
   let index_name = table_name
-  let pp_array _ pp f = Fmt.fmt "json('%a')" f pp
+  let pp_array _ pp f = Fmt.fmt "json(%a)" f pp
 
   let string_of_type t =
     let rec f : type t. t Expression.Column.Type.atomic -> string = function
@@ -337,6 +350,12 @@ module Sqlite : S = Make (struct
     f t
 
   let now = "strftime('%Y-%m-%d %H:%M:%f+00:00', 'now')"
+
+  (* SQLite has no array type: membership is a join on the JSON document. *)
+  let pp_in ~negated ~value ~set f () =
+    Fmt.pf f "%a %s (SELECT value FROM json_each(%a))" value ()
+      (if negated then "NOT IN" else "IN")
+      set ()
 end)
 
 let sqlite = (module Sqlite : S)

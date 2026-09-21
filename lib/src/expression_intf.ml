@@ -227,6 +227,11 @@ type ast =
       on : ast option;
       type_ : join_type;
     }
+  | In of {
+      value : ast;
+      set : ast;
+      negated : bool;
+    }
   | List of ast list
   | Now
   | Null

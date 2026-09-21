@@ -147,6 +147,10 @@ module Traverse_ast (M : Monad.S2) = struct
       | Funcall ({ args; _ } as pl) ->
         let+ args = Acid.List.map ~f:traverse_ast args |> M.all in
         Funcall { pl with args }
+      | In ({ value; set; _ } as pl) ->
+        let+ value = traverse_ast value
+        and+ set = traverse_ast set in
+        In { pl with value; set }
       | Infix ({ lhs; rhs; _ } as pl) ->
         let+ lhs = traverse_ast lhs
         and+ rhs = traverse_ast rhs in
@@ -443,12 +447,8 @@ end
 
 include Infix
 
-let in' (_, value) (_, array) =
-  (Type.Bool, Infix { lhs = value; op = "= ANY"; rhs = array; precedence = -1 })
-
-let not_in (_, value) (_, array) =
-  (Type.Bool, Infix { lhs = value; op = "!= ALL"; rhs = array; precedence = -1 })
-
+let in' (_, value) (_, set) = (Type.Bool, In { value; set; negated = false })
+let not_in (_, value) (_, set) = (Type.Bool, In { value; set; negated = true })
 let not (_, value) = (Type.Bool, Funcall { name = "NOT"; args = [ value ] })
 
 let cast (type t) (type' : t Column.Type.atomic) (_, value) =

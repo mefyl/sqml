@@ -930,8 +930,7 @@ let test_cases ~sqlite ~test_case ~test_case_db =
     test_case "json" Caqti_test.json;
     test_case "JSON parameters in prepared statements"
       Caqti_test.json_prepared_parameters;
-    (* FIXME: [= ANY] has no SQLite equivalent, it needs [json_each]. *)
-    test_case "in" (skip_on_sqlite Caqti_test.in');
+    test_case "in" Caqti_test.in';
     test_case "conflict" Caqti_test.conflict;
     test_case "conflict-cascade" Caqti_test.conflict_cascade;
     test_case "conflict-fail" Caqti_test.conflict_fail;
