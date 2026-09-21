@@ -938,8 +938,7 @@ let test_cases ~sqlite ~test_case ~test_case_db =
     (* FIXME: schema introspection is only implemented for PostgreSQL. *)
     test_case_db "schema-diff"
       (skip_on_sqlite Caqti_test.Versioning.schema_diff);
-    (* FIXME: exercises [in'], see above. *)
-    test_case "prepared" (skip_on_sqlite Caqti_test.prepared);
+    test_case "prepared" Caqti_test.prepared;
     test_case "join" Caqti_test.join;
     test_case "composite" Caqti_test.composite;
   ]

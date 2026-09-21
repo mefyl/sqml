@@ -146,6 +146,33 @@ end = struct
 
   let error = Lwt.map ~f:convert_error
 
+  (** [response_sequence driver_info stream] is the {!Sequence.t} containing
+      the many results inside a response [stream].
+
+      - PostgreSQL, unless single-row mode is set, hands us a result it has
+        already fetched in full, so the sequence may outlive Caqti's callback.
+      - SQLite steps a live statement that Caqti resets as soon as the callback
+        returns, so the rows have to be read before that. *)
+  let response_sequence driver_info stream =
+    match Caqti_driver_info.dialect_tag driver_info with
+    | `Sqlite ->
+      let rec drain acc stream =
+        stream () >>= function
+        | Caqti_lwt.Stream.Nil -> Lwt_result.return (List.rev acc)
+        | Error e -> Lwt_result.fail e
+        | Cons (v, next) -> drain (v :: acc) next
+      in
+      let+! rows = drain [] stream in
+      Sequence.of_list rows
+    | _ ->
+      let f stream =
+        stream () >>= function
+        | Caqti_lwt.Stream.Nil -> Lwt_result.return None
+        | Error e -> Lwt_result.fail e |> error
+        | Cons (v, next) -> Lwt_result.return @@ Some (v, next)
+      in
+      Lwt_result.return @@ Sequence.unfold_step ~init:stream ~f
+
   type 'res column_mapper = { f : 't. 't Sqml.Column.t -> 'res option }
 
   let column_map (f : 'res column_mapper) =
@@ -627,13 +654,10 @@ end = struct
     let f (module C : Caqti_lwt.CONNECTION) =
       let collect query =
         let f response =
-          let f stream =
-            Lwt.bind (stream ()) ~f:(function
-              | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-              | Error e -> Lwt_result.fail e |> error
-              | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-          and init = C.Response.to_stream response in
-          Lwt_result.return @@ Sqml.Model.Many (Sequence.unfold_step ~init ~f)
+          let+! seq =
+            response_sequence C.driver_info (C.Response.to_stream response)
+          in
+          Sqml.Model.Many seq
         in
         C.call ~f query ()
       in
@@ -835,13 +859,7 @@ end = struct
         let f (module C : Caqti_lwt.CONNECTION) =
           with_current_query transaction query @@ fun () ->
           let f response =
-            let f stream =
-              Lwt.bind (stream ()) ~f:(function
-                | Caqti_lwt.Stream.Nil -> Lwt_result.return None
-                | Error e -> Lwt_result.fail e |> error
-                | Cons (v, next) -> Lwt_result.return @@ Some (v, next))
-            and init = C.Response.to_stream response in
-            Lwt_result.return @@ Sequence.unfold_step ~init ~f
+            response_sequence C.driver_info (C.Response.to_stream response)
           in
           C.call ~f prepared values |> error
         in
