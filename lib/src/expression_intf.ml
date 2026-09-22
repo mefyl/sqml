@@ -99,6 +99,19 @@ module Column = struct
       | Nullable : 'a t -> 'a option t
 
     type any = Type : _ t -> any
+
+    let rec is_serial : type u. u t -> bool =
+      let rec atomic_is_serial : type t. t atomic -> bool = function
+        | Serial | Serial_big -> true
+        | Custom { repr; _ } -> atomic_is_serial repr
+        | Nullable t -> atomic_is_serial t
+        | _ -> false
+      in
+      function
+      | Atomic a -> atomic_is_serial a
+      | Custom { repr; _ } -> is_serial repr
+      | Nullable t -> is_serial t
+      | Composite _ -> false
   end
 end
 

@@ -452,6 +452,68 @@ end = struct
                  (column_map { f } T.Meta.columns |> List.concat)
           | `Mysql, _ -> failwith "dialect not handled"
         in
+        let value =
+          match (dialect, value) with
+          | `Sqlite, Expression.List values ->
+            (* [ref:SQLite has no sequences], so a serial column has no
+               server-side default to fall back on: number it from the rows
+               already there. Not a race condition because SQLite serialises
+               writes. *)
+            let next_serial column =
+              let self =
+                Expression.Column
+                  { selectable = T.Meta.name; names = [ column ] }
+              in
+              Expression.Select
+                {
+                  for' = None;
+                  from =
+                    Expression.Selectable
+                      { name = Fmt.str "%S" T.Meta.name; alias = None };
+                  group_by = None;
+                  limit = None;
+                  skip_locked = false;
+                  where = None;
+                  what =
+                    Expression.Infix
+                      {
+                        op = "+";
+                        precedence = 3;
+                        lhs =
+                          Expression.Funcall
+                            {
+                              name = "COALESCE";
+                              args =
+                                [
+                                  Expression.Funcall
+                                    { name = "MAX"; args = [ self ] };
+                                  Expression.Const
+                                    { type_ = Expression.Type.Int; value = 0 };
+                                ];
+                            };
+                        rhs =
+                          Expression.Const
+                            { type_ = Expression.Type.Int; value = 1 };
+                      };
+                }
+            in
+            let rec substitute : type t.
+                t Column.List.t -> Expression.ast list -> Expression.ast list =
+             fun columns values ->
+              match (columns, values) with
+              | Column.List.(column :: columns), value :: values ->
+                (match value with
+                | Expression.Default
+                  when Column.Type.is_serial column.Column.type_ ->
+                  next_serial column.Column.name
+                | value -> value)
+                :: substitute columns values
+              | [], [] -> []
+              | _ -> Fmt.failwith "mismatched INSERT columns length"
+            in
+            Expression.List (substitute T.Meta.columns values)
+          | _ -> value
+        in
         (* Explicitely enumerate columns order on insertion, migration that add
            columns subsequently mess up the column ordering. *)
         Fmt.(
