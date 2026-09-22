@@ -74,3 +74,16 @@ module Configs : sig
   val equal : t -> t -> bool
   val pp : t Fmt.t
 end
+
+module Serials : sig
+  type t = Int64.t * string
+
+  include
+    Table.S
+      with type model = tag
+       and type Meta.mapped = t
+       and type Meta.columns = Int64.t -> string -> unit
+
+  val sequence : Int64.t Expression.t
+  val label : string Expression.t
+end

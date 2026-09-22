@@ -206,3 +206,33 @@ module Configs = struct
 
   let Sqml.Expression.List.[ id; config; owner ] = Expression.columns
 end
+
+module Serials = struct
+  type t = Int64.t * string [@@deriving eq, show]
+
+  module Meta_ = struct
+    include Table.Meta (struct
+      let name = "serials"
+      let sequence = Column.(make "sequence" Type.Serial_big)
+      let label = Column.(make "label" Type.Text)
+
+      type columns = Int64.t -> string -> unit
+
+      let columns = Column.List.[ sequence; label ]
+
+      type primary = string -> unit
+
+      let primary Expression.Column.List.[ _; label ] =
+        Expression.Column.List.[ label ]
+    end)
+
+    type mapped = t
+
+    let map Hlist.[ sequence; label ] = (sequence, label)
+    let unmap (sequence, label) = Hlist.[ sequence; label ]
+  end
+
+  include BindTable (Meta_)
+
+  let Sqml.Expression.List.[ sequence; label ] = Expression.columns
+end

@@ -529,6 +529,31 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
     let+! res = Sequence.to_list res in
     Alcotest.(check ~here:[%here] (list string) "locked row" [ "one" ] res)
 
+  let serial db =
+    let insert label =
+      let+! Zero =
+        Engine.query db
+        @@ Model.insert
+             ~into:(module Model.Serials)
+             (Model.Serials.values
+                Sqml.Expression.[ default; const String label ])
+      in
+      ()
+    in
+    let*! () = insert "one" in
+    let*! () = insert "two" in
+    let*! (Many res) =
+      Engine.query db
+      @@ Model.select ~from:(module Model.Serials) Model.Serials.all
+    in
+    let+! res = Sequence.to_list res in
+    Alcotest.(
+      check ~here:[%here]
+        (list (pair int64 string))
+        "generated sequence numbers"
+        [ (1L, "one"); (2L, "two") ]
+        (List.sort res ~compare:(fun (l, _) (r, _) -> Int64.compare l r)))
+
   let conflict_cascade db =
     let*! () = populate ~t1s:[ (0, "zero", None) ] db in
     let*! () = populate_t2 [ 0 ] db in
@@ -931,6 +956,7 @@ let test_cases ~sqlite ~test_case ~test_case_db =
     test_case "JSON parameters in prepared statements"
       Caqti_test.json_prepared_parameters;
     test_case "in" Caqti_test.in';
+    test_case "serial" Caqti_test.serial;
     test_case "conflict" Caqti_test.conflict;
     test_case "conflict-cascade" Caqti_test.conflict_cascade;
     test_case "conflict-fail" Caqti_test.conflict_fail;
