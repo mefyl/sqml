@@ -37,8 +37,8 @@ let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
     Caqti_type.(custom ~encode ~decode string)
   | Null ->
     (* We don't have `Caqti.never`, but this should be safe since it can never
-       return `Some _` *)
-    Caqti_type.(option (Stdlib.Obj.magic unit))
+       return `Some _`. *)
+    Caqti_type.(option (Stdlib.Obj.magic string))
   | Nullable t -> Caqti_type.option (caqti_of_type t)
   | String -> Caqti_type.string
   | Time ->

@@ -554,6 +554,23 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         [ (1L, "one"); (2L, "two") ]
         (List.sort res ~compare:(fun (l, _) (r, _) -> Int64.compare l r)))
 
+  let returning_null db =
+    let*! () = populate db in
+    let*! (Many res) =
+      Engine.query db
+      @@ Model.update_returning
+           (module Model.T1)
+           ~where:Sqml.Expression.(Model.T1.id = const Int 1)
+           ~returning:Sqml.Expression.null
+           Sqml.Expression.[ Model.T1.Column.name := const String "renamed" ]
+    in
+    let*! res = Sequence.to_list res in
+    let () =
+      Alcotest.(check ~here:[%here] int) "updated rows" 1 (List.length res)
+    in
+    check_t1s db
+      [ (0, "zero", None); (1, "renamed", Some "1"); (2, "two", Some "2") ]
+
   let conflict_cascade db =
     let*! () = populate ~t1s:[ (0, "zero", None) ] db in
     let*! () = populate_t2 [ 0 ] db in
@@ -957,6 +974,7 @@ let test_cases ~sqlite ~test_case ~test_case_db =
       Caqti_test.json_prepared_parameters;
     test_case "in" Caqti_test.in';
     test_case "serial" Caqti_test.serial;
+    test_case "returning-null" Caqti_test.returning_null;
     test_case "conflict" Caqti_test.conflict;
     test_case "conflict-cascade" Caqti_test.conflict_cascade;
     test_case "conflict-fail" Caqti_test.conflict_fail;
