@@ -18,7 +18,7 @@ variables:
   GIT_DEPTH: 0
 
 .ocaml:
-  image: "$CI_REGISTRY/routine/logistic/dune-builder:3.22.2"
+  image: "$CI_REGISTRY/routine/logistic/dune-builder:3.24.2"
 
 .ocaml-build:
   extends: .ocaml
@@ -28,7 +28,6 @@ variables:
     - make -f .logistic/ci/dune/Makefile lint
     - make -f .logistic/ci/dune/Makefile build
     - make -f .logistic/ci/dune/Makefile check
-    - make -f .logistic/ci/dune/Makefile package
 
 .ocaml-opam:
   extends: .ocaml

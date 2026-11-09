@@ -146,8 +146,8 @@ end = struct
 
   let error = Lwt.map ~f:convert_error
 
-  (** [response_sequence driver_info stream] is the {!Sequence.t} containing
-      the many results inside a response [stream].
+  (** [response_sequence driver_info stream] is the {!Sequence.t} containing the
+      many results inside a response [stream].
 
       - PostgreSQL, unless single-row mode is set, hands us a result it has
         already fetched in full, so the sequence may outlive Caqti's callback.

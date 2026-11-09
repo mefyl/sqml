@@ -21,6 +21,7 @@ build:
 	time $(DUNE) build --profile release $(WORKSPACE_OPT) --ignore-promoted-rules @install
 
 lint:
+	tagref check
 	time $(DUNE) build $(WORKSPACE_OPT) @fmt
 	time $(DUNE) build --profile pedantic $(WORKSPACE_OPT)
 	# Check there is no diff in generated files, like *.opam
@@ -31,18 +32,6 @@ check:
 	if test -d /root/node_modules; then ln -s /root/node_modules; fi
 	$(DUNE) subst
 	time $(DUNE) runtest $(WORKSPACE_OPT)
-
-package:
-	$(DUNE) subst
-	$(DUNE) install $(WORKSPACE_OPT) --prefix=_install
-	if ! test -e Dockerfile; then echo "FROM alpine:3.21.0" > Dockerfile; fi
-	sed '1aADD _install/ /usr/' Dockerfile > Dockerfile.package
-	docker buildx build --cache-to type=inline -f "Dockerfile.package" . -t "$(IMAGE):$$(git describe --always --abbrev=7)"
-	docker push "$(IMAGE):$$(git describe --always --abbrev=7)"
-	docker tag "$(IMAGE):$$(git describe --always --abbrev=7)" "$(IMAGE):$$SLUG"
-	docker push "$(IMAGE):$$SLUG"
-	echo "Pushed Docker image: \"$(IMAGE):$$(git describe --always --abbrev=7)\"" 
-	docker rmi "$(IMAGE):$$(git describe --always --abbrev=7)" "$(IMAGE):$$SLUG"
 
 opam:
 	$(DIR)/opam-publish
