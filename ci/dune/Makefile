@@ -21,6 +21,7 @@ build:
 	time $(DUNE) build --profile release $(WORKSPACE_OPT) --ignore-promoted-rules @install
 
 lint:
+	tagref check
 	time $(DUNE) build $(WORKSPACE_OPT) @fmt
 	time $(DUNE) build --profile pedantic $(WORKSPACE_OPT)
 	# Check there is no diff in generated files, like *.opam

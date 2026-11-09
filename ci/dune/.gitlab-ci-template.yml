@@ -18,7 +18,7 @@ variables:
   GIT_DEPTH: 0
 
 .ocaml:
-  image: "$CI_REGISTRY/routine/logistic/dune-builder:3.22.2"
+  image: "$CI_REGISTRY/routine/logistic/dune-builder:3.24.2"
 
 .ocaml-build:
   extends: .ocaml
