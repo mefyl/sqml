@@ -1,0 +1,29 @@
+(version 0.13.5)
+
+(build
+ (all_platforms
+  ((action
+    (progn
+     (when %{pkg-self:dev} (run dune subst))
+     (run dune build -p %{pkg-self:name} -j %{jobs} @install))))))
+
+(depends
+ (all_platforms
+  (dune
+   base
+   fmt
+   hlist
+   logs
+   ocaml
+   ppx_deriving
+   ppx_here
+   ptime
+   timmy
+   schematic)))
+
+(source
+ (fetch
+  (url
+   git+ssh://git@gitlab.routine.co/routine/acid#d222226be4a58a76a72cf85e4674745a65b661fa)))
+
+(dev)

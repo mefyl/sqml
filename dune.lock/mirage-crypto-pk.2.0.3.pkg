@@ -23,4 +23,4 @@
   (url
    https://github.com/mirage/mirage-crypto/releases/download/v2.0.3/mirage-crypto-2.0.3.tbz)
   (checksum
-   sha256=3919a8bda3635959bb662d4ffa32266eb73c450ecc2a2b66ba5e1ecf88f7ad23)))
+   sha512=0580c8787cac821531c6038b9f82d32f6a7d3beee0b4c6900c2bf9fa3fa1b2a8d460b4d53ade8cd03e5e8e968b85f2c870c17818ad6e0f12d6834da92db4bef8)))

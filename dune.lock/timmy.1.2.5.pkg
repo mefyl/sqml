@@ -1,4 +1,4 @@
-(version 0.13.4)
+(version 1.2.5)
 
 (build
  (all_platforms
@@ -9,11 +9,11 @@
 
 (depends
  (all_platforms
-  (dune base fmt hlist logs ocaml ppx_deriving ppx_here ptime timmy)))
+  (dune base fmt ocaml ppx_here ppx_deriving ptime schematic)))
 
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/acid#5a354a6b31b346585fbc2e4e12b51fe2d9337397)))
+   git+ssh://git@gitlab.routine.co/routine/timmy#6e0ac4eb8e76e793dd7b5ec55222b32056469b32)))
 
 (dev)

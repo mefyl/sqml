@@ -16,4 +16,4 @@
   (url
    https://github.com/mmottl/postgresql-ocaml/releases/download/5.3.2/postgresql-5.3.2.tbz)
   (checksum
-   sha256=1c47d22772f8938ff23d7350575d88ff2a3cf0d1f3988162f7bb807bccb157af)))
+   sha512=9f0ba45e066e7cdbc6429eede7a76955bd924a46db33c0a81dd2eb6a2cb3700a678355235b7891b17baaf227c6f32ad558c6bdac4e61923f13e227fae4e5afe2)))

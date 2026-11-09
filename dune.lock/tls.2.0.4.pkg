@@ -30,4 +30,4 @@
   (url
    https://github.com/mirleft/ocaml-tls/releases/download/v2.0.4/tls-2.0.4.tbz)
   (checksum
-   sha256=704f467af8a88c198f9162d0c0c44d823a16ecb1ebcb38d8e98ef48fe52eb5f1)))
+   sha512=87d7657d748470b8cb0137e04f4bad1c9ea0b9b68dfaca9d1b7807a379d2b50e27252b4fa9b8b2bd2052f12d5401390ecdaf05163b639cbc14a82efb98a62587)))

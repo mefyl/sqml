@@ -16,4 +16,4 @@
   (url
    https://github.com/mmottl/sqlite3-ocaml/releases/download/5.4.0/sqlite3-5.4.0.tbz)
   (checksum
-   sha256=f0069532f78ac24f16d79262af01434952d0481f8bf80ae541dff4a56cc4e9ff)))
+   sha512=3ab7eb7a41e13a8448ce58dec388dee90fe7a18681323266ac14d2bd5b97c601b25f9b8ab60afa4f507b6ce13792f791e4b78bab1b0747b28097da273ff5a737)))

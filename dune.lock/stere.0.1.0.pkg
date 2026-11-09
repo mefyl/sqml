@@ -14,6 +14,6 @@
 (source
  (fetch
   (url
-   git+ssh://git@gitlab.routine.co/routine/stere#78ab63547307b04cdae7b49b1e616503e1d7fdfb)))
+   git+ssh://git@gitlab.routine.co/routine/stere#7262594787266a9f05aaa04742195a8fea61bb64)))
 
 (dev)
