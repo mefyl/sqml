@@ -236,3 +236,33 @@ module Serials = struct
 
   let Sqml.Expression.List.[ sequence; label ] = Expression.columns
 end
+
+module Optional_jsons = struct
+  type t = string * value option [@@deriving eq, show]
+
+  module Meta_ = struct
+    include Table.Meta (struct
+      let name = "optional_jsons"
+      let id = Column.(make "id" Type.Text)
+      let content = Column.(make_nullable "content" Type.Json)
+
+      type columns = string -> Ezjsonm.value option -> unit
+
+      let columns = Column.List.[ id; content ]
+
+      type primary = string -> unit
+
+      let primary Expression.Column.List.[ id; _ ] =
+        Expression.Column.List.[ id ]
+    end)
+
+    type mapped = t
+
+    let map Hlist.[ id; content ] = (id, content)
+    let unmap (id, content) = Hlist.[ id; content ]
+  end
+
+  include BindTable (Meta_)
+
+  let Sqml.Expression.List.[ id; content ] = Expression.columns
+end

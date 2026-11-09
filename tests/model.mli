@@ -87,3 +87,14 @@ module Serials : sig
   val sequence : Int64.t Expression.t
   val label : string Expression.t
 end
+
+module Optional_jsons : sig
+  type t = string * Ezjsonm.value option
+
+  include Table.S with type model = tag and type Meta.mapped = t
+
+  val id : string Expression.t
+  val content : Ezjsonm.value option Expression.t
+  val equal : t -> t -> bool
+  val pp : t Fmt.t
+end

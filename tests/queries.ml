@@ -554,6 +554,37 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
         [ (1L, "one"); (2L, "two") ]
         (List.sort res ~compare:(fun (l, _) (r, _) -> Int64.compare l r)))
 
+  let optional_json db =
+    let insert row =
+      let+! Zero =
+        Engine.query db
+        @@ Model.insert
+             ~into:(module Model.Optional_jsons)
+             Sqml.Expression.(const Model.Optional_jsons.type_ row)
+      in
+      ()
+    in
+    (* A bare JSON number is the case a column of NUMERIC affinity mangles. *)
+    let absent = ("absent", None)
+    and number = ("number", Some (`Float 5.))
+    and object_ = ("object", Some (`O [])) in
+    let*! () = insert absent in
+    let*! () = insert number in
+    let*! () = insert object_ in
+    let*! (Many res) =
+      Engine.query db
+      @@ Model.select
+           ~from:(module Model.Optional_jsons)
+           Model.Optional_jsons.all
+    in
+    let+! res = Sequence.to_list res in
+    Alcotest.(
+      check ~here:[%here]
+        (list (testable Model.Optional_jsons.pp Model.Optional_jsons.equal))
+        "optional JSON values"
+        [ absent; number; object_ ]
+        (List.sort res ~compare:(fun (l, _) (r, _) -> String.compare l r)))
+
   let returning_null db =
     let*! () = populate db in
     let*! (Many res) =
@@ -974,6 +1005,7 @@ let test_cases ~sqlite ~test_case ~test_case_db =
       Caqti_test.json_prepared_parameters;
     test_case "in" Caqti_test.in';
     test_case "serial" Caqti_test.serial;
+    test_case "optional-json" Caqti_test.optional_json;
     test_case "returning-null" Caqti_test.returning_null;
     test_case "conflict" Caqti_test.conflict;
     test_case "conflict-cascade" Caqti_test.conflict_cascade;
