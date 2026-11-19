@@ -23,21 +23,3 @@
     +A
     -warn-error
     +partial-match))))
-
-(subdir
- opam
- (rule
-  (target dune)
-  (mode (promote))
-  (action
-   (with-stdout-to
-    %{target}
-    (chdir
-     ..
-     (pipe-stdout
-      (run
-       %{workspace_root}/.logistic/ci/dune/dune_sak.exe
-       generate
-       %{read-strings:../cross.flags})
-      (run dune format)))))
-  (deps ../dune-project ../.logistic/dune.inc)))
