@@ -84,13 +84,6 @@ module Make (Model : Model.S) : sig
   val current_query : transaction -> current_query option
   val pp_current_query : current_query Fmt.t
 
-  val with_savepoint :
-    pp_error:'error Fmt.t ->
-    transaction ->
-    ?tags:Logs.Tag.set ->
-    (transaction -> ('result, ([> Engine.error ] as 'error)) Lwt_result.t) ->
-    ('result, 'error) Lwt_result.t
-
   val make :
     ?max_size:int ->
     ?post_creation_statements:(Caqti_driver_info.dialect_tag -> string list) ->

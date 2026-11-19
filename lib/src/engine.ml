@@ -57,6 +57,13 @@ module type S = sig
     (transaction -> ('res, 'error) Lwt_result.t) ->
     ('res, ([> error ] as 'error)) Lwt_result.t
 
+  val with_savepoint :
+    pp_error:'error Fmt.t ->
+    transaction ->
+    ?tags:Logs.Tag.set ->
+    (transaction -> ('res, ([> error ] as 'error)) Lwt_result.t) ->
+    ('res, 'error) Lwt_result.t
+
   val close : t -> unit Lwt.t
   val schema : t -> (Table.Schema.t list, [> error ]) Lwt_result.t
 end
