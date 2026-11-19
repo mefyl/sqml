@@ -1,6 +1,7 @@
 open Sqml
 open Utils
 module Array = Array.Monadic2 (Lwt_result)
+module Logs = Sqml.Logs
 open Let.Syntax (Lwt)
 
 let rec caqti_of_type : type t. t Sqml.Expression.Type.t -> t Caqti_type.t =
@@ -96,9 +97,14 @@ module Make (Model : Model.S) : sig
     string ->
     (t, [> Engine.error ]) Lwt_result.t
 end = struct
+  type error =
+    [ Caqti_error.t
+    | Sqml.Engine.error
+    ]
+
   type t = {
     dialect : Sqml.Dialect.t;
-    pool : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t;
+    pool : (Caqti_lwt.connection, error) Caqti_lwt_unix.Pool.t;
   }
 
   let dialect { dialect; _ } = dialect
@@ -123,24 +129,27 @@ end = struct
   let fail fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
   let convert_error =
-    let classify error (query_error : Caqti_error.query_error) =
-      match Caqti_error.cause error with
-      | `Foreign_key_violation -> `Foreign_key_violation
-      | `Not_null_violation -> `Not_null_violation
-      | `Unique_violation -> `Unique_violation (Caqti_error.show error)
-      | _ -> (
-        match query_error.msg with
-        | Caqti_driver_postgresql.Result_error_msg { sqlstate = "40P01"; _ } ->
-          `Sqml_deadlock
-        | Caqti_driver_sqlite3.Error_msg
-            { extended_errcode = Some (1555 | 2579); _ } ->
-          `Unique_violation (Caqti_error.show error)
-        | _ -> `Sqml_engine (Caqti_error.show error))
-    in
-    let f = function
+    let f =
+      let classify error (query_error : Caqti_error.query_error) =
+        match Caqti_error.cause error with
+        | `Foreign_key_violation -> `Foreign_key_violation
+        | `Not_null_violation -> `Not_null_violation
+        | `Unique_violation -> `Unique_violation (Caqti_error.show error)
+        | _ -> (
+          match query_error.msg with
+          | Caqti_driver_postgresql.Result_error_msg { sqlstate = "40P01"; _ }
+            ->
+            `Sqml_deadlock
+          | Caqti_driver_sqlite3.Error_msg
+              { extended_errcode = Some (1555 | 2579); _ } ->
+            `Unique_violation (Caqti_error.show error)
+          | _ -> `Sqml_engine (Caqti_error.show error))
+      in
+      function
       | `Request_failed query_error as error -> classify error query_error
       | `Response_failed query_error as error -> classify error query_error
-      | e -> `Sqml_engine (Caqti_error.show e)
+      | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+      | #Sqml.Engine.error as error -> error
     in
     Result.map_error ~f
 
@@ -185,6 +194,151 @@ end = struct
 
   let make ?max_size ?(post_creation_statements = fun _ -> []) uri =
     let open Caqti_request.Infix in
+    let open struct
+      let create (module C : Caqti_lwt.CONNECTION) =
+        let dialect, found_query =
+          match Caqti_driver_info.dialect_tag C.driver_info with
+          | `Sqlite ->
+            ( Sqml.Dialect.sqlite,
+              (Caqti_type.unit ->! Caqti_type.bool)
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
+                 name= 'sqml_metadata'" )
+          | `Pgsql ->
+            ( Sqml.Dialect.postgresql,
+              (Caqti_type.unit ->! Caqti_type.bool)
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
+                 table_schema = 'sqml' AND table_name = 'metadata')" )
+          | _ -> failwith "dialect not handled"
+        in
+        if not @@ Caqti_driver_info.can_transact C.driver_info then
+          fail "backend does not support transactions"
+        else
+          let initialize () =
+            let*! found = C.find found_query () in
+            let caqti_metadata_type = Caqti_type.(t4 int int int ptime) in
+            if found then
+              let*! current =
+                let+! major, minor, subminor, _ =
+                  let query =
+                    (Caqti_type.unit ->! caqti_metadata_type)
+                      (Fmt.str
+                         "SELECT major, minor, subminor, migrated FROM %s \
+                          ORDER BY %s DESC LIMIT 1"
+                         (table_name C.driver_info (Some "sqml") "metadata")
+                         (if
+                            Poly.(
+                              Caqti_driver_info.dialect_tag C.driver_info
+                              = `Sqlite)
+                          then "datetime(migrated)"
+                          else "migrated"))
+                  in
+                  C.find query ()
+                in
+                Schematic.Version.make major minor subminor
+              in
+              let* () =
+                Logs.info (fun m ->
+                    m "load model at version %a" Schematic.Version.pp current)
+              in
+              Lwt_result.return (current, dialect)
+            else
+              Logs.with_info (fun m ->
+                  m "create model at version %s"
+                  @@ Semver.to_string Model.version)
+              @@ fun () ->
+              let create_table (type tag)
+                  (module T : Table.S with type tag = tag) =
+                let*! () =
+                  match Caqti_driver_info.dialect_tag C.driver_info with
+                  | `Sqlite -> Lwt_result.return ()
+                  | `Pgsql -> (
+                    match T.Meta.schema with
+                    | None -> Lwt_result.return ()
+                    | Some schema ->
+                      let query =
+                        (Caqti_type.unit ->. Caqti_type.unit)
+                          ~oneshot:true
+                          (Fmt.str "CREATE SCHEMA IF NOT EXISTS %S" schema)
+                      in
+                      C.exec query ())
+                  | _ -> failwith "dialect not handled"
+                in
+                let queries = Sqml.Table.Query.create (module T) in
+                let* () =
+                  Logs.debug (fun m ->
+                      m "create table:@ %a"
+                        Fmt.(
+                          list
+                            ~sep:(const char ';' ++ sp)
+                            (Sqml.Table.Query.pp dialect))
+                        queries)
+                in
+                let exec query =
+                  let query =
+                    (Caqti_type.unit ->. Caqti_type.unit)
+                      ~oneshot:true
+                      (Fmt.to_to_string (Sqml.Table.Query.pp dialect) query)
+                  in
+                  C.exec query ()
+                in
+                Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
+              in
+              let*! () = Array.iter ~f:create_table (Model.tables ()) in
+              (* Apply post-creation statements *)
+              let*! () =
+                let post_creation_statements =
+                  post_creation_statements
+                  @@ Caqti_driver_info.dialect_tag C.driver_info
+                in
+                let* () =
+                  Logs.debug (fun m ->
+                      m "run post-creation statements:@ %a"
+                        Fmt.(list ~sep:(const char ';' ++ sp) string)
+                        post_creation_statements)
+                in
+                let exec query =
+                  let query =
+                    (Caqti_type.unit ->. Caqti_type.unit) ~oneshot:true query
+                  in
+                  C.exec query ()
+                in
+                post_creation_statements
+                |> Lwt_list.map_s exec
+                |> Lwt.map ~f:Result.all_unit
+              in
+              let query =
+                (caqti_metadata_type ->. Caqti_type.unit)
+                  (Fmt.str
+                     "INSERT INTO %s (major, minor, subminor, migrated) VALUES \
+                      (?, ?, ?, ?)"
+                     (table_name C.driver_info (Some "sqml") "metadata"))
+              in
+              let*! () =
+                let Semver.{ major; minor; patch; _ } = Model.version
+                and now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
+                C.exec query (major, minor, patch, now)
+              in
+              Lwt_result.return (Model.version, dialect)
+          in
+          let transaction () =
+            let*! () = C.start () in
+            initialize () >>= function
+            | Result.Ok res ->
+              let+! () = C.commit () in
+              res
+            | Result.Error _ as error ->
+              let* (_ : (unit, _) Result.t) = C.rollback () in
+              Lwt.return error
+          in
+          transaction () >>= function
+          | Result.Ok _ as res -> Lwt.return res
+          | Result.Error e ->
+            let* () =
+              Logs.warn (fun m ->
+                  m "model initialization failed, retrying: %a" Caqti_error.pp e)
+            in
+            transaction ()
+    end in
     let*! pool =
       let pool_config = Caqti_pool_config.create ?max_size ()
       and config =
@@ -195,133 +349,15 @@ end = struct
       |> Lwt.return
       |> error
     in
-    let create (module C : Caqti_lwt.CONNECTION) =
-      let dialect, found_query =
-        match Caqti_driver_info.dialect_tag C.driver_info with
-        | `Sqlite ->
-          ( Sqml.Dialect.sqlite,
-            (Caqti_type.unit ->! Caqti_type.bool)
-              "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND \
-               name= 'sqml_metadata'" )
-        | `Pgsql ->
-          ( Sqml.Dialect.postgresql,
-            (Caqti_type.unit ->! Caqti_type.bool)
-              "SELECT EXISTS (SELECT FROM information_schema.tables WHERE \
-               table_schema = 'sqml' AND table_name = 'metadata')" )
-        | _ -> failwith "dialect not handled"
-      in
-      if not @@ Caqti_driver_info.can_transact C.driver_info then
-        Lwt_result.return (None, dialect)
-      else
-        let*! found = C.find found_query () in
-        let caqti_metadata_type = Caqti_type.(t4 int int int ptime) in
-        if found then
-          let query =
-            (Caqti_type.unit ->! caqti_metadata_type)
-              (Fmt.str
-                 "SELECT major, minor, subminor, migrated FROM %s ORDER BY %s \
-                  DESC LIMIT 1"
-                 (table_name C.driver_info (Some "sqml") "metadata")
-                 (if
-                    Poly.(Caqti_driver_info.dialect_tag C.driver_info = `Sqlite)
-                  then "datetime(migrated)"
-                  else "migrated"))
-          in
-          let*! major, minor, subminor, _ = C.find query () in
-          let current = Semver.from_parts major minor subminor [] [] in
-          let* () =
-            Logs.info (fun m ->
-                m "load model at version %a" Fmt.(option Semver.pp) current)
-          in
-          Lwt_result.return (current, dialect)
-        else
-          let* () =
-            Logs.info (fun m ->
-                m "create model at version %s" @@ Semver.to_string Model.version)
-          in
-          (* Create tables and related indexes *)
-          let create_table (type tag) (module T : Table.S with type tag = tag) =
-            let*! () =
-              match Caqti_driver_info.dialect_tag C.driver_info with
-              | `Sqlite -> Lwt_result.return ()
-              | `Pgsql -> (
-                match T.Meta.schema with
-                | None -> Lwt_result.return ()
-                | Some schema ->
-                  let query =
-                    (Caqti_type.unit ->. Caqti_type.unit)
-                      ~oneshot:true
-                      (Fmt.str "CREATE SCHEMA IF NOT EXISTS %S" schema)
-                  in
-                  C.exec query ())
-              | _ -> failwith "dialect not handled"
-            in
-            let queries = Sqml.Table.Query.create (module T) in
-            let* () =
-              Logs.debug (fun m ->
-                  m "create table:@ %a"
-                    Fmt.(
-                      list
-                        ~sep:(const char ';' ++ sp)
-                        (Sqml.Table.Query.pp dialect))
-                    queries)
-            in
-            let exec query =
-              let query =
-                (Caqti_type.unit ->. Caqti_type.unit)
-                  ~oneshot:true
-                  (Fmt.to_to_string (Sqml.Table.Query.pp dialect) query)
-              in
-              C.exec query ()
-            in
-            Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
-          in
-          let*! () = Array.iter ~f:create_table (Model.tables ()) in
-          (* Apply post-creation statements *)
-          let*! () =
-            let post_creation_statements =
-              post_creation_statements
-              @@ Caqti_driver_info.dialect_tag C.driver_info
-            in
-            let* () =
-              Logs.debug (fun m ->
-                  m "run post-creation statements:@ %a"
-                    Fmt.(list ~sep:(const char ';' ++ sp) string)
-                    post_creation_statements)
-            in
-            let exec query =
-              let query =
-                (Caqti_type.unit ->. Caqti_type.unit) ~oneshot:true query
-              in
-              C.exec query ()
-            in
-            post_creation_statements
-            |> Lwt_list.map_s exec
-            |> Lwt.map ~f:Result.all_unit
-          in
-
-          let query =
-            (caqti_metadata_type ->. Caqti_type.unit)
-              (Fmt.str
-                 "INSERT INTO %s (major, minor, subminor, migrated) VALUES (?, \
-                  ?, ?, ?)"
-                 (table_name C.driver_info (Some "sqml") "metadata"))
-          in
-          let*! () =
-            let Semver.{ major; minor; patch; _ } = Model.version
-            and now = Option.value_exn (Ptime.of_float_s @@ Unix.time ()) in
-            C.exec query (major, minor, patch, now)
-          in
-          Lwt_result.return (Some Model.version, dialect)
+    let*! current_version, dialect =
+      Caqti_lwt_unix.Pool.use create pool |> error
     in
-    Caqti_lwt_unix.Pool.use create pool |> error >>=! function
-    | Some current, dialect ->
-      if Poly.(current <> Model.version) then
-        fail "model version mismatch: code at %s, data at %s"
-          (Semver.to_string Model.version)
-          (Semver.to_string current)
-      else Lwt_result.return { dialect; pool }
-    | None, _ -> fail "backend does not support transactions"
+    if Schematic.Version.(current_version = Model.version) then
+      Lwt_result.return { dialect; pool }
+    else
+      fail "model version mismatch: code at %s, data at %s"
+        (Semver.to_string Model.version)
+        (Semver.to_string current_version)
 
   let close { pool; _ } = Caqti_lwt_unix.Pool.drain pool
 
@@ -930,8 +966,8 @@ end = struct
       Sqml.Model.Many res
 
   let unmap = function
-    | `Shitty_api e -> e
-    | #Caqti_error.t as e -> `Sqml_engine (Caqti_error.show e)
+    | #Caqti_error.t as error -> `Sqml_engine (Caqti_error.show error)
+    | #Sqml.Engine.error as error -> error
 
   let connect t ?tags f =
     let* result =
@@ -941,15 +977,15 @@ end = struct
         let connection = Lwt_guarded.make connection in
         let f () =
           f { connection; current_query = ref None; error = None } >>= function
-          | Result.Error e ->
+          | Result.Error _ as error ->
             let* () = Logs.debug @@ fun m -> m ?tags "transaction rollback" in
-            let*! () =
+            let+! () =
               Lwt_guarded.acquire
                 ~f:(fun (module C) -> C.rollback ())
                 connection
             in
-            Lwt_result.fail (`Shitty_api e)
-          | Result.Ok res ->
+            error
+          | Result.Ok _ as res ->
             let* () = Logs.debug @@ fun m -> m ?tags "transaction commit" in
             let+! () =
               Lwt_guarded.acquire ~f:(fun (module C) -> C.commit ()) connection
@@ -964,13 +1000,10 @@ end = struct
         in
         Lwt.catch f catch
       in
-      Caqti_lwt_unix.Pool.use f
-        (t.pool
-          : (Caqti_lwt.connection, Caqti_error.t) Caqti_lwt_unix.Pool.t
-          :> (Caqti_lwt.connection, [> Caqti_error.t ]) Caqti_lwt_unix.Pool.t)
+      Caqti_lwt_unix.Pool.use f t.pool
     in
     match result with
-    | Result.Ok _ as res -> Lwt.return res
+    | Result.Ok res -> Lwt.return res
     | Result.Error error -> Lwt_result.fail @@ unmap error
 
   let savepoint_start =

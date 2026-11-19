@@ -795,6 +795,14 @@ module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
       let*! _ = make () in
       Lwt_result.return ()
 
+    (** Run initialization concurrently to check only one goes through and the
+        others picks it up. *)
+    let concurrent make () =
+      let+! (_ : _ list) =
+        List.init 8 ~f:(fun _ -> make ()) |> Lwt.all |> Lwt.map ~f:Result.all
+      in
+      ()
+
     let schema_diff make () =
       let*! db = make () in
       let+! diff = Sqml.Engine.diff (module Engine) db in
@@ -1011,6 +1019,8 @@ let test_cases ~sqlite ~test_case ~test_case_db =
     test_case "conflict-cascade" Caqti_test.conflict_cascade;
     test_case "conflict-fail" Caqti_test.conflict_fail;
     test_case_db "versioning-stable" Caqti_test.Versioning.stable;
+    test_case_db "versioning-concurrent"
+      (skip_on_sqlite Caqti_test.Versioning.concurrent);
     (* FIXME: schema introspection is only implemented for PostgreSQL. *)
     test_case_db "schema-diff"
       (skip_on_sqlite Caqti_test.Versioning.schema_diff);
