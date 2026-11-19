@@ -72,8 +72,7 @@ let pp_literal_string =
       (String.Search_pattern.replace_all quote_pattern ~in_:value ~with_:"''")
 
 module Make (D : sig
-  val table_name : ?schema:string -> string -> string
-  val index_name : ?schema:string -> string -> string
+  val schemas : bool
   val pp_array : 'element Expression.Type.t -> 'a Fmt.t -> 'a Fmt.t
   val string_of_type : _ Expression.Column.Type.atomic -> string
 
@@ -297,12 +296,7 @@ let string_of_type_postgres t =
   f t
 
 module Postgresql : S = Make (struct
-  let table_name ?schema name =
-    match schema with
-    | None -> Fmt.str "%S" name
-    | Some schema -> Fmt.str "%S.%S" schema name
-
-  let index_name ?schema:_ name = name
+  let schemas = true
 
   let pp_array element pp =
     let rec element_type : type element.
@@ -333,12 +327,7 @@ end)
 let postgresql = (module Postgresql : S)
 
 module Sqlite : S = Make (struct
-  let table_name ?schema name =
-    match schema with
-    | None -> Fmt.str "%S" name
-    | Some schema -> Fmt.str "%S" @@ Fmt.str "%s_%s" schema name
-
-  let index_name = table_name
+  let schemas = false
   let pp_array _ pp f = Fmt.fmt "json(%a)" f pp
 
   let string_of_type t =

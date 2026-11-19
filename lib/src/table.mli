@@ -5,6 +5,10 @@ val pp_referential_action : referential_action Fmt.t
 val referential_action_of_string : string -> referential_action option
 val name : (module S' with type tag = _) -> string
 
+(** [table_name dialect ?schema name] is the quoted name of table [name] in
+    [schema], mangled into a single name if [dialect] has no schemas. *)
+val table_name : Dialect.t -> ?schema:string -> string -> string
+
 module Column : sig
   include module type of Column
 

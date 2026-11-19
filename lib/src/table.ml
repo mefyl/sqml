@@ -235,6 +235,12 @@ module Schema = struct
   end
 end
 
+let table_name (module Dialect : Dialect.S) ?schema name =
+  match schema with
+  | None -> Fmt.str "%S" name
+  | Some schema when Dialect.schemas -> Fmt.str "%S.%S" schema name
+  | Some schema -> Fmt.str "%S" @@ Fmt.str "%s_%s" schema name
+
 module Query = struct
   type t =
     | Add_column of Schema.name * Schema.column_atomic
@@ -289,8 +295,13 @@ module Query = struct
 
   let pp_either l r f = function Either.First v -> l f v | Second v -> r f v
 
-  let pp_table_name (module Dialect : Dialect.S) f Schema.{ name; schema } =
-    Fmt.string f (Dialect.table_name ?schema name)
+  let pp_table_name dialect f Schema.{ name; schema } =
+    Fmt.string f (table_name dialect ?schema name)
+
+  (* Indexes live in their table's schema, unless schemas are folded into
+     names. *)
+  let index_name ((module Dialect : Dialect.S) as dialect) ?schema name =
+    if Dialect.schemas then name else table_name dialect ?schema name
 
   let pp_constraint dialect f =
     let open Fmt in
@@ -359,7 +370,7 @@ module Query = struct
       in
       pf f "@[<2>CREATE %sINDEX %s@ ON %a@ (%a)@]"
         (if unique then "UNIQUE " else "")
-        (Dialect.index_name ?schema name)
+        (index_name dialect ?schema name)
         (pp_table_name dialect) table_name
         (box
         @@ list ~sep:comma (fun f (ast, ordering) ->

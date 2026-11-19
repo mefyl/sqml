@@ -117,15 +117,6 @@ end = struct
 
   and current_query = Query : _ Model.Query.t -> current_query
 
-  let table_name info schema name =
-    match schema with
-    | None -> Fmt.str "%S" name
-    | Some schema -> (
-      match Caqti_driver_info.dialect_tag info with
-      | `Sqlite -> Fmt.str "%s_%s" (String.escaped schema) (String.escaped name)
-      | `Pgsql -> Fmt.str "%S.%S" schema name
-      | _ -> failwith "dialect not handled")
-
   let fail fmt = Fmt.kstr (fun s -> Lwt_result.fail (`Sqml_engine s)) fmt
 
   let convert_error =
@@ -224,7 +215,8 @@ end = struct
                       (Fmt.str
                          "SELECT major, minor, subminor, migrated FROM %s \
                           ORDER BY %s DESC LIMIT 1"
-                         (table_name C.driver_info (Some "sqml") "metadata")
+                         (Sqml.Table.table_name dialect ~schema:"sqml"
+                            "metadata")
                          (if
                             Poly.(
                               Caqti_driver_info.dialect_tag C.driver_info
@@ -311,7 +303,7 @@ end = struct
                   (Fmt.str
                      "INSERT INTO %s (major, minor, subminor, migrated) VALUES \
                       (?, ?, ?, ?)"
-                     (table_name C.driver_info (Some "sqml") "metadata"))
+                     (Sqml.Table.table_name dialect ~schema:"sqml" "metadata"))
               in
               let*! () =
                 let Semver.{ major; minor; patch; _ } = Model.version

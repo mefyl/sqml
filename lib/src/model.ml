@@ -682,18 +682,17 @@ let create (type tag) (module Model : S with type tag = tag) =
   |> Array.to_list
   |> List.concat
 
-let diff (type tag) (module Dialect : Dialect.S)
-    (module Model : S with type tag = tag) meta =
+let diff (type tag) dialect (module Model : S with type tag = tag) meta =
   let module Seq = Base.Sequence in
   let effective =
     List.map meta ~f:(fun (t : Table.Schema.t) ->
-        (Dialect.table_name ?schema:t.name.schema t.name.name, t))
+        (Table.table_name dialect ?schema:t.name.schema t.name.name, t))
     |> Map.of_alist_exn (module String)
   and expected =
     Model.tables ()
     |> Array.to_list
     |> List.map ~f:(fun ((module T : Table.S with type tag = tag) as t) ->
-        ( Dialect.table_name ?schema:T.Meta.schema T.Meta.name,
+        ( Table.table_name dialect ?schema:T.Meta.schema T.Meta.name,
           Table.Schema.of_table t ))
     |> Map.of_alist_exn (module String)
   and f = function
