@@ -13,169 +13,159 @@ struct
   let v = { tables = [||] }
   let tables () = v.tables
 
-  module BindTable (Meta : Table.META) = struct
-    module Res = struct
-      type model = unit
+  module Bind (Meta : Table.META) = struct
+    type model = unit
 
-      module Meta = Meta
+    module Meta = Meta
 
-      type tag = unit
+    type tag = unit
 
-      let name = Meta.name
-      let selected : tag Selected.t = Selected.Private.v { name }
+    let name = Meta.name
+    let selected : tag Selected.t = Selected.Private.v { name }
 
-      module Column = struct
-        type nonrec 't t = ('t, tag) Expression.Column.t
+    module Column = struct
+      type nonrec 't t = ('t, tag) Expression.Column.t
 
-        let rec bind_columns : type l.
-            l Table.Column.List.t ->
-            (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
-          function
-          | Table.Column.List.({ foreign_keys; name; type_; _ } :: tl) ->
-            let column =
-              Expression.make_column ~name ~selectable:Meta.name type_
-            in
-            let constraints =
-              List.map
-                ~f:(function
-                  | Table.Column.Foreign_key.Reference
+      let rec bind_columns : type l.
+          l Table.Column.List.t ->
+          (l, tag) Expression.Column.List.t * tag Table.constraint_ list =
+        function
+        | Table.Column.List.({ foreign_keys; name; type_; _ } :: tl) ->
+          let column =
+            Expression.make_column ~name ~selectable:Meta.name type_
+          in
+          let constraints =
+            List.map
+              ~f:(function
+                | Table.Column.Foreign_key.Reference
+                    { deferrability; reference = target; on_delete; on_update }
+                  ->
+                  Table.(
+                    Foreign_key
                       {
                         deferrability;
-                        reference = target;
+                        reference =
+                          List_nonempty.[ Foreign_reference { column; target } ];
                         on_delete;
                         on_update;
-                      } ->
-                    Table.(
-                      Foreign_key
-                        {
-                          deferrability;
-                          reference =
-                            List_nonempty.
-                              [ Foreign_reference { column; target } ];
-                          on_delete;
-                          on_update;
-                        })
-                  | Table.Column.Foreign_key.Reference_opt
+                      })
+                | Table.Column.Foreign_key.Reference_opt
+                    { deferrability; reference = target; on_delete; on_update }
+                  ->
+                  Table.(
+                    Foreign_key
                       {
                         deferrability;
-                        reference = target;
+                        reference =
+                          List_nonempty.
+                            [ Foreign_reference_opt { column; target } ];
                         on_delete;
                         on_update;
-                      } ->
-                    Table.(
-                      Foreign_key
-                        {
-                          deferrability;
-                          reference =
-                            List_nonempty.
-                              [ Foreign_reference_opt { column; target } ];
-                          on_delete;
-                          on_update;
-                        }))
-                foreign_keys
-            and rest, rest_constraints = bind_columns tl in
-            ( Expression.Column.List.(column :: rest),
-              constraints @ rest_constraints )
-          | [] -> (Expression.Column.List.[], [])
+                      }))
+              foreign_keys
+          and rest, rest_constraints = bind_columns tl in
+          ( Expression.Column.List.(column :: rest),
+            constraints @ rest_constraints )
+        | [] -> (Expression.Column.List.[], [])
 
-        let columns, constraints = bind_columns Meta.columns
-      end
-
-      let column_types =
-        let rec type_of_columns : type a.
-            (a, _) Expression.Column.List.t -> a Expression.Type.List.t =
-          function
-          | hd :: tl ->
-            Expression.Type.of_column_type hd.type_ :: type_of_columns tl
-          | [] -> []
-        in
-        type_of_columns Column.columns
-
-      let type_values =
-        let rec type_of_columns : type a.
-            (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
-          function
-          | hd :: tl ->
-            Expression.Type.of_column_type hd.type_ :: type_of_columns tl
-          | [] -> []
-        in
-        type_of_columns Column.columns
-
-      let type_ =
-        let decode columns = Meta.map columns |> Result.return
-        and encode = Meta.unmap in
-        Expression.Type.Custom { decode; encode; repr = type_values }
-
-      let const value = Expression.const type_ value
-
-      module Expression = struct
-        let rec bind_expressions : type l tag.
-            (l, tag) Expression.Column.List.t -> (l, tag) Expression.List.t =
-          function
-          | Expression.Column.List.(head :: tail) ->
-            Expression.column head :: bind_expressions tail
-          | Expression.Column.List.[] -> []
-
-        let columns = bind_expressions Column.columns
-
-        include Expression
-
-        type nonrec 't t = ('t, tag) t
-        type nonrec 't column = ('t, tag) Column.t
-
-        module List = struct
-          include List
-
-          type 't t = ('t, tag) List.t
-          type 't value = ('t, tag) List.value
-        end
-      end
-
-      let all =
-        let columns = Expression.(of_list columns) in
-        Expression.map
-          ~decode:(fun v -> Result.return (Meta.map v))
-          ~encode:Meta.unmap columns
-
-      let make columns =
-        let columns = Expression.of_list columns in
-        Expression.map
-          ~decode:(fun v -> Result.return (Meta.map v))
-          ~encode:Meta.unmap columns
-
-      let to_ast () = Expression.Selectable { alias = None; name }
-      let constraints = Column.constraints @ Meta.constraints Column.columns
-
-      module Index_of_columns =
-        Expression.Column.List.Transduce2 (Table.Index.Expression.List)
-
-      let primary =
-        let expressions =
-          Index_of_columns.map
-            (Meta.primary Column.columns)
-            ~f:
-              {
-                f =
-                  (fun column ->
-                    {
-                      Table.Index.Expression.expression =
-                        Expression.column column;
-                      order = Ascending;
-                    });
-              }
-        in
-        Table.Index.Unique { expressions; name = "pkey" }
-
-      let indexes = Meta.indexes Column.columns
-
-      let values (values : Meta.columns Expression.List.t) :
-          Meta.mapped Expression.t =
-        Expression.Private.conceal (type_, Expression.(to_ast @@ of_list values))
+      let columns, constraints = bind_columns Meta.columns
     end
 
-    let () = v.tables <- Array.append v.tables [| (module Res) |]
+    let column_types =
+      let rec type_of_columns : type a.
+          (a, _) Expression.Column.List.t -> a Expression.Type.List.t = function
+        | hd :: tl ->
+          Expression.Type.of_column_type hd.type_ :: type_of_columns tl
+        | [] -> []
+      in
+      type_of_columns Column.columns
 
-    include Res
+    let type_values =
+      let rec type_of_columns : type a.
+          (a, _) Expression.Column.List.t -> a Hlist.t Expression.Type.t =
+        function
+        | hd :: tl ->
+          Expression.Type.of_column_type hd.type_ :: type_of_columns tl
+        | [] -> []
+      in
+      type_of_columns Column.columns
+
+    let type_ =
+      let decode columns = Meta.map columns |> Result.return
+      and encode = Meta.unmap in
+      Expression.Type.Custom { decode; encode; repr = type_values }
+
+    let const value = Expression.const type_ value
+
+    module Expression = struct
+      let rec bind_expressions : type l tag.
+          (l, tag) Expression.Column.List.t -> (l, tag) Expression.List.t =
+        function
+        | Expression.Column.List.(head :: tail) ->
+          Expression.column head :: bind_expressions tail
+        | Expression.Column.List.[] -> []
+
+      let columns = bind_expressions Column.columns
+
+      include Expression
+
+      type nonrec 't t = ('t, tag) t
+      type nonrec 't column = ('t, tag) Column.t
+
+      module List = struct
+        include List
+
+        type 't t = ('t, tag) List.t
+        type 't value = ('t, tag) List.value
+      end
+    end
+
+    let all =
+      let columns = Expression.(of_list columns) in
+      Expression.map
+        ~decode:(fun v -> Result.return (Meta.map v))
+        ~encode:Meta.unmap columns
+
+    let make columns =
+      let columns = Expression.of_list columns in
+      Expression.map
+        ~decode:(fun v -> Result.return (Meta.map v))
+        ~encode:Meta.unmap columns
+
+    let to_ast () = Expression.Selectable { alias = None; name }
+    let constraints = Column.constraints @ Meta.constraints Column.columns
+
+    module Index_of_columns =
+      Expression.Column.List.Transduce2 (Table.Index.Expression.List)
+
+    let primary =
+      let expressions =
+        Index_of_columns.map
+          (Meta.primary Column.columns)
+          ~f:
+            {
+              f =
+                (fun column ->
+                  {
+                    Table.Index.Expression.expression = Expression.column column;
+                    order = Ascending;
+                  });
+            }
+      in
+      Table.Index.Unique { expressions; name = "pkey" }
+
+    let indexes = Meta.indexes Column.columns
+
+    let values (values : Meta.columns Expression.List.t) :
+        Meta.mapped Expression.t =
+      Expression.Private.conceal (type_, Expression.(to_ast @@ of_list values))
+  end
+
+  module BindTable (Meta : Table.META) = struct
+    module Bound = Bind (Meta)
+    include Bound
+
+    let () = v.tables <- Array.append v.tables [| (module Bound) |]
   end
 
   module type JOIN = sig
@@ -673,14 +663,31 @@ struct
       let indexes _ = Table.Index.List.[]
     end
 
-    include BindTable (Meta_)
+    include Bind (Meta_)
   end
+
+  let metadata = (module Metadata : Table.S with type tag = tag)
 end
 
 let create (type tag) (module Model : S with type tag = tag) =
-  Array.map ~f:Table.Query.create (Model.tables ())
-  |> Array.to_list
-  |> List.concat
+  let tables = Model.tables () |> Array.to_list in
+  let schemas =
+    List.filter_map tables ~f:(fun (module T : Table.S with type tag = tag) ->
+        T.Meta.schema)
+    |> List.dedup_and_sort ~compare:String.compare
+    |> List.map ~f:Table.Query.create_schema
+  in
+  schemas @ List.concat_map ~f:Table.Query.create tables
+
+let pp_create (type tag) dialect f (module Model : S with type tag = tag) =
+  Fmt.pf f "@[<v>-- SQML model version %s@,%a@]@."
+    (Semver.to_string Model.version)
+    Fmt.(list ~sep:cut (string ++ const char ';'))
+    (create (module Model)
+    |> List.filter_map ~f:(fun query ->
+        match Fmt.to_to_string (Table.Query.pp dialect) query with
+        | "" -> None
+        | statement -> Some statement))
 
 let diff (type tag) dialect (module Model : S with type tag = tag) meta =
   let module Seq = Base.Sequence in
@@ -689,8 +696,7 @@ let diff (type tag) dialect (module Model : S with type tag = tag) meta =
         (Table.table_name dialect ?schema:t.name.schema t.name.name, t))
     |> Map.of_alist_exn (module String)
   and expected =
-    Model.tables ()
-    |> Array.to_list
+    Model.metadata :: Array.to_list (Model.tables ())
     |> List.map ~f:(fun ((module T : Table.S with type tag = tag) as t) ->
         ( Table.table_name dialect ?schema:T.Meta.schema T.Meta.name,
           Table.Schema.of_table t ))

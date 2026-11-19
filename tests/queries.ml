@@ -68,6 +68,72 @@ CREATE TABLE "table2" (
     Alcotest.(
       check ~here:[%here] string "creation queries" expected
         (Buffer.contents buffer))
+
+  let schema () =
+    let dump dialect =
+      Fmt.str "%a" (Sqml.Model.pp_create dialect) (module Model)
+    in
+    Alcotest.(
+      check ~here:[%here] string "PostgreSQL script"
+        {|-- SQML model version 0.0.0
+CREATE TABLE "table1" (
+  description TEXT,
+  id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  CONSTRAINT table1_pkey PRIMARY KEY (id));
+CREATE UNIQUE INDEX ids ON "table1" (id ASC, name DESC);
+CREATE TABLE "table2" (
+  id INTEGER NOT NULL,
+  CONSTRAINT table2_id_fkey
+    FOREIGN KEY (id) REFERENCES "table1"(id) ON DELETE CASCADE);
+CREATE TABLE "ts" (time TIMESTAMP NOT NULL);
+CREATE TABLE "configuration" (
+  config JSONB NOT NULL,
+  id VARCHAR(64) NOT NULL,
+  owner_age INTEGER NOT NULL,
+  owner_first_name VARCHAR(64) NOT NULL,
+  owner_last_name VARCHAR(64) NOT NULL,
+  CONSTRAINT configuration_pkey PRIMARY KEY (id));
+CREATE TABLE "serials" (
+  label TEXT NOT NULL,
+  sequence BIGSERIAL NOT NULL,
+  CONSTRAINT serials_pkey PRIMARY KEY (label));
+CREATE TABLE "optional_jsons" (
+  content JSONB,
+  id TEXT NOT NULL,
+  CONSTRAINT optional_jsons_pkey PRIMARY KEY (id));
+|}
+        (dump Sqml.Dialect.postgresql);
+      check ~here:[%here] string "SQLite script"
+        {|-- SQML model version 0.0.0
+CREATE TABLE "table1" (
+  description TEXT,
+  id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  CONSTRAINT table1_pkey PRIMARY KEY (id));
+CREATE UNIQUE INDEX "ids" ON "table1" (id ASC, name DESC);
+CREATE TABLE "table2" (
+  id INTEGER NOT NULL,
+  CONSTRAINT table2_id_fkey
+    FOREIGN KEY (id) REFERENCES "table1"(id) ON DELETE CASCADE);
+CREATE TABLE "ts" (time TEXT NOT NULL);
+CREATE TABLE "configuration" (
+  config TEXT NOT NULL,
+  id VARCHAR(64) NOT NULL,
+  owner_age INTEGER NOT NULL,
+  owner_first_name VARCHAR(64) NOT NULL,
+  owner_last_name VARCHAR(64) NOT NULL,
+  CONSTRAINT configuration_pkey PRIMARY KEY (id));
+CREATE TABLE "serials" (
+  label TEXT NOT NULL,
+  sequence BIGSERIAL NOT NULL,
+  CONSTRAINT serials_pkey PRIMARY KEY (label));
+CREATE TABLE "optional_jsons" (
+  content TEXT,
+  id TEXT NOT NULL,
+  CONSTRAINT optional_jsons_pkey PRIMARY KEY (id));
+|}
+        (dump Sqml.Dialect.sqlite))
 end
 
 module Test (Engine : Sqml.Engine.S with module Model = ModelS) = struct
@@ -1048,7 +1114,10 @@ let () =
                  let () = f () in
                  Lwt.return ())
            in
-           [ test_case "create" Queries.create ] );
+           [
+             test_case "create" Queries.create;
+             test_case "schema" Queries.schema;
+           ] );
          ( "Caqti-SQLite",
            let make test _ () =
              let f (name, channel) =

@@ -238,44 +238,37 @@ end = struct
                   m "create model at version %s"
                   @@ Semver.to_string Model.version)
               @@ fun () ->
-              let create_table (type tag)
-                  (module T : Table.S with type tag = tag) =
-                let*! () =
-                  match Caqti_driver_info.dialect_tag C.driver_info with
-                  | `Sqlite -> Lwt_result.return ()
-                  | `Pgsql -> (
-                    match T.Meta.schema with
-                    | None -> Lwt_result.return ()
-                    | Some schema ->
-                      let query =
-                        (Caqti_type.unit ->. Caqti_type.unit)
-                          ~oneshot:true
-                          (Fmt.str "CREATE SCHEMA IF NOT EXISTS %S" schema)
-                      in
-                      C.exec query ())
-                  | _ -> failwith "dialect not handled"
-                in
-                let queries = Sqml.Table.Query.create (module T) in
-                let* () =
-                  Logs.debug (fun m ->
-                      m "create table:@ %a"
-                        Fmt.(
-                          list
-                            ~sep:(const char ';' ++ sp)
-                            (Sqml.Table.Query.pp dialect))
-                        queries)
-                in
-                let exec query =
-                  let query =
-                    (Caqti_type.unit ->. Caqti_type.unit)
-                      ~oneshot:true
-                      (Fmt.to_to_string (Sqml.Table.Query.pp dialect) query)
+              let*! () =
+                let queries =
+                  let (module Metadata : Table.S with type tag = Model.tag) =
+                    Model.metadata
                   in
-                  C.exec query ()
+                  List.map ~f:Sqml.Table.Query.create_schema
+                    (Option.to_list Metadata.Meta.schema)
+                  @ Sqml.Table.Query.create (module Metadata)
+                  @ Sqml.Model.create (module Model)
+                in
+                Logs.with_debug (fun m ->
+                    m "create model:@ %a"
+                      Fmt.(
+                        list
+                          ~sep:(const char ';' ++ sp)
+                          (Sqml.Table.Query.pp dialect))
+                      queries)
+                @@ fun () ->
+                let exec query =
+                  match
+                    Fmt.to_to_string (Sqml.Table.Query.pp dialect) query
+                  with
+                  | "" -> Lwt_result.return ()
+                  | query ->
+                    C.exec
+                      ((Caqti_type.unit ->. Caqti_type.unit)
+                         ~oneshot:true query)
+                      ()
                 in
                 Lwt_list.map_s exec queries |> Lwt.map ~f:Result.all_unit
               in
-              let*! () = Array.iter ~f:create_table (Model.tables ()) in
               (* Apply post-creation statements *)
               let*! () =
                 let post_creation_statements =

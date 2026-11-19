@@ -54,6 +54,9 @@ module type S = sig
 
   val tables : unit -> (module Table.S with type tag = tag) array
 
+  (** The table where engines keep track of the model. *)
+  val metadata : (module Table.S with type tag = tag)
+
   module BindTable (Meta : Table.META) :
     Table.S with type model = tag and module Meta = Meta
 

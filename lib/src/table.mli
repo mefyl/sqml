@@ -75,6 +75,7 @@ module Query : sig
   type t
 
   val create : (module S with type tag = 'tag) -> t list
+  val create_schema : string -> t
   val drop : (module S with type tag = 'tag) -> t list
 
   val drop_column :

@@ -252,6 +252,7 @@ module Query = struct
         * Expression.Column.Type.any_atomic
         * Expression.Column.Type.any_atomic
     | Create_index of Schema.name * Schema.Index.t
+    | Create_schema of string
     | Create_table of Schema.t
     | Drop_column of Schema.name * Schema.column_atomic
     | Drop_constraint of Schema.name * string
@@ -283,6 +284,7 @@ module Query = struct
   end
 
   let create t = Schema.of_table t |> Schema_.create
+  let create_schema name = Create_schema name
   let drop t = Schema.of_table t |> Schema_.drop
 
   let drop_column (table : (module S with type tag = 'tag))
@@ -385,6 +387,8 @@ module Query = struct
             in
             Fmt.pf f "%a %a" pp ast pp_ordering ordering))
         (List_nonempty.to_list expressions)
+    | Create_schema name ->
+      if Dialect.schemas then pf f "@[<h>CREATE SCHEMA IF NOT EXISTS %S@]" name
     | Create_table { columns; constraints; name; _ } ->
       let columns =
         Set.to_list columns
