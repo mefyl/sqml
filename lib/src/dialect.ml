@@ -73,6 +73,7 @@ let pp_literal_string =
 
 module Make (D : sig
   val schemas : bool
+  val index_nulls_ordering : bool
   val pp_array : 'element Expression.Type.t -> 'a Fmt.t -> 'a Fmt.t
   val string_of_type : _ Expression.Column.Type.atomic -> string
 
@@ -297,6 +298,7 @@ let string_of_type_postgres t =
 
 module Postgresql : S = Make (struct
   let schemas = true
+  let index_nulls_ordering = true
 
   let pp_array element pp =
     let rec element_type : type element.
@@ -328,6 +330,7 @@ let postgresql = (module Postgresql : S)
 
 module Sqlite : S = Make (struct
   let schemas = false
+  let index_nulls_ordering = false
   let pp_array _ pp f = Fmt.fmt "json(%a)" f pp
 
   let string_of_type t =

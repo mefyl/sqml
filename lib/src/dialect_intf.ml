@@ -9,6 +9,10 @@ module type S = sig
       names. *)
   val schemas : bool
 
+  (** Whether index definitions accept [NULLS FIRST] and [NULLS LAST]. If not,
+      NULLs sort first in ascending order and last in descending order. *)
+  val index_nulls_ordering : bool
+
   val string_of_type :
     ?include_nullable:bool -> _ Expression.Column.Type.atomic -> string
 

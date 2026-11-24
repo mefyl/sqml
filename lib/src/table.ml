@@ -365,6 +365,14 @@ module Query = struct
           string f "ASC"
         | { Schema.Index.ascending = false; nulls_first = None } ->
           string f "DESC"
+        | { ascending; nulls_first = Some nulls_first } as ordering
+          when not Dialect.index_nulls_ordering ->
+          if Bool.equal ascending nulls_first then
+            pp_ordering f { ordering with nulls_first = None }
+          else
+            Fmt.failwith "index %s: NULLS %s is not supported in %s order" name
+              (if nulls_first then "FIRST" else "LAST")
+              (if ascending then "ascending" else "descending")
         | { nulls_first = Some true; _ } as ordering ->
           pf f "%a NULLS FIRST" pp_ordering { ordering with nulls_first = None }
         | { nulls_first = Some false; _ } as ordering ->

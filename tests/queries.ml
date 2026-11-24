@@ -70,29 +70,49 @@ CREATE TABLE "table2" (
         (Buffer.contents buffer))
 
   let index_nulls_ordering () =
-    let table = { Sqml.Table.Schema.name = "table1"; schema = None } in
-    let queries =
-      Sqml.Table.Query.Schema.create_index table
+    let create_index dialect orderings =
+      Sqml.Table.Query.Schema.create_index
+        { name = "table1"; schema = None }
         {
           Sqml.Table.Schema.Index.expressions =
             List_nonempty.of_list_exn
-              [
-                ( Sqml.Expression.to_ast Model.T1.id,
-                  { ascending = true; nulls_first = Some true } );
+            @@ List.map orderings ~f:(fun (ascending, nulls_first) ->
                 ( Sqml.Expression.to_ast Model.T1.description,
-                  { ascending = false; nulls_first = Some false } );
-              ];
+                  { Sqml.Table.Schema.Index.ascending; nulls_first } ));
           name = { name = "nulls"; schema = None };
           unique = false;
         }
+      |> List.map ~f:(Fmt.str "%a" (Sqml.Table.Query.pp dialect))
     in
     Alcotest.(
-      check ~here:[%here] (list string) "index creation query"
+      check ~here:[%here] (list string) "PostgreSQL index"
         [
-          {|CREATE INDEX nulls ON "table1" (id ASC NULLS FIRST, description DESC NULLS LAST)|};
+          {|CREATE INDEX nulls ON "table1"
+  (description ASC NULLS FIRST, description ASC NULLS LAST,
+   description DESC NULLS FIRST, description DESC NULLS LAST)|};
         ]
-        (List.map queries
-           ~f:(Fmt.str "%a" (Sqml.Table.Query.pp Sqml.Dialect.postgresql))))
+      @@ create_index Sqml.Dialect.postgresql
+           [
+             (true, Some true);
+             (true, Some false);
+             (false, Some true);
+             (false, Some false);
+           ]);
+    Alcotest.(
+      check ~here:[%here] (list string) "SQLite index"
+        [
+          {|CREATE INDEX "nulls" ON "table1" (description ASC, description DESC)|};
+        ]
+      @@ create_index Sqml.Dialect.sqlite
+           [ (true, Some true); (false, Some false) ]);
+    ( Alcotest.check_raises ~here:[%here] "SQLite ascending nulls last"
+        (Failure "index nulls: NULLS LAST is not supported in ascending order")
+    @@ fun () ->
+      ignore (create_index Sqml.Dialect.sqlite [ (true, Some false) ]) );
+    Alcotest.check_raises ~here:[%here] "SQLite descending nulls first"
+      (Failure "index nulls: NULLS FIRST is not supported in descending order")
+    @@ fun () ->
+    ignore (create_index Sqml.Dialect.sqlite [ (false, Some true) ])
 
   let schema () =
     let dump dialect =
