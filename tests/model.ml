@@ -27,7 +27,10 @@ module T1_meta = struct
   let primary Expression.Column.List.[ id; _; _ ] =
     Expression.Column.List.[ id ]
 
-  type indexes = (int -> string -> unit) Sqml.Table.Index.unique -> unit
+  type indexes =
+    (int -> string -> unit) Sqml.Table.Index.unique ->
+    (string option -> unit) Sqml.Table.Index.non_unique ->
+    unit
 
   let indexes Expression.Column.List.[ id; _name; _desc ] =
     Sqml.Table.Index.List.
@@ -40,6 +43,17 @@ module T1_meta = struct
                 { expression = Expression.column _name; order = Descending };
               ];
             name = "ids";
+          };
+        Non_unique
+          {
+            expressions =
+              [
+                {
+                  expression = Expression.column _desc;
+                  order = Nulls_first Ascending;
+                };
+              ];
+            name = "descriptions";
           };
       ]
 end

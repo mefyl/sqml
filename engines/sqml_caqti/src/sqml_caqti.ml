@@ -1369,16 +1369,26 @@ ORDER BY constraint_name, src_col.ord;|}
                     split_pattern comma def
                     |> List.map ~f:(fun c ->
                         let c = String.strip c in
+                        let c, nulls_first =
+                          match
+                            ( String.chop_suffix c ~suffix:" NULLS FIRST",
+                              String.chop_suffix c ~suffix:" NULLS LAST" )
+                          with
+                          | Some c, _ -> (c, Some true)
+                          | _, Some c -> (c, Some false)
+                          | None, None -> (c, None)
+                        in
                         let expr, ascending =
-                          if String.is_suffix c ~suffix:" DESC" then
-                            (String.drop_suffix c 5 |> String.strip, false)
-                          else if String.is_suffix c ~suffix:" ASC" then
-                            (String.drop_suffix c 4 |> String.strip, true)
-                          else (c, true)
+                          match
+                            ( String.chop_suffix c ~suffix:" DESC",
+                              String.chop_suffix c ~suffix:" ASC" )
+                          with
+                          | Some c, _ -> (String.strip c, false)
+                          | _, Some c -> (String.strip c, true)
+                          | None, None -> (c, true)
                         in
                         ( parse_index_expression ~selectable expr,
-                          Sqml.Table.Schema.Index.
-                            { ascending; nulls_first = None } ))
+                          Sqml.Table.Schema.Index.{ ascending; nulls_first } ))
                   with
                   | head :: tail -> Result.Ok List_nonempty.(head :: tail)
                   | _ -> fail
