@@ -291,7 +291,7 @@ let string_of_type_postgres t =
     | Serial -> "SERIAL"
     | Serial_big -> "BIGSERIAL"
     | Text -> "TEXT"
-    | Time -> "TIMESTAMP"
+    | Time -> "TIMESTAMPTZ"
     | Varchar len -> Fmt.str "VARCHAR(%i)" len
   in
   f t

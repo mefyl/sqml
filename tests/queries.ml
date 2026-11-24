@@ -134,7 +134,7 @@ CREATE TABLE "table2" (
   id INTEGER NOT NULL,
   CONSTRAINT table2_id_fkey
     FOREIGN KEY (id) REFERENCES "table1"(id) ON DELETE CASCADE);
-CREATE TABLE "ts" (time TIMESTAMP NOT NULL);
+CREATE TABLE "ts" (time TIMESTAMPTZ NOT NULL);
 CREATE TABLE "configuration" (
   config JSONB NOT NULL,
   id VARCHAR(64) NOT NULL,
@@ -1108,6 +1108,66 @@ end
 module Caqti = Sqml_caqti.Make (Model)
 module Caqti_test = Test (Caqti)
 
+module Postgresql = struct
+  (** Times are instants: reading them back must not depend on the session time
+      zone, and an offset on input must be honored. *)
+  let time_zone ~uri make () =
+    let instant s =
+      let t, _, _ = Ptime.of_rfc3339 s |> Result.ok |> Option.value_exn in
+      Timmy.Time.of_ptime t
+    in
+    let written = instant "2026-11-24T10:00:00Z"
+    and offset = instant "2026-11-24T15:00:00+02:00" in
+    let*! db = make () in
+    let*! Zero =
+      Caqti.connect db (fun db ->
+          Caqti.query db
+          @@ Model.insert ~into:(module Model.Ts)
+          @@ Model.Ts.const written)
+    in
+    let*! () =
+      let*! c =
+        Caqti_lwt_unix.connect (Uri.of_string uri) |> Lwt.map ~f:convert_error
+      in
+      let module C = (val c) in
+      let*! times =
+        (let*! () =
+           C.exec
+             (Caqti_type.(unit ->. unit) "SET TimeZone TO 'Europe/Paris'")
+             ()
+         in
+         let*! () =
+           C.exec
+             (Caqti_type.(unit ->. unit)
+                "INSERT INTO ts (time) VALUES ('2026-11-24T15:00:00+02:00')")
+             ()
+         in
+         C.collect_list
+           (Caqti_type.(unit ->* ptime) "SELECT time FROM ts ORDER BY time")
+           ())
+        |> Lwt.map ~f:convert_error
+      in
+      let+ () = C.disconnect () in
+      Result.return
+      @@ Alcotest.(
+           check ~here:[%here]
+             (list (module Timmy.Time))
+             "times read in Europe/Paris" [ written; offset ]
+             (List.map ~f:Timmy.Time.of_ptime times))
+    in
+    Caqti.connect db (fun db ->
+        let*! (Many res) =
+          Caqti.query db @@ Model.select ~from:(module Model.Ts) Model.Ts.time
+        in
+        let*! res = Sequence.to_list res in
+        Lwt_result.return
+        @@ Alcotest.(
+             check ~here:[%here]
+               (list (module Timmy.Time))
+               "times read through Sqml" [ written; offset ]
+               (List.sort ~compare:Timmy.Time.compare res)))
+end
+
 let test_cases ~sqlite ~test_case ~test_case_db =
   let skip_on_sqlite f = if sqlite then fun _ -> Alcotest.skip () else f in
   [
@@ -1224,25 +1284,30 @@ let () =
                  ()
                |> Lwt.map ~f:convert_error
              in
+             let uri = pg_host ^ "/" ^ db in
              let make () =
-               let+! res = Caqti.make (pg_host ^ "/" ^ db) in
+               let+! res = Caqti.make uri in
                let () =
                  Lwt_switch.add_hook (Some switch) (fun () -> Caqti.close res)
                in
                res
              in
-             test make ()
+             test ~uri make ()
            in
            let make name test switch () =
-             let test make () =
+             let test ~uri:_ make () =
                let*! db = make () in
                Caqti.connect db test
              in
              make_db name test switch ()
            in
-           let test_case ?here name f = test_case ?here name @@ make name f
-           and test_case_db ?here name f =
+           let test_case_uri ?here name f =
              test_case ?here name @@ make_db name f
            in
-           test_cases ~sqlite:false ~test_case ~test_case_db );
+           let test_case ?here name f = test_case ?here name @@ make name f
+           and test_case_db ?here name f =
+             test_case_uri ?here name (fun ~uri:_ -> f)
+           in
+           test_cases ~sqlite:false ~test_case ~test_case_db
+           @ [ test_case_uri "time-zone" Postgresql.time_zone ] );
        ]

@@ -1040,7 +1040,9 @@ end = struct
     | "integer" | "int4" | "int" -> Some (Type Int)
     | "jsonb" | "json" -> Some (Type Json)
     | "text" -> Some (Type Text)
-    | "timestamp" | "timestamp without time zone" -> Some (Type Time)
+    | "timestamp" | "timestamp without time zone" | "timestamptz"
+    | "timestamp with time zone" ->
+      Some (Type Time)
     | _ -> None
 
   (* FIXME: This parser is incomplete and shall be expanded as we go. *)
