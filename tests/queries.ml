@@ -69,6 +69,31 @@ CREATE TABLE "table2" (
       check ~here:[%here] string "creation queries" expected
         (Buffer.contents buffer))
 
+  let index_nulls_ordering () =
+    let table = { Sqml.Table.Schema.name = "table1"; schema = None } in
+    let queries =
+      Sqml.Table.Query.Schema.create_index table
+        {
+          Sqml.Table.Schema.Index.expressions =
+            List_nonempty.of_list_exn
+              [
+                ( Sqml.Expression.to_ast Model.T1.id,
+                  { ascending = true; nulls_first = Some true } );
+                ( Sqml.Expression.to_ast Model.T1.description,
+                  { ascending = false; nulls_first = Some false } );
+              ];
+          name = { name = "nulls"; schema = None };
+          unique = false;
+        }
+    in
+    Alcotest.(
+      check ~here:[%here] (list string) "index creation query"
+        [
+          {|CREATE INDEX nulls ON "table1" (id ASC NULLS FIRST, description DESC NULLS LAST)|};
+        ]
+        (List.map queries
+           ~f:(Fmt.str "%a" (Sqml.Table.Query.pp Sqml.Dialect.postgresql))))
+
   let schema () =
     let dump dialect =
       Fmt.str "%a" (Sqml.Model.pp_create dialect) (module Model)
@@ -1116,6 +1141,7 @@ let () =
            in
            [
              test_case "create" Queries.create;
+             test_case "index-nulls-ordering" Queries.index_nulls_ordering;
              test_case "schema" Queries.schema;
            ] );
          ( "Caqti-SQLite",

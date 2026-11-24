@@ -366,9 +366,9 @@ module Query = struct
         | { Schema.Index.ascending = false; nulls_first = None } ->
           string f "DESC"
         | { nulls_first = Some true; _ } as ordering ->
-          pf f "%a NULLS FIRST" pp_ordering ordering
+          pf f "%a NULLS FIRST" pp_ordering { ordering with nulls_first = None }
         | { nulls_first = Some false; _ } as ordering ->
-          pf f "%a NULLS LAST" pp_ordering ordering
+          pf f "%a NULLS LAST" pp_ordering { ordering with nulls_first = None }
       in
       pf f "@[<2>CREATE %sINDEX %s@ ON %a@ (%a)@]"
         (if unique then "UNIQUE " else "")
